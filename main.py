@@ -18,6 +18,8 @@ QQ 侧不再提供 /bili 命令。聊天里可用的 LLM 工具：
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import json
 import re
 import time
@@ -54,6 +56,12 @@ DEFAULT_COMMENT_TASTE = (
 )
 
 DEFAULT_SPEAKING_STYLE = "像普通网友随手回的，不端着，不堆网络烂梗，不卖萌，不油腻。"
+
+APPEARANCE_DEFAULTS = {
+    "x": 50, "y": 50, "zoom": 100, "opacity": 85,
+    "fit": "cover", "mask": "#edf6fc", "strength": 85,
+}
+MAX_ILLUSTRATION_BYTES = 3 * 1024 * 1024
 
 # 页面上能改的配置项（也是 GET /config 返回的字段）
 CONFIG_KEYS = (
@@ -181,6 +189,8 @@ class BiliScrollPlugin(Star):
             ("summary", self._api_summary, ["GET"], "刷B站概览"),
             ("config", self._api_config, ["GET"], "读配置"),
             ("config/save", self._api_config_save, ["POST"], "存配置"),
+            ("appearance/state", self._api_appearance_state, ["GET"], "读取面板外观"),
+            ("appearance/save", self._api_appearance_save, ["POST"], "保存面板外观与插画"),
             ("login/start", self._api_login_start, ["POST"], "生成扫码登录二维码"),
             ("login/state", self._api_login_state, ["GET"], "扫码登录状态"),
             ("reports", self._api_reports, ["GET"], "日报日期列表"),
@@ -213,6 +223,74 @@ class BiliScrollPlugin(Star):
         values = {key: self.cfg.get(key) for key in CONFIG_KEYS}
         values["speaking_style_bind_persona"] = self.cfg.get("speaking_style_bind_persona", True) is not False
         return values
+
+    @staticmethod
+    def _normalize_appearance(settings: dict) -> dict:
+        if not isinstance(settings, dict):
+            raise ValueError("外观参数格式不正确")
+        result = dict(APPEARANCE_DEFAULTS)
+        for key, lo, hi in (("x", 0, 100), ("y", 0, 100), ("zoom", 100, 250),
+                            ("opacity", 0, 100), ("strength", 0, 100)):
+            value = settings.get(key, result[key])
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not lo <= value <= hi:
+                raise ValueError(f"{key} 必须在 {lo}~{hi} 之间")
+            result[key] = value
+        if settings.get("fit", "cover") not in ("cover", "contain"):
+            raise ValueError("请选择铺满裁剪或完整显示")
+        result["fit"] = settings.get("fit", "cover")
+        color = settings.get("mask", result["mask"])
+        if not isinstance(color, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+            raise ValueError("遮罩颜色格式不正确")
+        result["mask"] = color.lower()
+        return result
+
+    def _load_appearance(self) -> dict:
+        try:
+            data = json.loads((self.data_dir / "appearance.json").read_text(encoding="utf-8"))
+            return {"settings": self._normalize_appearance(data.get("settings", {})), "image": data.get("image")}
+        except (OSError, ValueError, TypeError, AttributeError):
+            return {"settings": dict(APPEARANCE_DEFAULTS), "image": None}
+
+    async def _api_appearance_state(self):
+        return json_response(self._load_appearance())
+
+    async def _api_appearance_save(self):
+        payload = await request.json(default={})
+        if not isinstance(payload, dict):
+            return error_response("请求体不是 JSON 对象")
+        try:
+            settings = self._normalize_appearance(payload.get("settings", {}))
+            image = payload.get("image")
+            if image is not None:
+                if not isinstance(image, str) or len(image) > MAX_ILLUSTRATION_BYTES * 4 // 3 + 100:
+                    raise ValueError("处理后的插画不能超过 3 MB，请缩小图片后重试")
+                header, separator, encoded = image.partition(",")
+                if not separator or header not in ("data:image/webp;base64", "data:image/png;base64", "data:image/jpeg;base64"):
+                    raise ValueError("插画仅支持 PNG、JPG 或 WebP")
+                raw = base64.b64decode(encoded, validate=True)
+                signatures = {
+                    "data:image/png;base64": raw.startswith(b"\x89PNG\r\n\x1a\n"),
+                    "data:image/jpeg;base64": raw.startswith(b"\xff\xd8\xff"),
+                    "data:image/webp;base64": raw.startswith(b"RIFF") and raw[8:12] == b"WEBP",
+                }
+                if len(raw) > MAX_ILLUSTRATION_BYTES or not signatures[header]:
+                    raise ValueError("插画文件内容或大小不正确")
+        except (ValueError, binascii.Error) as exc:
+            return error_response(str(exc))
+        target = self.data_dir / "appearance.json"
+        temporary = target.with_name(f"appearance.{uuid.uuid4().hex}.tmp")
+        try:
+            temporary.write_text(json.dumps({"settings": settings, "image": image}, ensure_ascii=False), encoding="utf-8")
+            temporary.replace(target)
+        except OSError:
+            logger.exception("[bili-scroll] 保存面板外观失败")
+            return error_response("外观保存失败，请重试")
+        finally:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return json_response({"saved": True})
 
     @staticmethod
     def _cred_ok() -> bool:
