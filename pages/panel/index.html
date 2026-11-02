@@ -258,48 +258,224 @@
     *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
   }
 
+  /* 一隅书房：固定分组导航、轻工具栏与插画欢迎卡 */
+  body { padding: 22px 26px 54px; background: radial-gradient(ellipse at 82% 0, #edf5fc 0, transparent 58%), linear-gradient(125deg, #f8fbfe, #eff5fa 70%, #eaf2f8); }
+  .wrap.study-shell { max-width: 1460px; }
+  .study-shell .layout { display: block; }
+  .study-shell .main { margin-left: 238px; }
+  .study-shell .side {
+    position: fixed; top: 22px; bottom: 22px; left: max(26px, calc((100vw - 1460px) / 2));
+    width: 208px; min-height: 0; max-height: calc(100dvh - 44px); z-index: 4;
+    display: flex; flex-direction: column; padding: 12px; overflow: auto;
+    border: 1px solid #ffffffd9; border-radius: 25px; background: #ffffffa8;
+    box-shadow: 8px 14px 45px #6e91ac09;
+  }
+  .study-profile { display: flex; align-items: center; gap: 12px; padding: 19px 9px 25px; }
+  .study-avatar { position: relative; flex: 0 0 49px; width: 49px; height: 49px; display: grid; place-items: center; overflow: hidden; border: 3px solid #fff; border-radius: 50%; background: #e2eef8; box-shadow: 0 3px 12px #6c92af1c; font: 22px var(--serif); color: #6487a2; }
+  .study-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 84% 34%; }
+  .study-avatar img:not([src]) { display: none; }
+  .study-room-name { margin: 0; font: 600 17px/1.6 var(--serif); letter-spacing: .06em; color: #3d5971; }
+  .study-room-caption { margin: 3px 0 0; font-size: 10px; color: #71889a; letter-spacing: .03em; }
+  .study-shell .side-menu { display: block; padding: 0; }
+  .nav-group { margin: 0 0 18px; }
+  .nav-group-label { padding: 0 15px; margin: 0 0 8px; color: #7c91a2; font-size: 10px; letter-spacing: .16em; font-weight: 500; }
+  .nav-group .tab { margin: 3px 0; min-height: 44px; font-size: 12px; }
+  .study-shell .tab.active { background: #e7f1fb; border-color: #d4e5f4; box-shadow: inset 0 1px 0 #ffffffaa; color: #477caa; }
+  .study-shell .tab.active::before { left: 4px; height: 18px; width: 2px; }
+  .side-footnote { margin-top: auto; padding: 20px 14px 12px; border-top: 1px solid #d8e6f080; color: #6a8397; font-size: 10px; line-height: 2; }
+  .side-footnote span { display: block; font: 13px/1.8 var(--serif); color: #58758b; letter-spacing: .04em; }
+  .study-toolbar { position: sticky; top: 10px; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px 8px 3px; margin: 0 0 18px; border-radius: 16px; background: #f3f8fce6; backdrop-filter: blur(12px); }
+  .toolbar-path { display: flex; align-items: center; gap: 9px; font-size: 11px; color: #5f7a91; white-space: nowrap; }
+  .toolbar-path svg { width: 16px; height: 16px; fill: none; stroke: #7898b2; stroke-width: 1.4; }
+  .toolbar-path .path-separator { color: #a3b9c9; }
+  .toolbar-path strong { font-weight: 500; color: #38576f; }
+  .toolbar-actions { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  .toolbar-actions button { min-height: 35px; padding: 7px 13px; font-size: 11px; }
+  .toolbar-actions #appearance-open { margin: 0; font-size: 11px; padding: 7px 12px; }
+  .study-shell .hd { min-height: 282px; padding: 33px 36px; border-radius: 26px; margin-bottom: 22px; display: flex; align-items: center; }
+  .study-shell .hd-main { width: 56%; max-width: 500px; }
+  .study-shell h1 { font-size: clamp(31px, 3.2vw, 42px); line-height: 1.5; margin: 13px 0 11px; letter-spacing: .07em; }
+  .study-shell h1 > span { font-size: .77em; letter-spacing: .04em; }
+  .study-shell h1 > strong { font-weight: 400; }
+  .study-shell .hero-art { inset: 0 0 0 28%; }
+  .study-shell .hero-readability { background: linear-gradient(90deg, #f8fcfff9 0%, #f7fbfff0 28%, #f5faffb8 45%, #f2f8fd3b 62%, transparent 78%); }
+  .study-shell .hero-eyebrow { font-size: 9px; letter-spacing: .19em; color: #69849a; }
+  .study-shell .hero-note { margin: 0; max-width: 290px; font: 12px/1.9 "Segoe UI", "Microsoft YaHei", sans-serif; letter-spacing: .01em; color: #4d697f; }
+  .hero-tags { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 18px; }
+  .hero-tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border: 1px solid #cedfeb; border-radius: 99px; color: #5c7d97; background: #fafdffb0; font-size: 10px; }
+  .hero-tag::before { content: ""; width: 4px; height: 4px; border-radius: 50%; background: #8dafca; }
+  .study-overview { margin-bottom: 28px; }
+  .study-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 2px 13px; }
+  .study-section-head h2 { font-size: 19px; }
+  .study-section-head .sub { font-size: 10px; }
+  .study-timeline-card { padding: 19px 23px 21px; border: 1px solid #ffffffe6; border-radius: 22px; background: #ffffffab; box-shadow: 0 8px 30px #6488a00a; }
+  .study-card-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+  .study-card-heading h3 { font-size: 12px; margin: 0; font-weight: 600; color: #4d6b83; }
+  .study-card-heading button { padding: 0 2px; min-height: 22px; border: 0; box-shadow: none; background: transparent; color: #6287a5; font-size: 10px; }
+  .study-timeline { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); margin: 0; padding: 0; gap: 18px 0; }
+  .timeline-item { position: relative; padding: 0 15px 0 0; min-width: 0; }
+  .timeline-time { display: block; margin: 0 0 12px; color: #6a8297; font-size: 10px; font-variant-numeric: tabular-nums; }
+  .timeline-line { position: relative; height: 1px; background: #d5e4f0; margin-bottom: 13px; }
+  .timeline-line::before { content: ""; position: absolute; width: 7px; height: 7px; border-radius: 50%; top: -3px; left: 0; background: #a0bed4; box-shadow: 0 0 0 4px #edf5fb; }
+  .timeline-item.next .timeline-line::before, .timeline-item.running .timeline-line::before { background: #729fc2; box-shadow: 0 0 0 4px #e4f0f9; }
+  .timeline-item.window .timeline-line::before { background: #f8fcff; border: 1px solid #9fbad0; }
+  .timeline-title { margin: 0; color: #405e77; font-size: 11px; font-weight: 500; }
+  .timeline-detail { margin: 5px 0 0; color: #687f92; font-size: 10px; line-height: 1.7; }
+  .timeline-empty { grid-column: 1 / -1; padding: 8px 0; color: #6c8497; font-size: 12px; }
+  .study-lower-grid { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.35fr); gap: 17px; margin-top: 17px; }
+  .study-progress-card { display: flex; align-items: center; gap: 18px; padding: 20px; border-radius: 22px; border: 1px solid #ffffffe6; background: #ffffffab; box-shadow: 0 8px 30px #6488a00a; }
+  .progress-orbit { position: relative; width: 100px; height: 100px; flex: 0 0 100px; }
+  .progress-orbit svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .progress-orbit circle { fill: none; stroke-width: 6; stroke-linecap: round; }
+  .progress-orbit .orbit-track { stroke: #e5eef6; }
+  .progress-orbit .orbit-value { stroke: #82acca; transition: stroke-dashoffset 220ms ease; }
+  .progress-orbit .orbit-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .orbit-label strong { font-size: 22px; font-weight: 500; letter-spacing: -.03em; color: #547f9f; line-height: 1.5; }
+  .orbit-label span { font-size: 9px; color: #748c9f; }
+  .progress-copy { min-width: 0; }
+  .progress-copy h3 { font: 600 16px/1.7 var(--serif); color: #45637a; margin: 0 0 7px; }
+  .progress-copy p { font-size: 10px; color: #647e92; line-height: 1.9; margin: 0; overflow-wrap: anywhere; }
+  .progress-copy .progress-count { color: #426d90; font-size: 12px; margin-bottom: 5px; }
+  .study-stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+  .study-stat { padding: 15px 18px; background: #ffffffa8; border: 1px solid #ffffffdb; border-radius: 19px; box-shadow: 0 6px 22px #6488a008; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .study-stat:hover, .study-progress-card:hover, .study-timeline-card:hover { transform: translateY(-1px); box-shadow: 0 10px 30px #6488a013; }
+  .study-stat, .study-progress-card, .study-timeline-card { transition: transform 200ms ease, box-shadow 200ms ease; }
+  .study-stat .stat-key { color: #6a8195; font-size: 10px; }
+  .study-stat .stat-number { display: block; font-size: 22px; color: #45647d; font-weight: 500; line-height: 1.4; font-variant-numeric: tabular-nums; }
+  .stat-icon { width: 31px; height: 31px; border-radius: 11px; background: #edf5fb; display: grid; place-items: center; color: #91adc3; }
+  .stat-icon svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.45; stroke-linecap: round; stroke-linejoin: round; }
+  .study-shell .top-row { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); margin-top: 0; }
+  #study-feedback { margin: 9px 2px 0; font-size: 10px; color: #6c8497; }
+  @media (min-width: 1500px) { .study-shell .main { margin-left: 252px; } .study-shell .side { width: 220px; } .study-shell .hd { min-height: 320px; } }
+  @media (max-width: 1050px) {
+    .study-shell .side { width: 175px; left: 22px; }
+    .study-shell .main { margin-left: 195px; }
+    .study-profile { gap: 8px; padding: 18px 4px 22px; } .study-avatar { width: 40px; height: 40px; flex-basis: 40px; }
+    .study-room-name { font-size: 15px; } .study-room-caption { font-size: 9px; }
+    .toolbar-path { font-size: 10px; gap: 6px; }
+    .toolbar-actions { gap: 5px; } .toolbar-actions button { padding: 6px 9px; font-size: 10px; }
+    .toolbar-actions #appearance-open { padding: 6px 9px; font-size: 10px; }
+    .study-shell .hd { padding: 27px; min-height: 270px; }
+    .study-shell h1 { font-size: 34px; }
+    .study-lower-grid { grid-template-columns: 1fr; }
+    .study-stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .study-stat { padding: 13px; } .stat-icon { display: none; }
+    .study-progress-card { padding: 17px 22px; }
+    .progress-orbit { width: 86px; height: 86px; flex-basis: 86px; }
+  }
+  @media (max-width: 760px) {
+    body { padding: 15px 15px 40px; }
+    .study-shell .side { position: relative; inset: auto; width: auto; max-height: none; margin: 0 0 14px; padding: 13px; border-radius: 21px; overflow: visible; }
+    .study-shell .main { margin-left: 0; }
+    .study-profile { padding: 2px 4px 13px; gap: 10px; }
+    .study-room-name { font-size: 17px; } .study-room-caption { display: inline; margin-left: 10px; font-size: 10px; }
+    .study-shell .side-menu { display: grid; grid-template-columns: .8fr 1.6fr 1.1fr; gap: 12px; }
+    .nav-group { margin: 0; } .nav-group-label { padding: 0 5px; margin-bottom: 5px; font-size: 9px; }
+    .nav-group-buttons { display: flex; gap: 4px; }
+    .nav-group .tab { flex: 1; width: auto; flex-direction: column; justify-content: center; padding: 8px 4px 9px; min-height: 58px; gap: 4px; font-size: 10px; margin: 0; }
+    .study-shell .tab.active::before { left: 50%; top: auto; bottom: 3px; height: 2px; width: 13px; transform: translateX(-50%); }
+    .side-footnote { display: none; }
+    .study-toolbar { position: relative; top: auto; padding: 3px 0 9px; margin-bottom: 8px; flex-wrap: wrap; background: transparent; backdrop-filter: none; }
+    .toolbar-path { font-size: 10px; } .toolbar-actions { margin-left: auto; }
+    .study-shell .hd { min-height: 270px; padding: 27px; flex-direction: row; align-items: center; margin-bottom: 20px; }
+    .study-shell .hd-main { width: 64%; max-width: 380px; }
+    .study-shell .hero-art { inset: 0 0 0 15%; }
+    .study-shell .hero-readability { background: linear-gradient(90deg, #f8fcfff7, #f7fbfff0 25%, #f5faff9c 49%, #f2f8fd38 75%, transparent); }
+    .study-shell h1 { font-size: 34px; line-height: 1.5; }
+    .study-shell .hero-note { font-size: 11px; }
+    .hero-tag { font-size: 9px; padding: 2px 7px; }
+    .study-lower-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+    .study-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .study-progress-card { flex-direction: column; gap: 8px; align-items: flex-start; padding: 19px; }
+    .study-stat { padding: 14px; } .study-stat .stat-number { font-size: 20px; }
+    .study-timeline-card { padding: 18px 20px; }
+  }
+  @media (max-width: 480px) {
+    body { padding: 12px 12px 30px; }
+    .study-room-caption { display: block; margin: 1px 0 0; }
+    .study-toolbar { gap: 7px; }
+    .toolbar-path { width: 100%; padding: 4px; }
+    .toolbar-actions { margin-left: 0; width: 100%; justify-content: flex-start; }
+    .toolbar-actions button, .toolbar-actions #appearance-open { font-size: 10px; padding: 7px 10px; min-height: 33px; }
+    .study-shell .hd { min-height: 262px; padding: 23px; border-radius: 23px; }
+    .study-shell h1 { font-size: 29px; letter-spacing: .04em; margin: 12px 0 10px; }
+    .study-shell .hd-main { width: 75%; }
+    .study-shell .hero-eyebrow { font-size: 8px; letter-spacing: .12em; }
+    .study-shell .hero-note { max-width: 195px; font-size: 10px; }
+    .hero-tags { margin-top: 14px; gap: 5px; }
+    .study-shell .hero-art { left: 11%; opacity: .95; }
+    .study-section-head h2 { font-size: 18px; }
+    .study-section-head .sub { font-size: 9px; }
+    .study-timeline { grid-template-columns: 1fr; gap: 0; }
+    .timeline-item { display: grid; grid-template-columns: 45px 15px minmax(0, 1fr); gap: 0 8px; padding: 0 0 15px; }
+    .timeline-time { grid-row: 1 / 3; margin: 0; padding-top: 1px; font-size: 10px; }
+    .timeline-line { grid-column: 2; grid-row: 1 / 3; width: 1px; height: calc(100% + 15px); margin: 0; background: #d8e6f1; }
+    .timeline-line::before { top: 5px; left: -3px; }
+    .timeline-item:last-child { padding-bottom: 0; } .timeline-item:last-child .timeline-line { height: 12px; }
+    .timeline-title { grid-column: 3; font-size: 11px; }
+    .timeline-detail { grid-column: 3; font-size: 10px; margin-top: 3px; }
+    .study-lower-grid { grid-template-columns: 1fr; }
+    .study-progress-card { flex-direction: row; align-items: center; gap: 18px; padding: 20px; }
+    .study-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stat-icon { display: grid; }
+    .study-shell .top-row { grid-template-columns: 1fr; }
+  }
+
 </style>
 <script src="/api/plugin/page/bridge-sdk.js"></script>
 </head>
 <body>
-<div class="wrap">
-
-  <header class="hd" id="top">
-    <div class="hero-art" aria-hidden="true"><img id="hero-illustration" alt="" /><div class="hero-wash"></div></div>
-    <div class="hero-readability" aria-hidden="true"></div>
-    <div class="hd-main">
-      <div class="hero-eyebrow">BILIBILI · DAILY JOURNAL</div>
-      <h1>刷 B站</h1>
-      <p class="hero-note">留一点闲时，遇见日常里的有趣。</p>
-      <div class="sub">按关键词筛选视频、整理日报，按需开启评论与回复</div>
-    </div>
-    <div class="hd-act">
-      <div class="row-btns">
-        <button id="btn-refresh"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></svg>刷新状态</button>
-        <button id="btn-run" class="primary"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 10 7-10 7z"/></svg>立刻刷一轮</button>
-      </div>
-      <button id="appearance-open" type="button" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8" cy="9" r="1.5"/><path d="m4 17 5-5 4 4 3-3 5 5"/></svg>外观与插画</button>
-      <span id="run-hint" class="sub" role="status"></span>
-    </div>
-  </header>
-
-
+<div class="wrap study-shell">
   <div class="layout">
   <aside class="side" id="tabs">
-    <div class="side-brand"><span class="brand-text">刷B站</span></div>
-    <nav class="side-menu">
-      <button class="tab active" id="tab-main" aria-pressed="true" data-view="刷视频"><span class="tab-icon"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg></span><span class="tab-label">刷视频</span></button>
-      <button class="tab" id="tab-rhythm" aria-pressed="false" data-view="作息"><span class="tab-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span><span class="tab-label">作息</span></button>
-      <button class="tab" id="tab-upload" aria-pressed="false" data-view="投稿"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg></span><span class="tab-label">投稿</span></button>
-      <button class="tab" id="tab-delivery" aria-pressed="false" data-view="投递"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></span><span class="tab-label">投递</span></button>
-      <button class="tab" id="tab-comments" aria-pressed="false" data-view="评论"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span class="tab-label">评论</span></button>
-      <button class="tab" id="tab-reply" aria-pressed="false" data-view="reply"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></span><span class="tab-label">回复<span id="tab-reply-count" class="badge"></span></span></button>
-    </nav>
+    <div class="study-profile"><div class="study-avatar" aria-hidden="true">汐<img id="study-avatar" alt="" /></div><div><p class="study-room-name">一隅书房</p><p class="study-room-caption">私人的观影手记</p></div></div>
+    <nav class="side-menu" aria-label="书房导航"><div class="nav-group"><div class="nav-group-label">阅读</div><div class="nav-group-buttons"><button class="tab active" id="tab-main" aria-pressed="true" data-view="刷视频"><span class="tab-icon"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg></span><span class="tab-label">刷视频</span></button></div></div><div class="nav-group"><div class="nav-group-label">写作</div><div class="nav-group-buttons"><button class="tab" id="tab-comments" aria-pressed="false" data-view="评论"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span class="tab-label">评论</span></button>
+<button class="tab" id="tab-reply" aria-pressed="false" data-view="reply"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></span><span class="tab-label">回复<span id="tab-reply-count" class="badge"></span></span></button>
+<button class="tab" id="tab-upload" aria-pressed="false" data-view="投稿"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg></span><span class="tab-label">投稿</span></button></div></div><div class="nav-group"><div class="nav-group-label">生活</div><div class="nav-group-buttons"><button class="tab" id="tab-rhythm" aria-pressed="false" data-view="作息"><span class="tab-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span><span class="tab-label">作息</span></button>
+<button class="tab" id="tab-delivery" aria-pressed="false" data-view="投递"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></span><span class="tab-label">投递</span></button></div></div></nav>
+    <div class="side-footnote"><span>把有趣，收进日常。</span>留一点时间，给喜欢的事。</div>
   </aside>
   <main class="main">
+    <div class="study-toolbar">
+      <div class="toolbar-path"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8M6 9v12h12V9M10 21v-7h4v7"/></svg><span>我的书房</span><span class="path-separator">/</span><strong id="study-page-title">观影手记</strong></div>
+      <div class="toolbar-actions">
+        <button id="btn-refresh"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></svg>刷新状态</button>
+        <button id="appearance-open" type="button" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8" cy="9" r="1.5"/><path d="m4 17 5-5 4 4 3-3 5 5"/></svg>外观与插画</button>
+        <button id="btn-run" class="primary"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 10 7-10 7z"/></svg>立刻刷一轮</button>
+      </div>
+    </div>
+    <header class="hd" id="top">
+      <div class="hero-art" aria-hidden="true"><img id="hero-illustration" alt="" decoding="async" /><div class="hero-wash"></div></div><div class="hero-readability" aria-hidden="true"></div>
+      <div class="hd-main"><div class="hero-eyebrow">A QUIET CORNER · BILIBILI JOURNAL</div><h1><span id="study-greeting">欢迎回来，</span><br/><strong>一隅书房</strong></h1><p class="hero-note">今日也留一点闲时，看看世界的有趣。<br/>让喜欢的内容，在这里慢慢留下来。</p><div class="hero-tags"><span class="hero-tag">B站观影手记</span><span class="hero-tag" id="study-style-tag">人设相伴</span></div></div>
+    </header>
+    <div id="run-hint" class="sub" role="status" aria-live="polite"></div>
 
   <div id="view-main">
   <div id="err" class="err"></div>
+  <section class="study-overview" aria-labelledby="study-overview-title">
+    <div class="study-section-head"><h2 id="study-overview-title">今日书页</h2><span id="study-date" class="sub">正在同步今日记录</span></div>
+    <section class="study-timeline-card" aria-labelledby="study-timeline-title">
+      <div class="study-card-heading"><h3 id="study-timeline-title">一天的时间轴</h3><button type="button" id="study-rhythm-link">管理作息 ↗</button></div>
+      <ol class="study-timeline" id="study-timeline"><li class="timeline-empty">正在读取运行与作息记录…</li></ol>
+    </section>
+    <div class="study-lower-grid">
+      <section class="study-progress-card" aria-labelledby="study-progress-title">
+        <div class="progress-orbit" id="study-progress" role="progressbar" aria-label="今日自动唤醒进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="orbit-track" cx="60" cy="60" r="49"/><circle id="study-progress-circle" class="orbit-value" cx="60" cy="60" r="49" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg>
+          <div class="orbit-label"><strong id="study-percent">—</strong><span>今日作息</span></div>
+        </div>
+        <div class="progress-copy"><h3 id="study-progress-title">慢慢来，也在前进</h3><p id="study-progress-count" class="progress-count">正在读取今日计划</p><p id="study-next-wake">完成一次唤醒，便收下一段闲时。</p></div>
+      </section>
+      <div class="study-stat-grid" aria-label="书房数据统计">
+        <article class="study-stat"><div><span class="stat-key">今日精选</span><strong class="stat-number" id="study-stat-selected">—</strong></div><span class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4zM13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg></span></article>
+        <article class="study-stat"><div><span class="stat-key">今日自动评论</span><strong class="stat-number" id="study-stat-comments">—</strong></div><span class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 3V6a2 2 0 0 1 1-2zM8 8h9M8 12h6"/></svg></span></article>
+        <article class="study-stat"><div><span class="stat-key">待审回复</span><strong class="stat-number" id="study-stat-pending">—</strong></div><span class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h10v18H4V6h3zM7 3v4h10M8 11h5M8 15h7"/></svg></span></article>
+        <article class="study-stat" title="已处理并加入去重记录的视频数量"><div><span class="stat-key">累计记录</span><strong class="stat-number" id="study-stat-recorded">—</strong></div><span class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16v14H4zM3 3h18v4H3zM9 11h6"/></svg></span></article>
+      </div>
+    </div>
+    <div id="study-feedback" role="status" aria-live="polite"></div>
+  </section>
+
 
   <div class="top-row">
     <div class="cards" id="cards"></div>
@@ -809,6 +985,7 @@
   </div>
   </main>
 </div>
+</div>
 <dialog id="appearance-dialog" class="appearance-dialog" aria-labelledby="appearance-title" aria-describedby="appearance-description">
   <div class="appearance-heading">
     <div><h2 id="appearance-title">布置这一隅</h2><div class="sub" id="appearance-description">调整页首插画，让喜欢的画面轻轻融入日常。</div></div>
@@ -850,7 +1027,7 @@
 
 <script type="module" id="appearance-script">
 // 通过插件 bridge 保存外观，兼容 AstrBot 的隔离面板。
-const ART_DEFAULTS = Object.freeze({ x: 50, y: 50, zoom: 100, opacity: 85, fit: "cover", mask: "#edf6fc", strength: 85 });
+const ART_DEFAULTS = Object.freeze({ x: 75, y: 50, zoom: 100, opacity: 85, fit: "cover", mask: "#edf6fc", strength: 85 });
 function normalizeAppearance(raw = {}) {
   const clamp = (key, min, max) => {
     const value = Number(raw[key]);
@@ -875,6 +1052,7 @@ async function appearanceBridge() {
 async function appearanceStorage(mode, record) {
   const bridge = await appearanceBridge();
   if (mode === "readonly") return await bridge.apiGet("appearance/state");
+  if (mode === "default") return await bridge.apiGet("appearance/default");
   const result = await bridge.apiPost("appearance/save", record);
   if (!result?.saved) throw new Error("外观保存未完成，请重试");
   return result;
@@ -931,7 +1109,7 @@ function renderAppearance(settings, illustration) {
   root.setProperty("--art-mask-strength", String(settings.strength / 100));
   root.setProperty("--art-mask", [1, 3, 5].map((offset) => parseInt(settings.mask.slice(offset, offset + 2), 16)).join(", "));
   if (illustration !== displayedIllustration) {
-    for (const id of ["hero-illustration", "preview-illustration"]) {
+    for (const id of ["hero-illustration", "preview-illustration", "study-avatar"]) {
       if (illustration) artEl(id).src = illustration;
       else artEl(id).removeAttribute("src");
     }
@@ -1023,14 +1201,21 @@ artEl("art-recenter").onclick = () => {
   fillAppearanceControls();
   artStatus("已恢复居中铺满，可继续调整。");
 };
-artEl("art-reset").onclick = () => {
-  ++artRevision;
-  artBusy = false;
-  draftAppearance = { ...ART_DEFAULTS };
-  draftIllustration = null;
-  artEl("art-file").value = "";
-  fillAppearanceControls();
-  artStatus("已恢复默认外观，保存后保留。");
+artEl("art-reset").onclick = async () => {
+  const revision = ++artRevision;
+  artBusy = true;
+  syncAppearanceControls();
+  artStatus("正在恢复默认插画…");
+  try {
+    const defaults = await appearanceStorage("default");
+    if (revision !== artRevision || !artDialog.open) return;
+    draftAppearance = normalizeAppearance(defaults.settings);
+    draftIllustration = defaults.image || null;
+    artEl("art-file").value = "";
+    fillAppearanceControls();
+    artStatus("已恢复默认书房插画，保存后保留。");
+  } catch { artStatus("默认插画暂时无法读取，请重试。", true); }
+  finally { if (revision === artRevision) { artBusy = false; syncAppearanceControls(); } }
 };
 artEl("art-save").onclick = async () => {
   if (artBusy) return;
@@ -1070,6 +1255,81 @@ artDialog.addEventListener("close", () => {
   renderAppearance(savedAppearance, savedIllustration);
   artEl("art-file").value = "";
 });
+
+</script>
+<script type="module" id="study-script">
+function studyCount(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.floor(number) : 0;
+}
+function studyProgress(progress = {}) {
+  const target = studyCount(progress.target);
+  const completed = studyCount(progress.completed);
+  return { target, completed, percent: target ? Math.min(100, Math.round(completed / target * 100)) : 0 };
+}
+function studyTimelineMarkup(items) {
+  const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+  if (!Array.isArray(items) || !items.length) return '<li class="timeline-empty">今天还没有安排，给自己留一点自由的闲时。可在「作息」中设置自动唤醒。</li>';
+  return items.slice(-5).map((item) => {
+    const kind = ["done", "next", "running", "window"].includes(item.kind) ? item.kind : "done";
+    return `<li class="timeline-item ${kind}"><time class="timeline-time">${escape(item.time)}</time><span class="timeline-line" aria-hidden="true"></span><h4 class="timeline-title">${escape(item.title)}</h4><p class="timeline-detail">${escape(item.detail)}</p></li>`;
+  }).join("");
+}
+const studyEl = (id) => document.getElementById(id);
+let studyRequest = null;
+async function studyBridge() {
+  for (let i = 0; i < 40; i++) {
+    if (window.AstrBotPluginView) {
+      await window.AstrBotPluginView.ready();
+      return window.AstrBotPluginView;
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error("书房服务暂未连接");
+}
+function renderStudy(data) {
+  if (!data || typeof data !== "object" || !data.stats || !data.progress) throw new Error("暂未收到今日记录");
+  const progress = studyProgress(data.progress);
+  studyEl("study-greeting").textContent = data.greeting || "欢迎回来，";
+  studyEl("study-date").textContent = data.date_label || data.date || "今日记录";
+  studyEl("study-style-tag").textContent = data.style_bound === false ? "自定义说话风格" : "人设相伴";
+  studyEl("study-timeline").innerHTML = studyTimelineMarkup(data.timeline);
+  studyEl("study-progress-circle").style.strokeDashoffset = String(100 - progress.percent);
+  studyEl("study-percent").textContent = progress.target ? progress.percent + "%" : "—";
+  studyEl("study-progress").setAttribute("aria-valuenow", String(progress.percent));
+  studyEl("study-progress").setAttribute("aria-valuetext", progress.target ? `已完成 ${progress.completed} 次，共 ${progress.target} 次自动唤醒` : "尚未设置自动作息");
+  studyEl("study-progress-count").textContent = progress.target ? `已完成 ${progress.completed} / ${progress.target} 次唤醒` : "今日未安排自动作息";
+  studyEl("study-next-wake").textContent = data.running ? "正在翻阅视频，本轮结束后更新。" : data.next_at ? "下一次：" + data.next_at : progress.target ? "下一次唤醒会在作息窗口内安排。" : "也可以随时点击「立刻刷一轮」。";
+  for (const [id, key] of [["selected", "selected"], ["comments", "auto_comments"], ["pending", "pending"], ["recorded", "recorded"]]) {
+    studyEl("study-stat-" + id).textContent = String(studyCount(data.stats[key]));
+  }
+  studyEl("study-feedback").textContent = `今日已运行 ${studyCount(data.stats.today_runs)} 轮 · ${progress.target ? "按计划跳过也计入唤醒进度" : "在「作息」中安排书房醒来的时间"}`;
+}
+function loadStudy() {
+  if (studyRequest) return studyRequest;
+  studyRequest = (async () => {
+    try {
+      const bridge = await studyBridge();
+      renderStudy(await bridge.apiGet("dashboard"));
+    } catch (error) {
+      studyEl("study-feedback").textContent = "暂时无法同步今日记录，可点击「刷新状态」重试。";
+    } finally { studyRequest = null; }
+  })();
+  return studyRequest;
+}
+studyEl("study-rhythm-link").onclick = () => studyEl("tab-rhythm").click();
+window.addEventListener("bili:refreshed", loadStudy);
+window.addEventListener("bili:run-started", loadStudy);
+window.addEventListener("bili:view", (event) => {
+  const titles = { main: "观影手记", rhythm: "作息安排", upload: "视频投稿", delivery: "日报投递", comments: "评论与口味", reply: "回复与草稿" };
+  studyEl("study-page-title").textContent = titles[event.detail] || "观影手记";
+  if (event.detail === "main") loadStudy();
+});
+const studyTimer = setInterval(() => {
+  if (!document.hidden && !studyEl("view-main").classList.contains("hide")) loadStudy();
+}, 30000);
+window.addEventListener("pagehide", () => clearInterval(studyTimer), { once: true });
+loadStudy();
 
 </script>
 <script type="module">
@@ -1350,6 +1610,7 @@ async function refreshAll() {
     const s = await loadSummary();
     await loadReports();
     await loadHistory();
+    window.dispatchEvent?.(new CustomEvent("bili:refreshed"));
     return s;
   } catch (e) {
     showErr("加载失败：" + (e?.message || e));
@@ -1377,6 +1638,7 @@ $("btn-run").onclick = async () => {
   setHint("run-hint", "已触发，正在跑（读字幕+判断，几分钟）…", "warn");
   try {
     const r = await api("run", {});
+    window.dispatchEvent?.(new CustomEvent("bili:run-started"));
     setHint("run-hint", r.message || "正在跑…", "warn");
     clearInterval(runTimer);
     runTimer = setInterval(watchRun, 4000);
@@ -1425,6 +1687,7 @@ function switchView(name) {
     $("tab-" + tab).ariaPressed = String(name === tab);
     $("view-" + view).classList.toggle("hide", name !== view);
   }
+  window.dispatchEvent?.(new CustomEvent("bili:view", { detail: name }));
   if (name === "rhythm") loadRhythm();
   if (name === "upload") loadUpload();
   if (name === "delivery") loadDelivery();

@@ -58,7 +58,7 @@ DEFAULT_COMMENT_TASTE = (
 DEFAULT_SPEAKING_STYLE = "像普通网友随手回的，不端着，不堆网络烂梗，不卖萌，不油腻。"
 
 APPEARANCE_DEFAULTS = {
-    "x": 50, "y": 50, "zoom": 100, "opacity": 85,
+    "x": 75, "y": 50, "zoom": 100, "opacity": 85,
     "fit": "cover", "mask": "#edf6fc", "strength": 85,
 }
 MAX_ILLUSTRATION_BYTES = 3 * 1024 * 1024
@@ -187,9 +187,11 @@ class BiliScrollPlugin(Star):
     def _register_pages(self) -> None:
         routes = [
             ("summary", self._api_summary, ["GET"], "刷B站概览"),
+            ("dashboard", self._api_dashboard, ["GET"], "书房今日概览"),
             ("config", self._api_config, ["GET"], "读配置"),
             ("config/save", self._api_config_save, ["POST"], "存配置"),
             ("appearance/state", self._api_appearance_state, ["GET"], "读取面板外观"),
+            ("appearance/default", self._api_appearance_default, ["GET"], "读取默认书房插画"),
             ("appearance/save", self._api_appearance_save, ["POST"], "保存面板外观与插画"),
             ("login/start", self._api_login_start, ["POST"], "生成扫码登录二维码"),
             ("login/state", self._api_login_state, ["GET"], "扫码登录状态"),
@@ -244,12 +246,28 @@ class BiliScrollPlugin(Star):
         result["mask"] = color.lower()
         return result
 
+    def _default_appearance(self) -> dict:
+        image = None
+        try:
+            raw = (Path(__file__).parent / "pages" / "panel" / "assets" / "study-hero.png").read_bytes()
+            image = "data:image/png;base64," + base64.b64encode(raw).decode("ascii")
+        except OSError:
+            pass
+        return {"settings": dict(APPEARANCE_DEFAULTS), "image": image}
+
     def _load_appearance(self) -> dict:
         try:
             data = json.loads((self.data_dir / "appearance.json").read_text(encoding="utf-8"))
-            return {"settings": self._normalize_appearance(data.get("settings", {})), "image": data.get("image")}
+            image = data.get("image")
+            # 老版空白封面升级为新默认插画；新版主动移除插画后保留渐变背景。
+            if image is None and data.get("version", 1) < 2:
+                image = self._default_appearance()["image"]
+            return {"settings": self._normalize_appearance(data.get("settings", {})), "image": image}
         except (OSError, ValueError, TypeError, AttributeError):
-            return {"settings": dict(APPEARANCE_DEFAULTS), "image": None}
+            return self._default_appearance()
+
+    async def _api_appearance_default(self):
+        return json_response(self._default_appearance())
 
     async def _api_appearance_state(self):
         return json_response(self._load_appearance())
@@ -280,7 +298,7 @@ class BiliScrollPlugin(Star):
         target = self.data_dir / "appearance.json"
         temporary = target.with_name(f"appearance.{uuid.uuid4().hex}.tmp")
         try:
-            temporary.write_text(json.dumps({"settings": settings, "image": image}, ensure_ascii=False), encoding="utf-8")
+            temporary.write_text(json.dumps({"version": 2, "settings": settings, "image": image}, ensure_ascii=False), encoding="utf-8")
             temporary.replace(target)
         except OSError:
             logger.exception("[bili-scroll] 保存面板外观失败")
@@ -291,6 +309,79 @@ class BiliScrollPlugin(Star):
             except OSError:
                 pass
         return json_response({"saved": True})
+
+    async def _api_dashboard(self):
+        """仅汇总本地记录，不触发刷视频、模型调用或计划变更。"""
+        now = datetime.now()
+        today = now.strftime("%Y-%m-%d")
+
+        def count(value):
+            try:
+                return max(0, int(value or 0))
+            except (TypeError, ValueError, OverflowError):
+                return 0
+
+        seen = self._load_json(self.data_dir / "seen.json", {})
+        if not isinstance(seen, dict):
+            seen = {}
+        runs = seen.get("runs") or []
+        today_runs = sorted(
+            [row for row in runs if isinstance(row, dict) and str(row.get("at") or "").startswith(today)],
+            key=lambda row: str(row["at"]),
+        ) if isinstance(runs, list) else []
+        auto_comments = 0
+        try:
+            with (self.data_dir / "comments.jsonl").open(encoding="utf-8") as stream:
+                for line in stream:
+                    try:
+                        row = json.loads(line)
+                        if isinstance(row, dict) and str(row.get("at") or "").startswith(today) and row.get("auto") and not row.get("reply_to"):
+                            auto_comments += 1
+                    except ValueError:
+                        continue
+        except OSError:
+            pass
+        schedule = self._rhythm_summary()
+        target, completed = count(schedule.get("max_wakes")), count(schedule.get("wakes_used"))
+        timeline = [
+            {"time": str(row["at"])[11:16], "title": "完成一轮翻阅", "kind": "done",
+             "detail": f"阅读 {count(row.get('scanned'))} 条 · 精选 {count(row.get('picked'))} 条"}
+            for row in today_runs
+        ]
+        next_at = str(schedule.get("next_at") or "")
+        if self._running:
+            timeline.append({"time": "此刻", "title": "正在翻阅视频", "detail": "本轮结束后更新日报", "kind": "running"})
+        elif next_at.startswith(today):
+            resting = schedule.get("action") == "skip"
+            timeline.append({"time": next_at[11:16], "title": "下一次计划休息" if resting else "下一次书房唤醒",
+                             "detail": "按当前跳过设置，本次不刷视频" if resting else "按作息计划自动运行", "kind": "next"})
+        if not timeline:
+            timeline = [
+                {"time": str(window.get("label") or "")[:5], "title": "作息窗口", "kind": "window",
+                 "detail": f"{window.get('label', '')} · 安排 {count(window.get('wakes'))} 次唤醒"}
+                for window in schedule.get("windows", [])
+            ]
+        videos = seen.get("videos") or {}
+        if 5 <= now.hour < 11:
+            greeting = "早上好，"
+        elif 11 <= now.hour < 14:
+            greeting = "午间好，"
+        elif 14 <= now.hour < 18:
+            greeting = "午后好，"
+        elif 18 <= now.hour < 23:
+            greeting = "晚上好，"
+        else:
+            greeting = "夜色正好，"
+        return json_response({
+            "date": today, "date_label": f"{now.month:02d}月{now.day:02d}日 · 星期{'一二三四五六日'[now.weekday()]}",
+            "greeting": greeting, "running": self._running,
+            "style_bound": self.cfg.get("speaking_style_bind_persona", True) is not False,
+            "timeline": timeline, "next_at": next_at,
+            "progress": {"completed": completed, "target": target, "percent": min(100, round(completed / target * 100)) if target else 0},
+            "stats": {"today_runs": len(today_runs), "selected": sum(count(row.get("picked")) for row in today_runs),
+                      "auto_comments": auto_comments, "pending": len(self._pending().get("items") or []),
+                      "recorded": len(videos) if isinstance(videos, dict) else 0},
+        })
 
     @staticmethod
     def _cred_ok() -> bool:

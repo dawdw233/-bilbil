@@ -80,9 +80,19 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((self.instance.data_dir / "appearance.json").read_bytes(), original)
 
     async def test_missing_or_broken_preferences_use_defaults(self):
-        self.assertEqual(self.instance._load_appearance(), {"settings": plugin.APPEARANCE_DEFAULTS, "image": None})
+        defaults = self.instance._load_appearance()
+        self.assertEqual(defaults["settings"], plugin.APPEARANCE_DEFAULTS)
+        self.assertTrue(defaults["image"].startswith("data:image/png;base64,"))
         (self.instance.data_dir / "appearance.json").write_text("not json", encoding="utf-8")
         self.assertEqual(self.instance._load_appearance()["settings"], plugin.APPEARANCE_DEFAULTS)
+
+    async def test_old_blank_cover_gets_default_but_explicit_removal_stays_empty(self):
+        (self.instance.data_dir / "appearance.json").write_text(json.dumps({"settings": {}, "image": None}), encoding="utf-8")
+        self.assertTrue(self.instance._load_appearance()["image"].startswith("data:image/png;base64,"))
+        self.payload = {"settings": {}, "image": None}
+        await self.instance._api_appearance_save()
+        self.assertIsNone(self.instance._load_appearance()["image"])
+        self.assertTrue((await self.instance._api_appearance_default())["image"].startswith("data:image/png;base64,"))
 
 
 if __name__ == "__main__":

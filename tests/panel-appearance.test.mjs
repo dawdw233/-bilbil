@@ -60,6 +60,8 @@ test("刷新时从插件读取外观，失败或缺少保存确认时返回错�
   const fixture=storageFixture();
   assert.equal((await fixture.api.appearanceStorage("readonly")).settings.zoom,130);
   assert.equal(fixture.state.readPath,"appearance/state");
+  await fixture.api.appearanceStorage("default");
+  assert.equal(fixture.state.readPath,"appearance/default");
   const failed=storageFixture();
   const rejection=assert.rejects(failed.api.appearanceStorage("readwrite",{}),/Service unavailable/);
   await new Promise(setImmediate);
