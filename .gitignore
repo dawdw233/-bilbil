@@ -1,0 +1,30 @@
+# Python caches and environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local credentials and runtime data
+.env
+.env.*
+!.env.example
+bili_credential.json
+config/
+plugin_data/
+media/
+out/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Deployment backups and temporary files
+*.bak
+*.bak-*
+*.bak_*
+*.new
+build/
+dist/

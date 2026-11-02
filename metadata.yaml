@@ -1,0 +1,17 @@
+name: astrbot_plugin_bili_scroll
+display_name: 刷B站
+short_desc: 按兴趣刷 B站、整理日报，支持人设评论、回复互动与视频投稿
+desc: 按关键词搜索视频，结合字幕或简介与热评筛选值得看的内容，去重后整理成日报。支持自定义作息、随机唤醒，以及 QQ 或 B站私信投递；可按评论口味和开口积极性自动评论，并选择先审草稿或自动回复。说话风格可实时跟随 AstrBot 当前默认人设卡，也可自行填写。面板还提供视频投稿、运行记录和互动历史；聊天中可直接发送视频链接，查询字幕、评论与楼中楼。所有设置均可在插件面板中管理。
+version: 0.1.0
+author: c1overzz / 移植适配
+repo: https://github.com/c1overzz/dsh-bili-scroll
+astrbot_version: ">=4.24,<5"
+support_platforms:
+  - aiocqhttp
+tags:
+  - bilibili
+  - daily
+  - automation
+pages:
+  - name: panel
+    title: 刷B站

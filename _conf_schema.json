@@ -1,0 +1,142 @@
+{
+  "keywords": {
+    "type": "list",
+    "description": "关注关键词：每轮按这些词搜（留空则用默认那几组）",
+    "default": ["搞笑", "沙雕", "整活", "名场面"]
+  },
+  "daily_count": {
+    "type": "int",
+    "description": "每次醒来最多挑几条（单次上限；一天醒几次由作息窗口决定）",
+    "default": 4
+  },
+  "candidates_per_keyword": {
+    "type": "int",
+    "description": "每个关键词先拉多少条候选（会再去重、再读字幕筛）",
+    "default": 10
+  },
+  "max_scan": {
+    "type": "int",
+    "description": "每轮最多读几条字幕（读字幕+判断最花时间，用它兜住整轮时长）",
+    "default": 15
+  },
+  "rhythm_windows": {
+    "type": "string",
+    "description": "作息窗口：每行一个 `09:00-15:00 3` = 这段里随机醒 3 次（次数可省略=1）；醒的时刻在窗口内随机，重启不重抽",
+    "default": "09:00-15:00 3\n18:00-24:00 3"
+  },
+  "rhythm_min_gap_minutes": {
+    "type": "int",
+    "description": "相邻两次醒来至少隔几分钟（0~180，默认 10）；窗口里放不下就少醒一次",
+    "default": 10
+  },
+  "rhythm_skip_percent": {
+    "type": "int",
+    "description": "每次醒来「今晚不看」的概率（百分比，0~100，默认 30）；不看也消耗一次机会，仍写日记",
+    "default": 30
+  },
+  "search_order": {
+    "type": "string",
+    "description": "搜索排序：pubdate=最新 / totalrank=综合 / click=播放量",
+    "default": "totalrank"
+  },
+  "provider_id": {
+    "type": "string",
+    "description": "用来判断值不值得的模型 Provider ID（留空=用 AstrBot 当前默认）",
+    "default": ""
+  },
+  "dm_mode": {
+    "type": "string",
+    "description": "B站私信投递：off=不发 / only=发私信",
+    "default": "off"
+  },
+  "dm_uid": {
+    "type": "string",
+    "description": "私信发给谁（B站 UID，通常是使用者本人）",
+    "default": ""
+  },
+  "push_qq": {
+    "type": "bool",
+    "description": "把日报推到 QQ",
+    "default": true
+  },
+  "owner_qq": {
+    "type": "string",
+    "description": "日报推给哪个 QQ 号",
+    "default": ""
+  },
+  "max_dm_items": {
+    "type": "int",
+    "description": "一条私信里最多放几条（B站私信实测上限 500 字，建议 4）",
+    "default": 4
+  },
+  "auto_comment": {
+    "type": "bool",
+    "description": "刷完一轮后，让模型自己决定要不要给挑中的视频发评论（公开发言，慎开）",
+    "default": false
+  },
+  "auto_comment_per_run": {
+    "type": "int",
+    "description": "可选硬上限：每轮最多几条（默认 -1=不限；0=不评。正常不用改，评论多少由 comment_eagerness 决定）",
+    "default": -1
+  },
+  "auto_comment_per_day": {
+    "type": "int",
+    "description": "可选硬上限：每天最多几条（-1=不限，0=不评）。插件页「评论」面板可以直接调",
+    "default": -1
+  },
+  "comment_interval_seconds": {
+    "type": "int",
+    "description": "两条自动评论之间至少隔几秒（5~300，默认 8）。撞过风控会自动进入 5~30 分钟全局暂停",
+    "default": 8
+  },
+  "comment_taste": {
+    "type": "string",
+    "description": "评论口味：模型凭什么判断想不想开口（留空=用内置口味）",
+    "default": ""
+  },
+  "speaking_style": {
+    "type": "string",
+    "description": "自定义说话风格：取消绑定 AstrBot 人设卡后生效（留空=用内置风格）",
+    "default": ""
+  },
+  "speaking_style_bind_persona": {
+    "type": "bool",
+    "description": "绑定 AstrBot 当前默认人设卡：每次评论和回复实时读取，切换或修改人设后自动跟随；关闭后使用自定义说话风格",
+    "default": true
+  },
+  "comment_eagerness": {
+    "type": "string",
+    "description": "开口积极性：保守 / 正常 / 积极（决定它多容易开口，取代按条数卡上限）",
+    "default": "正常"
+  },
+  "comment_at": {
+    "type": "string",
+    "description": "评论时 @ 谁：填 B站 昵称（会自动补 @），留空=不 @。@ 是纯文本，昵称写错就只是普通文字",
+    "default": ""
+  },
+  "reply_mode": {
+    "type": "string",
+    "description": "有人回复我的评论时：off=不检测 / draft=先写草稿推给你审、你说发才发 / auto=自己发（受日上限约束）",
+    "default": "draft"
+  },
+  "reply_check_minutes": {
+    "type": "int",
+    "description": "多久查一次「回复我的」（分钟，3~120，默认 10）",
+    "default": 10
+  },
+  "reply_max_per_day": {
+    "type": "int",
+    "description": "auto 模式下每天最多自动回几条（0=不回、只存草稿，默认 3）",
+    "default": 3
+  },
+  "reply_interval_seconds": {
+    "type": "int",
+    "description": "两条自动回复之间至少隔几秒（30~600，默认 90）",
+    "default": 90
+  },
+  "reply_once_per_person": {
+    "type": "bool",
+    "description": "同一人 30 天内只回一条（防拉锯、防被当客服）。关掉 = 想回几次回几次；使用者本人不受这条限制",
+    "default": true
+  }
+}

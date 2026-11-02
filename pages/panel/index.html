@@ -1,0 +1,1655 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>刷B站</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --line: rgb(127 127 127 / .20);
+    --line-2: rgb(127 127 127 / .34);
+    --muted: #8a8a8a;
+    --surface: rgb(127 127 127 / .055);
+    --surface-2: rgb(127 127 127 / .11);
+    --accent: #0091c2;
+    --accent-fill: #007ba3;
+    --ok: #16a34a; --bad: #dc2626; --warn: #d97706;
+    --panel-bg: #ffffff;
+    --r: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    /* 宿主没注入 data-theme 时（本地直开）跟随系统 */
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --muted: #9a9a9a; --surface: rgb(127 127 127 / .09); --surface-2: rgb(127 127 127 / .16);
+      --accent: #58c6e8; --accent-fill: #1b8fb0;
+    --panel-bg: #18181c;
+      --panel-bg: #18181c;
+    }
+  }
+  /* AstrBot 服务页面时会往 <html> 注入 data-theme，面板主题优先于系统偏好 */
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --muted: #9a9a9a; --surface: rgb(127 127 127 / .09); --surface-2: rgb(127 127 127 / .16);
+    --accent: #58c6e8; --accent-fill: #1b8fb0;
+  }
+  :root[data-theme="light"] { color-scheme: light; }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 68px; }
+  body {
+    margin: 0; padding: 18px 20px 48px;
+    font: 14px/1.65 system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+
+  h1 { font-size: 20px; font-weight: 650; margin: 0 0 2px; letter-spacing: .01em; }
+  h2 { font-size: 15px; font-weight: 650; margin: 0; }
+  .sub { color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+  /* ---------- 顶部 ---------- */
+  .hd { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+  .hd-act { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .hd-act .row-btns { display: flex; gap: 8px; }
+  @media (max-width: 620px) { .hd-act, .hd-act .row-btns { align-items: stretch; } .hd-act { align-items: flex-start; } }
+
+  /* ---------- 状态卡 ---------- */
+  .cards { display: grid; gap: 10px; margin-top: 16px; grid-template-columns: repeat(auto-fit, minmax(146px, 1fr)); }
+  .card {
+    display: flex; flex-direction: column; justify-content: space-between; gap: 3px;
+    min-height: 66px; padding: 10px 12px;
+    border: 1px solid var(--line); border-radius: var(--r); background: var(--surface);
+  }
+  .card .k { font-size: 11.5px; color: var(--muted); letter-spacing: .02em; }
+  .card .v { font-size: 14px; font-weight: 600; line-height: 1.4; word-break: break-word; }
+  /* 主面板 6 张状态卡：一排六个，比其它 tab 的卡更紧凑 */
+  #cards { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  #cards .card { flex: 0 0 auto; min-width: 132px; min-height: 52px; padding: 7px 12px; gap: 1px; }
+  #cards .card .k { font-size: 11px; }
+  #cards .card .v {
+    font-size: 12.5px; line-height: 1.35;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+
+  /* ---------- 区块 / 面板 ---------- */
+  .sec { scroll-margin-top: 68px; }
+  .sec-head {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    margin: 26px 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line);
+  }
+  /* ---------- 可收纳区块（点标题旁的小箭头） ---------- */
+  .sec.collapsible > .sec-head { cursor: pointer; user-select: none; gap: 6px; }
+  .sec.collapsible > .sec-head:hover h2 { color: var(--accent); }
+  .sec.collapsible > .sec-head .caret {
+    display: inline-block; width: 12px; font-size: 11px; line-height: 1;
+    color: var(--muted); transform: rotate(0deg); transition: transform .15s ease;
+  }
+  .sec.collapsible:not(.collapsed) > .sec-head .caret { transform: rotate(90deg); }
+  .sec.collapsible.collapsed > .sec-body { display: none; }
+  .sec.collapsible.collapsed > .sec-head { margin-bottom: 14px; }
+  .panel { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 12px 14px; }
+  .panel-title { font-size: 12.5px; font-weight: 600; color: var(--muted); letter-spacing: .02em; margin-bottom: 10px; }
+  .panels { display: grid; gap: 12px; grid-template-columns: 1fr; align-items: start; }
+  @media (min-width: 900px) { .panels { grid-template-columns: 1fr 1fr; } }
+  /* 设置里只剩一个面板时让它铺满，别缩在左半边 */
+  .panels > :only-child { grid-column: 1 / -1; }
+
+  /* ---------- 登录 ---------- */
+  /* 顶部两块并排：状态卡 + B站登录，等宽等高 */
+  /* 注意：#cards .card 带 ID 权重，这里必须显式带 #cards 才压得住 */
+  .top-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin-top: 12px; align-items: start;   /* 不强制等高：二维码展开时左边不跟着长 */
+  }
+  .top-row #cards { margin-top: 0; display: flex; gap: 0; }
+  .top-row #cards .card {
+    flex: 1 1 auto; min-width: 0; width: auto; height: 64px;
+    justify-content: center; align-items: center; text-align: center;
+  }
+  .top-row .login-panel {
+    margin: 0; display: flex; flex-direction: column;
+    justify-content: center; align-items: center; text-align: center; gap: 8px;
+    min-height: 64px; max-height: 300px; overflow: auto;  /* 二维码超高时在面板内滚动 */
+  }
+  .top-row .login-panel .login-row { justify-content: center; }
+  .top-row .login-panel #qr { margin-left: auto; margin-right: auto; }
+  @media (max-width: 680px) { .top-row { grid-template-columns: 1fr; } }
+
+  .login-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .login-row .panel-title { margin: 0; }
+  #qr { display: block; margin-top: 12px; max-width: 220px; max-height: 220px; object-fit: contain; border-radius: 10px; border: 1px solid var(--line); background: #fff; padding: 6px; }
+
+  /* ---------- 表单 ---------- */
+  .grid { display: grid; gap: 12px 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid > .span-all { grid-column: 1 / -1; }
+  @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field > .lbl { font-size: 12px; color: var(--muted); line-height: 1.4; }
+  .field .tip { font-size: 11.5px; color: var(--muted); }
+
+  input, select, textarea {
+    font: inherit; width: 100%; min-width: 0; padding: 7px 10px;
+    border-radius: 8px; border: 1px solid var(--line-2);
+    background: transparent; background: Canvas; color: inherit;
+  }
+  input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent);
+  }
+  textarea { min-height: 68px; resize: vertical; line-height: 1.55; }
+  textarea:disabled { opacity: .55; cursor: not-allowed; }
+  textarea.tight { min-height: 46px; }             /* 一两行就够的框（时段/条数） */
+  textarea.tight::placeholder { font-size: 12px; }
+  input::placeholder, textarea::placeholder { color: var(--muted); opacity: .8; }
+
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row input, .row select { width: auto; }
+
+  /* 复选框：整行卡片式，不再用占位符对齐 */
+  .check {
+    grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--surface-2); cursor: pointer;
+  }
+  .check input { width: 16px; height: 16px; margin: 3px 0 0; flex: 0 0 auto; accent-color: var(--accent-fill); }
+  .check .t { font-size: 13px; font-weight: 600; display: block; }
+  .check .d { font-size: 11.5px; color: var(--muted); font-weight: 400; display: block; margin-top: 1px; }
+
+  /* ---------- 按钮 ---------- */
+  button {
+    font: inherit; padding: 7px 14px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--line-2); background: transparent; color: inherit;
+    transition: background .15s, border-color .15s, color .15s;
+  }
+  button:hover:not(:disabled) { background: var(--surface-2); border-color: var(--line-2); }
+  button.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-fill); filter: brightness(1.08); }
+  button:disabled { opacity: .5; cursor: default; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .save-bar { display: flex; gap: 12px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+
+  /* ---------- 日报 / 评论区 ---------- */
+  .md {
+    border: 1px solid var(--line); border-radius: var(--r); background: var(--surface);
+    padding: 14px 16px; overflow: auto; scrollbar-gutter: stable;
+  }
+  #report { max-height: min(62vh, 640px); }
+  .md h1 { font-size: 17px; margin: 0 0 10px; }
+  .md h2 { font-size: 14px; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+  .md h2:first-child { margin-top: 0; }
+  .md h3 { font-size: 13.5px; margin: 14px 0 6px; }
+  .md p { margin: 6px 0; }
+  .md ul { margin: 6px 0; padding-left: 20px; }
+  .md li { margin: 3px 0; }
+  .md blockquote {
+    margin: 10px 0 0; padding: 7px 12px; border-left: 3px solid var(--line-2);
+    border-radius: 0 6px 6px 0; background: var(--surface-2);
+    color: var(--muted); font-size: 12px;
+  }
+  .md a { color: var(--accent); word-break: break-all; }
+
+  /* ---------- 表格 ---------- */
+  .tbl-wrap { border: 1px solid var(--line); border-radius: var(--r); overflow: auto; background: var(--surface); }
+  /* 窄屏别把表格挤成竖排：给它一个最小宽度，让 .tbl-wrap 横向滚动 */
+  table { width: 100%; min-width: 600px; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: var(--surface-2); }
+  th { font-size: 11.5px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+  .c-date { width: 100px; white-space: nowrap; }
+  .c-verdict { width: 86px; }
+  .c-bv { width: 148px; white-space: nowrap; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--line-2); white-space: nowrap; }
+  .tag-good { color: var(--ok); border-color: rgb(22 163 74 / .45); background: rgb(22 163 74 / .09); }
+  .tag-skip { color: var(--muted); }
+  .bvid { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 12px; color: var(--accent); }
+
+  .err {
+    margin-top: 12px; padding: 10px 14px; border-radius: 10px;
+    border: 1px solid rgb(220 38 38 / .4); background: rgb(220 38 38 / .08);
+    color: var(--bad); white-space: pre-wrap; font-size: 13px;
+  }
+  .err:empty { display: none; }
+  /* ---------- 左侧功能菜单（对齐天使之魂：208px / 图标 + 文字 / 窄屏收成 64px 图标栏） ---------- */
+  .layout {
+    display: grid; grid-template-columns: 208px minmax(0, 1fr);
+    gap: 0; margin-top: 14px; align-items: start;
+  }
+  .main { min-width: 0; padding: 4px 0 0 24px; }
+  .side {
+    position: sticky; top: 12px;
+    display: flex; flex-direction: column; min-height: 60vh;
+    border: 1px solid var(--line); border-radius: 14px;
+    background: var(--panel-bg); overflow: hidden;
+    box-shadow: 0 1px 2px rgb(0 0 0 / .05);
+  }
+  .side-brand {
+    display: flex; align-items: center; gap: 8px;
+    padding: 14px 16px; font-size: 15px; font-weight: 600;
+    white-space: nowrap; overflow: hidden;
+  }
+  .side-menu {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 4px 8px 10px;
+  }
+  .tab {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; min-height: 40px; padding: 0 10px;
+    border: 1px solid transparent; border-radius: 8px;
+    background: transparent; font-size: 14px; color: inherit;
+    text-align: left; cursor: pointer;
+    transition: background .15s ease, color .15s ease;
+  }
+  .tab:hover { background: var(--surface-2); }
+  .tab.active {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+    color: var(--accent); font-weight: 600;
+  }
+  .tab-icon { flex-shrink: 0; display: inline-flex; width: 18px; height: 18px; }
+  .tab-icon svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab .badge {
+    display: inline-block; min-width: 16px; padding: 0 5px; margin-left: 6px;
+    border-radius: 99px; font-size: 11px; font-weight: 600;
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    color: var(--accent);
+  }
+  .tab .badge:empty { display: none; }
+  /* 窄屏：学天使之魂，收成 64px 的纯图标栏 */
+  @media (max-width: 768px) {
+    .layout { grid-template-columns: 64px minmax(0, 1fr); }
+    .main { padding-left: 12px; }
+    .side { min-height: 0; }
+    .side-brand { justify-content: center; padding: 12px 0; }
+    .brand-text { display: none; }
+    .side-menu { padding: 4px 6px 8px; }
+    .tab { justify-content: center; padding: 0; gap: 0; }
+    .tab-label { display: none; }
+  }
+  .c-id { width: 76px; white-space: nowrap; }
+  .c-who { width: 118px; }
+  .c-act { width: 132px; white-space: nowrap; }
+  .empty { padding: 14px 16px; color: var(--muted); font-size: 13px; }
+  .quote { color: var(--muted); }
+  .hide { display: none !important; }
+</style>
+<script src="/api/plugin/page/bridge-sdk.js"></script>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hd" id="top">
+    <div class="hd-main">
+      <div class="sub">按关键词筛选视频、整理日报，按需开启评论与回复</div>
+    </div>
+    <div class="hd-act">
+      <div class="row-btns">
+        <button id="btn-refresh">刷新状态</button>
+        <button id="btn-run" class="primary">立刻刷一轮</button>
+      </div>
+      <span id="run-hint" class="sub"></span>
+    </div>
+  </header>
+
+  <div class="layout">
+  <aside class="side" id="tabs">
+    <div class="side-brand"><span class="brand-text">刷B站</span></div>
+    <nav class="side-menu">
+      <button class="tab active" id="tab-main" data-view="刷视频"><span class="tab-icon"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg></span><span class="tab-label">刷视频</span></button>
+      <button class="tab" id="tab-rhythm" data-view="作息"><span class="tab-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span><span class="tab-label">作息</span></button>
+      <button class="tab" id="tab-upload" data-view="投稿"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg></span><span class="tab-label">投稿</span></button>
+      <button class="tab" id="tab-delivery" data-view="投递"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></span><span class="tab-label">投递</span></button>
+      <button class="tab" id="tab-comments" data-view="评论"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span class="tab-label">评论</span></button>
+      <button class="tab" id="tab-reply" data-view="reply"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></span><span class="tab-label">回复<span id="tab-reply-count" class="badge"></span></span></button>
+    </nav>
+  </aside>
+  <main class="main">
+
+  <div id="view-main">
+  <div id="err" class="err"></div>
+
+  <div class="top-row">
+    <div class="cards" id="cards"></div>
+
+    <section class="panel login-panel">
+      <div class="login-row">
+        <span class="panel-title">B站 登录</span>
+        <button id="btn-login">生成二维码</button>
+        <span id="login-hint" class="sub"></span>
+      </div>
+      <img id="qr" class="hide" alt="B站登录二维码" />
+    </section>
+  </div>
+
+  <!-- ===== 设置 ===== -->
+  <section class="sec collapsible" id="sec-settings">
+    <div class="sec-head">
+      <span class="caret">▸</span>
+      <h2>设置</h2>
+      <span class="sub">设置搜索关键词、筛选数量和使用的模型</span>
+    </div>
+    <div class="sec-body">
+
+    <div class="panels" id="form">
+
+      <section class="panel">
+        <div class="panel-title">搜索与判断</div>
+        <div class="sub" style="margin:-6px 0 10px">先搜索并去重，再阅读内容、判断是否值得推荐。</div>
+        <div class="grid">
+          <label class="field span-all">
+            <span class="lbl">关键词（一行一个，或逗号分隔）</span>
+            <textarea id="f-keywords" placeholder="搞笑&#10;沙雕&#10;整活"></textarea>
+            <span class="tip">填写感兴趣的话题，一行一个或逗号分隔；具体关键词更容易找到符合口味的内容。</span>
+          </label>
+          <label class="field"><span class="lbl">每个关键词的候选视频数</span><input id="f-candidates_per_keyword" type="number" min="3" max="30" />
+            <span class="tip">每个关键词先取多少条搜索结果；数值越大，可供筛选的内容越多。</span>
+          </label>
+          <label class="field"><span class="lbl">每轮最多阅读的视频数</span><input id="f-max_scan" type="number" min="3" max="40" />
+            <span class="tip">限制本轮读取并判断的数量；调大可能找到更多合适视频，也会增加耗时和模型用量。</span>
+          </label>
+          <label class="field"><span class="lbl">搜索排序</span>
+            <select id="f-search_order">
+              <option value="pubdate">pubdate（最新）</option>
+              <option value="totalrank">totalrank（综合）</option>
+              <option value="click">click（播放量）</option>
+            </select>
+            <span class="tip">最新侧重新发布的内容；综合兼顾匹配度；播放量侧重热门，可能包含较早的视频。</span>
+          </label>
+          <label class="field span-all"><span class="lbl">使用的模型（Provider ID，留空 = AstrBot 当前默认）</span><input id="f-provider_id" placeholder="留空使用当前默认模型" />
+            <span class="tip">用于视频判断、自动评论和回复；留空使用 AstrBot 当前默认模型。</span>
+          </label>
+        </div>
+      </section>
+
+
+
+    </div>
+
+    <div class="save-bar">
+      <button id="btn-save" class="primary">保存设置</button>
+      <span id="save-hint" class="sub"></span>
+    </div>
+    </div><!-- /sec-body -->
+  </section>
+
+  <!-- ===== 最近跑过 ===== -->
+  <section class="sec collapsible" id="sec-runs">
+    <div class="sec-head"><span class="caret">▸</span><h2>最近跑过</h2><span class="sub">查看最近 10 轮的筛选数量与运行结果</span></div>
+    <div class="sec-body">
+    <div class="tbl-wrap">
+      <table id="m-runs">
+        <thead><tr><th class="c-id">时间</th><th>候选 → 新</th><th class="c-verdict">挑中</th><th class="c-verdict">扫了</th><th class="c-verdict">跳过</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    </div><!-- /sec-body -->
+  </section>
+
+  <!-- ===== 聊天里怎么用 ===== -->
+  <section class="sec collapsible" id="sec-chat">
+    <div class="sec-head">
+      <span class="caret">▸</span>
+      <h2>聊天里怎么用</h2>
+      <span class="sub">发送视频链接，再说明想了解什么</span>
+    </div>
+    <div class="sec-body">
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>你说</th><th>它会做</th></tr></thead>
+        <tbody>
+          <tr><td>「搜一下最近的整活视频」</td><td>搜 B站：标题 / BV / UP / 播放量</td></tr>
+          <tr><td>「这个视频讲了什么」</td><td>读字幕全文（BV 号或直接粘链接都行）</td></tr>
+          <tr><td>「评论区都在聊什么」</td><td>拉评论，标出哪几条是它发的</td></tr>
+          <tr><td>「这条评论下面在聊什么」</td><td>展开楼中楼（谁回谁）</td></tr>
+          <tr><td>「有人回复我或者 @ 我吗」</td><td>查看回复消息，以及使用者本人发来的 @</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="sub" style="margin-top:8px">发送视频链接、BV 号或 b23.tv 短链后，再说明想查什么。自动刷视频在「作息」中设置；评论和回复各自开启、保存后生效。</div>
+    </div><!-- /sec-body -->
+  </section>
+
+  <!-- ===== 日报 ===== -->
+  <section class="sec collapsible" id="sec-report">
+    <div class="sec-head">
+      <span class="caret">▸</span>
+      <h2>日报</h2>
+      <span class="sub">按日期查看推荐结果，同一天的运行记录自动追加</span>
+    </div>
+    <div class="sec-body">
+    <div class="row" style="margin-bottom:10px">
+      <select id="report-date"></select>
+    </div>
+    <div class="md" id="report"><span class="sub">（还没有日报）</span></div>
+    </div><!-- /sec-body -->
+  </section>
+
+  <!-- ===== 看过的视频 ===== -->
+  <section class="sec collapsible" id="sec-history">
+    <div class="sec-head">
+      <span class="caret">▸</span>
+      <h2>看过的视频</h2>
+      <span class="sub">查看最近 100 条已处理视频，后续搜索时自动去重</span>
+    </div>
+    <div class="sec-body">
+    <div class="tbl-wrap">
+      <table id="history">
+        <thead><tr><th class="c-date">日期</th><th class="c-verdict">档位</th><th>标题</th><th class="c-bv">BV</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    </div><!-- /sec-body -->
+  </section>
+
+  </div><!-- /view-main -->
+
+  <!-- ===== 作息（同一个页面里的 tab） ===== -->
+  <div id="view-rhythm" class="hide">
+    <div class="cards" id="h-cards"></div>
+
+    <section class="sec collapsible" id="sec-rhythm">
+      <div class="sec-head"><span class="caret">▸</span><h2>作息设置</h2><span class="sub">设置自动刷视频的时段、次数和间隔</span></div>
+    <div class="sec-body">
+      <div class="panel">
+        <div class="grid">
+          <label class="field span-all"><span class="lbl">作息窗口（每行一个：开始-结束 醒几次）</span>
+            <textarea id="f-rhythm_windows" class="tight" rows="3" placeholder="09:00-15:00 3&#10;18:00-24:00 3"></textarea>
+            <span class="tip"><code>09:00-15:00 3</code> 表示在该时段随机安排 3 次；支持 <code>22:00-02:00</code> 跨午夜。留空则只手动运行。</span>
+          </label>
+          <label class="field"><span class="lbl">两次唤醒的最小间隔（分钟）</span>
+            <input id="f-rhythm_min_gap_minutes" type="number" min="0" max="180" step="1" />
+            <span class="tip">限制自动唤醒的密度；时段内排不下时，实际次数会减少。</span>
+          </label>
+          <label class="field"><span class="lbl">每次唤醒跳过刷视频的概率（%）</span>
+            <input id="f-rhythm_skip_percent" type="number" min="0" max="100" step="1" />
+            <span class="tip">0 表示每次都尝试刷视频；数值越大，跳过本次刷视频的可能性越高。</span>
+          </label>
+          <label class="field"><span class="lbl">每次醒来最多挑几条</span>
+            <input id="f-daily_count" type="number" min="1" max="10" />
+            <span class="tip">单轮最多推荐的数量；能否挑满取决于候选内容和阅读上限，全天次数由作息窗口决定。</span>
+          </label>
+        </div>
+        <div class="save-bar">
+          <button id="h-btn-save" class="primary">保存</button>
+          <span id="h-save-hint" class="sub"></span>
+        </div>
+        <div id="h-err" class="err"></div>
+      </div>
+    </div><!-- /sec-body -->
+    </section>
+
+    <section class="sec collapsible" id="sec-rhythm-runs">
+      <div class="sec-head"><span class="caret">▸</span><h2>最近醒来</h2><span class="sub">查看最近 20 轮已完成的运行记录</span></div>
+    <div class="sec-body">
+      <div class="tbl-wrap">
+        <table id="h-runs">
+          <thead><tr><th class="c-id">时间</th><th>挑中</th><th>候选 → 新</th><th>扫了</th><th>跳过</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div><!-- /sec-body -->
+    </section>
+
+    <section class="sec collapsible" id="sec-rhythm-note">
+      <div class="sec-head"><span class="caret">▸</span><h2>作息如何运行</h2><span class="sub">计划保存后，重启也会继续沿用</span></div>
+    <div class="sec-body">
+      <div class="panel">
+        <div class="sub">
+          系统会在作息窗口内随机安排具体时间，并保存计划；<strong>重启不会重新抽取时间</strong>。到点未能执行时，会在窗口结束前继续尝试。<br />
+          修改时间窗口、唤醒次数、最小间隔或跳过概率并保存后，会重新安排计划；修改评论、投递或说话风格不会影响计划。
+        </div>
+      </div>
+    </div><!-- /sec-body -->
+    </section>
+  </div>
+
+  <!-- ===== 投稿（同一个页面里的 tab） ===== -->
+  <div id="view-upload" class="hide">
+    <div class="cards" id="u-cards"></div>
+
+    <section class="sec collapsible" id="sec-upload">
+      <div class="sec-head"><span class="caret">▸</span><h2>投稿</h2><span class="sub">选择视频并填写信息，提交到当前 B站账号</span></div>
+    <div class="sec-body">
+      <div class="panel">
+        <div class="grid">
+          <label class="field span-all"><span class="lbl">选择视频素材</span>
+            <select id="u-file"></select>
+            <span class="tip">先将视频放入插件的 <code>media/</code> 素材目录，再从列表选择；也可在下方填写服务器文件路径。</span>
+          </label>
+          <label class="field span-all"><span class="lbl">指定视频路径（可选，优先于上方所选素材）</span>
+            <input id="u-path" placeholder="/root/qqbot/videos/xxx.mp4" />
+            <span class="tip">填写运行 AstrBot 的服务器上的绝对路径；留空则使用上方所选视频。</span>
+          </label>
+          <label class="field span-all"><span class="lbl">标题（最多 80 字）</span>
+            <input id="u-title" placeholder="例如：这只猫的睡姿我看了三遍" />
+            <span class="tip">发布到 B站时显示的视频标题，不能为空。</span>
+          </label>
+          <label class="field"><span class="lbl">分区</span>
+            <select id="u-tid">
+              <option value="21">日常（21）</option>
+              <option value="17">单机游戏（17）</option>
+              <option value="171">电子竞技（171）</option>
+              <option value="160">生活记录（160）</option>
+              <option value="124">社科·法律·心理（124）</option>
+              <option value="183">影视杂谈（183）</option>
+              <option value="188">科技资讯（188）</option>
+              <option value="208">科技（208）</option>
+              <option value="230">其他（230）</option>
+              <option value="231">美食（231）</option>
+            </select>
+          </label>
+          <label class="field"><span class="lbl">标签（逗号分隔，至少 1 个）</span>
+            <input id="u-tags" placeholder="搞笑,日常,猫咪" />
+            <span class="tip">填写与视频内容相关的标签，例如「搞笑,日常,猫咪」。</span>
+          </label>
+          <label class="field span-all"><span class="lbl">简介</span>
+            <textarea id="u-desc" class="tight" rows="2" placeholder="留空也行"></textarea>
+          </label>
+          <label class="field"><span class="lbl">封面图片路径（可选）</span>
+            <input id="u-cover" placeholder="/root/qqbot/media/cover.jpg" />
+            <span class="tip">填写服务器上的图片路径；留空则不指定封面，由 B站处理。</span>
+          </label>
+          <label class="field"><span class="lbl">转载来源（非原创才填）</span>
+            <input id="u-source" placeholder="https://…" />
+            <span class="tip">原创视频留空；转载视频填写来源，系统会按转载稿提交。</span>
+          </label>
+          <label class="field span-all"><span class="lbl">同步发一条粉丝动态（留空 = 不发）</span>
+            <input id="u-dynamic" placeholder="留空" />
+          </label>
+          <label class="check">
+            <input id="u-no_reprint" type="checkbox" checked />
+            <span><span class="t">禁止未经授权转载</span><span class="d">用于原创稿的转载设置；填写转载来源后，此项不生效。</span></span>
+          </label>
+        </div>
+        <div class="save-bar">
+          <button id="u-btn-start" class="primary">开始投稿</button>
+          <span id="u-hint" class="sub"></span>
+        </div>
+        <div id="u-err" class="err"></div>
+      </div>
+    </div><!-- /sec-body -->
+    </section>
+
+    <section class="sec collapsible" id="sec-upload-note">
+      <div class="sec-head"><span class="caret">▸</span><h2>投稿准备与结果</h2><span class="sub">素材来自服务器，提交进度在本页查看</span></div>
+    <div class="sec-body">
+      <div class="panel">
+        <div class="sub">
+          本页使用服务器上已有的视频文件，不能直接选择你电脑里的文件；可先放入插件素材目录，或填写服务器上的完整路径。<br />
+          点击「开始投稿」后，可在本页查看上传状态、视频编号或失败原因。上传时间取决于文件大小和网络情况。
+        </div>
+      </div>
+    </div><!-- /sec-body -->
+    </section>
+  </div>
+
+  <!-- ===== 投递（同一个页面里的 tab） ===== -->
+  <div id="view-delivery" class="hide">
+    <div class="cards" id="d-cards"></div>
+
+    <section class="sec collapsible" id="sec-delivery">
+      <div class="sec-head"><span class="caret">▸</span><h2>投递设置</h2><span class="sub">选择日报是否推送到 QQ 或 B站私信</span></div>
+    <div class="sec-body">
+      <div class="panel">
+          <div class="grid">
+            <label class="check">
+              <input id="f-push_qq" type="checkbox" />
+              <span><span class="t">把日报推到 QQ</span><span class="d">开启后，每轮完成时将筛选摘要发送给下方填写的 QQ。</span></span>
+            </label>
+            <label class="field"><span class="lbl">接收日报的 QQ 号</span><input id="f-owner_qq" placeholder="填写你的数字 QQ 号" />
+              <span class="tip">用于接收日报和待审回复通知；日报是否推送由上方开关控制。</span>
+            </label>
+            <label class="field"><span class="lbl">每条私信最多推荐几个视频</span><input id="f-max_dm_items" type="number" min="1" max="6" />
+              <span class="tip">控制私信中展示的视频数量；内容过长时会截短，完整结果可在面板日报中查看。</span>
+            </label>
+            <label class="field"><span class="lbl">B站 私信投递</span>
+              <select id="f-dm_mode">
+                <option value="off">off（不发私信）</option>
+                <option value="only">only（发私信）</option>
+              </select>
+              <span class="tip">开启后向下方 UID 发送本轮推荐摘要；与 QQ 推送互不影响。</span>
+            </label>
+            <label class="field"><span class="lbl">私信发给谁（B站 UID）</span><input id="f-dm_uid" placeholder="留空 = 不发" />
+              <span class="tip">填写对方的数字 UID，而不是昵称；留空则不发送 B站私信。</span>
+            </label>
+          </div>
+        <div class="save-bar">
+          <button id="d-btn-save" class="primary">保存</button>
+          <span id="d-save-hint" class="sub"></span>
+        </div>
+        <div id="d-err" class="err"></div>
+      </div>
+    </div><!-- /sec-body -->
+    </section>
+
+    <section class="sec collapsible" id="sec-delivery-note">
+      <div class="sec-head"><span class="caret">▸</span><h2>日报保存与投递</h2><span class="sub">关闭推送后，仍可在面板查看日报</span></div>
+    <div class="sec-body">
+      <div class="panel">
+        <div class="sub">
+          日报会保存在插件中，可在「刷视频 → 日报」按日期查看；关闭 QQ 和 B站私信投递不会关闭日报生成。<br />
+          QQ 推送需要 AstrBot 的 QQ 连接在线；B站私信使用当前登录的 B站账号发送。
+        </div>
+      </div>
+    </div><!-- /sec-body -->
+    </section>
+  </div>
+
+  <!-- ===== 评论（同一个页面里的 tab） ===== -->
+  <div id="view-comments" class="hide">
+    <div class="cards" id="c2-cards"></div>
+
+    <section class="sec collapsible" id="sec-comments">
+      <div class="sec-head"><span class="caret">▸</span><h2>评论设置</h2><span class="sub">控制自动评论的开关、频率和每日上限</span></div>
+    <div class="sec-body">
+      <div class="panel">
+          <div class="grid">
+            <label class="check">
+              <input id="f-auto_comment" type="checkbox" />
+              <span><span class="t">让机器人自己决定要不要评论</span><span class="d">开启后，对本轮挑中的视频判断是否有话可说，并用当前 B站账号发表评论；没有合适内容时不发。</span></span>
+            </label>
+            <label class="field"><span class="lbl">开口积极性</span>
+              <select id="f-comment_eagerness">
+                <option value="保守">保守（很少开口）</option>
+                <option value="正常">正常</option>
+                <option value="积极">积极（有乐子就说）</option>
+              </select>
+              <span class="tip">保守只在特别想说时评论；正常有具体内容才评；积极更愿意接话，但不会强凑评论。</span>
+            </label>
+            <label class="field"><span class="lbl">每天最多评几条（-1 = 不限，0 = 不评）</span><input id="f-auto_comment_per_day" type="number" min="-1" max="20" step="1" />
+              <span class="tip">统计当天各轮自动评论的总数；-1 不限，0 停止自动评论，不影响回复功能。</span>
+            </label>
+            <label class="field"><span class="lbl">两条评论间隔（秒，5~300）</span><input id="f-comment_interval_seconds" type="number" min="5" max="300" step="1" />
+              <span class="tip">设置连续发表评论之间的等待时间；遇到风控时，插件会额外暂停相关 B站请求。</span>
+            </label>
+            <label class="field"><span class="lbl">评论时 @ 谁（B站昵称，留空 = 不 @）</span><input id="f-comment_at" placeholder="例如 Wei_Yang233" />
+              <span class="tip">在评论末尾附上 @ 昵称；填写完整的 B站昵称，留空则不附加。</span>
+            </label>
+          </div>
+        <div class="save-bar">
+          <button id="c2-btn-save" class="primary">保存</button>
+          <span id="c2-save-hint" class="sub"></span>
+        </div>
+        <div id="c2-err" class="err"></div>
+      </div>
+    </div><!-- /sec-body -->
+    </section>
+
+    <!-- ===== 评论口味（从评论设置里独立出来） ===== -->
+    <section class="sec collapsible" id="sec-comments-taste">
+      <div class="sec-head"><span class="caret">▸</span><h2>评论口味</h2><span class="sub">决定哪些内容值得开口</span></div>
+    <div class="sec-body">
+      <div class="panel">
+        <div class="grid">
+          <label class="field span-all"><span class="lbl">内容偏好（留空 = 内置口味）</span>
+            <textarea id="f-comment_taste" rows="4"></textarea>
+            <span class="tip">写清喜欢和不喜欢的内容，例如「喜欢反差和生活细节，不喜欢硬煽情」。语气和措辞在下方设置。</span>
+          </label>
+        </div>
+        <div class="save-bar">
+          <button id="c2t-btn-save" class="primary">保存</button>
+          <span id="c2t-save-hint" class="sub"></span>
+        </div>
+      </div>
+    </div><!-- /sec-body -->
+    </section>
+
+    <section class="sec collapsible" id="sec-comments-style">
+      <div class="sec-head"><span class="caret">▸</span><h2>说话风格</h2><span class="sub">选择跟随人设，或自定义评论与回复的语气</span></div>
+    <div class="sec-body">
+      <div class="panel">
+        <div class="grid">
+          <label class="check">
+            <input type="checkbox" id="f-speaking_style_bind_persona" />
+            <span><span class="t">绑定 AstrBot 当前默认人设卡</span><span class="d">勾选并保存后，每次生成评论或回复都会读取当前默认人设；之后切换或修改人设卡，无需再次保存插件设置。</span></span>
+          </label>
+          <span id="c2s-persona-status" class="tip span-all" role="status"></span>
+          <label class="field span-all"><span class="lbl">自定义说话风格（取消绑定后生效）</span>
+            <textarea id="f-speaking_style" rows="4" maxlength="2000"></textarea>
+            <span class="tip">例如「简短直接，带一点冷幽默」。取消绑定并保存后使用此框，留空用内置风格；绑定期间保留原有输入。</span>
+          </label>
+        </div>
+        <div class="save-bar">
+          <button id="c2s-btn-save" class="primary">保存</button>
+          <span id="c2s-save-hint" class="sub"></span>
+        </div>
+      </div>
+    </div><!-- /sec-body -->
+    </section>
+
+    <section class="sec collapsible" id="sec-comments-history">
+      <div class="sec-head"><span class="caret">▸</span><h2>最近评论</h2><span class="sub">查看最近 20 条已发送的评论和回复</span></div>
+    <div class="sec-body">
+      <div class="tbl-wrap">
+        <table id="c2-history">
+          <thead><tr><th class="c-id">时间</th><th class="c-bv2">视频</th><th>说了什么</th><th class="c-who">方式</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div><!-- /sec-body -->
+    </section>
+  </div>
+
+  <!-- ===== 回复（同一个页面里的 tab） ===== -->
+  <div id="view-reply" class="hide">
+    <div class="cards" id="r-cards"></div>
+
+    <section class="sec collapsible" id="sec-reply">
+      <div class="sec-head"><span class="caret">▸</span><h2>回复设置</h2><span class="sub">设置回复与 @ 消息的处理方式和频率</span></div>
+    <div class="sec-body">
+      <div class="panel">
+        <div class="grid">
+          <label class="field"><span class="lbl">收到回复或使用者的 @ 时</span>
+            <select id="f-reply_mode">
+              <option value="off">off（不检测）</option>
+              <option value="draft">draft（先推给你审）</option>
+              <option value="auto">auto（自己回）</option>
+            </select>
+            <span class="tip">关闭则不检测；待审模式先写草稿；自动模式在判断需要回复后发送。</span>
+          </label>
+          <label class="field"><span class="lbl">多久查一次（分钟）</span>
+            <input id="f-reply_check_minutes" type="number" min="3" max="120" step="1" />
+            <span class="tip">检查新回复及使用者本人 @ 的间隔；数值越小，检查越频繁，实际发现时间也受 B站消息延迟影响。</span>
+          </label>
+          <label class="field"><span class="lbl">每天最多自动回几条</span>
+            <input id="f-reply_max_per_day" type="number" min="0" max="20" step="1" />
+            <span class="tip">仅限制自动发送的回复；达到上限后，后续生成的回复转为待审草稿。填 0 则只存草稿。</span>
+          </label>
+          <label class="field"><span class="lbl">两条回复间隔（秒）</span>
+            <input id="f-reply_interval_seconds" type="number" min="30" max="600" step="1" />
+            <span class="tip">控制连续自动发送回复的最小间隔；不会改变上方检查新消息的频率。</span>
+          </label>
+          <label class="check">
+            <input id="f-reply_once_per_person" type="checkbox" />
+            <span><span class="t">同一人 30 天只回一条</span><span class="d">减少与同一人的重复互动，使用者本人不受此项限制；取消勾选仅关闭这项限制。</span></span>
+          </label>
+        </div>
+        <div class="save-bar">
+          <button id="r-btn-save" class="primary">保存</button>
+          <span id="r-save-hint" class="sub"></span>
+        </div>
+        <div id="r-err" class="err"></div>
+      </div>
+    </div><!-- /sec-body -->
+    </section>
+
+    <section class="sec collapsible" id="sec-reply-pending">
+      <div class="sec-head"><span class="caret">▸</span><h2>待审草稿</h2><span class="sub">确认后发送，或丢弃不合适的回复</span></div>
+    <div class="sec-body">
+      <div class="tbl-wrap">
+        <table id="r-pending">
+          <thead><tr><th class="c-id">id</th><th class="c-who">对方</th><th>TA 说</th><th>我打算回</th><th class="c-act">操作</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div><!-- /sec-body -->
+    </section>
+
+    <section class="sec collapsible" id="sec-reply-history">
+      <div class="sec-head"><span class="caret">▸</span><h2>最近回过</h2><span class="sub">查看最近 20 条已发送回复及对应的视频</span></div>
+    <div class="sec-body">
+      <div class="tbl-wrap">
+        <table id="r-history">
+          <thead><tr><th class="c-id">时间</th><th class="c-who">回谁</th><th>我说了什么</th><th class="c-id">视频</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div><!-- /sec-body -->
+    </section>
+
+    <section class="sec collapsible" id="sec-reply-chat">
+      <div class="sec-head"><span class="caret">▸</span><h2>聊天里怎么用</h2><span class="sub">在 QQ 中查看消息、审阅和处理回复草稿</span></div>
+    <div class="sec-body">
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>你说</th><th>它会做</th></tr></thead>
+          <tbody>
+            <tr><td>「有人回复我或者 @ 我吗」</td><td>查看收到的回复，以及使用者本人发来的 @</td></tr>
+            <tr><td>「看看有哪些待发的回复」</td><td>列出待审草稿，供管理员确认</td></tr>
+            <tr><td>「发这条草稿 / 丢弃这条草稿」</td><td>根据草稿 ID 发送或丢弃，只有管理员可以操作</td></tr>
+            <tr><td>「帮我回这条评论：…」</td><td>把回复加入待审队列，管理员确认后发送</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div><!-- /sec-body -->
+    </section>
+  </div>
+  </main>
+</div>
+<script type="module">
+// 页面顶部显式引入了 bridge SDK；这里再兜一层：轮询等 window.AstrBotPluginView 出现。
+// 踩过的坑：AstrBot 注入 bridge 的方式是字符串替换 body 结束标签（只替换第一个），
+// 所以本文件任何地方（包括注释和 JS 字符串）都不能出现那个字面量 ——
+// 一旦出现，bridge 会被塞进脚本内部，它的结束标签会把这段脚本截断，
+// 剩下的代码会被当成正文渲染出来，页面就变成"满屏源码 + 加载失败"。
+const $ = (id) => document.getElementById(id);
+
+function showErr(msg) { $("err").textContent = msg ? String(msg) : ""; }
+function setHint(id, text, cls) {
+  const el = $(id);
+  el.textContent = text || "";
+  el.className = "sub" + (cls ? " " + cls : "");
+}
+
+let bridge = null;
+async function getBridge() {
+  if (bridge) return bridge;
+  for (let i = 0; i < 100 && !window.AstrBotPluginView; i++) {
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  bridge = window.AstrBotPluginView;
+  if (!bridge) throw new Error("AstrBot 插件页 bridge 没加载出来，刷新页面试试");
+  await Promise.race([bridge.ready(), new Promise((r) => setTimeout(r, 1500))]);
+  return bridge;
+}
+
+async function api(path, body, params) {
+  const b = await getBridge();
+  // 注意：bridge 不允许 endpoint 里带 ? 或 #，query 参数必须走第二个参数
+  const r = body === undefined ? await b.apiGet(path, params) : await b.apiPost(path, body);
+  // bridge 在响应体为空时会 resolve(undefined)，统一兜成 {}，
+  // 免得调用处 s.config / r.values 这种读属性直接抛 TypeError
+  return r ?? {};
+}
+
+// ---------- 小工具 ----------
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function renderMarkdown(md) {
+  if (!md || !md.trim()) return '<span class="sub">（空）</span>';
+  const inline = (s) =>
+    esc(s)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noreferrer">$1</a>');
+  const out = [];
+  let list = null;
+  const flush = () => { if (list) { out.push("<ul>" + list.join("") + "</ul>"); list = null; } };
+  for (const raw of md.split("\n")) {
+    const line = raw.replace(/\s+$/, "");
+    if (!line.trim()) { flush(); continue; }
+    let m;
+    if ((m = line.match(/^###\s+(.*)$/))) { flush(); out.push(`<h3>${inline(m[1])}</h3>`); }
+    else if ((m = line.match(/^##\s+(.*)$/))) { flush(); out.push(`<h2>${inline(m[1])}</h2>`); }
+    else if ((m = line.match(/^#\s+(.*)$/))) { flush(); out.push(`<h1>${inline(m[1])}</h1>`); }
+    else if ((m = line.match(/^>\s?(.*)$/))) { flush(); out.push(`<blockquote>${inline(m[1])}</blockquote>`); }
+    else if ((m = line.match(/^[-*]\s+(.*)$/))) { (list ||= []).push(`<li>${inline(m[1])}</li>`); }
+    else { flush(); out.push(`<p>${inline(line)}</p>`); }
+  }
+  flush();
+  return out.join("");
+}
+
+// ---------- 状态 ----------
+let lastConfig = null;
+
+function fillForm(values) {
+  lastConfig = values || {};
+  $("f-keywords").value = (values.keywords || []).join("\n");
+  $("f-candidates_per_keyword").value = values.candidates_per_keyword ?? 10;
+  $("f-max_scan").value = values.max_scan ?? 15;
+  $("f-search_order").value = values.search_order || "pubdate";
+  $("f-provider_id").value = values.provider_id || "";
+}
+
+function card(k, v, cls) {
+  return `<div class="card"><div class="k">${esc(k)}</div><div class="v ${cls || ""}">${esc(v)}</div></div>`;
+}
+
+// 作息 → 状态卡上的一句话
+function rhythmCardText(r) {
+  if (!r || !Array.isArray(r.windows) || !r.windows.length) return "没设置（不自动刷）";
+  const seg = r.windows.map((w) => `${w.label}×${w.wakes}`).join(" · ");
+  const used = `${r.wakes_used ?? 0}/${r.max_wakes ?? 0} 次`;
+  const next = r.next_at ? ` · 下次 ${String(r.next_at).slice(11)}` : "";
+  return `${seg} · 今天 ${used}${next}`;
+}
+
+// 自动评论日上限 → 人话。-1/空 = 不限，0 = 不评
+function commentCapText(v) {
+  if (v === null || v === undefined || v === "") return "不限量";
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) return "不限量";
+  return n === 0 ? "不评" : `每天≤${n} 条`;
+}
+
+async function loadSummary() {
+  const s = await api("summary");
+  const cfg = s.config || {};
+  const last = s.last_run;
+  // 口味留空时用的是后端内置那一套，拿它当 placeholder，省得人猜「留空是什么」
+  if (s.comment_taste_default) {
+    $("f-comment_taste").placeholder = "留空 = 用内置口味：\n" + s.comment_taste_default;
+  }
+  if (s.speaking_style_default) {
+    $("f-speaking_style").placeholder = "留空 = 用内置风格：\n" + s.speaking_style_default;
+  }
+  $("cards").innerHTML = card("B站", s.logged_in ? "已登录" : "未登录", s.logged_in ? "ok" : "bad");
+  loggedIn = !!s.logged_in;
+  syncLoginButton();
+  if (!lastConfig) fillForm(cfg);
+  return s;
+}
+
+// ---------- 登录 ----------
+let loginTimer = null;
+
+function loginStateText(login) {
+  const s = login?.state || "idle";
+  // 对象字面量是立即求值的：这里必须先取出 msg，不能写成 login.message ——
+  // 那样 login 为 undefined 时连 idle 分支都会抛 TypeError
+  const msg = login?.message || "";
+  return {
+    idle: ["还没开始", ""],
+    qrcode_ready: [msg || "用 B站 App 扫码", "warn"],
+    scanning: ["已扫码，等手机上确认…", "warn"],
+    confirming: ["已确认，正在保存凭证…", "warn"],
+    done: ["登录成功，凭证已保存", "ok"],
+    already_logged_in: ["已经登录过了", "ok"],
+    timeout: [msg || "二维码过期了", "bad"],
+    error: [msg || "出错了", "bad"],
+  }[s] || [msg || s, ""];
+}
+
+function stopLoginPolling() {
+  if (loginTimer) { clearInterval(loginTimer); loginTimer = null; }
+}
+
+// 已登录时按钮是「重新登录」——这时候点它是有意的换账号，要带 force；
+// 未登录时是「生成二维码」。别靠按钮文字猜状态，用变量。
+let loggedIn = false;
+function syncLoginButton() {
+  $("btn-login").textContent = loggedIn ? "重新登录（换账号）" : "生成二维码";
+}
+
+async function pollLogin() {
+  try {
+    const r = await api("login/state");
+    const [text, cls] = loginStateText(r.login);
+    setHint("login-hint", text, cls);
+    if (r.logged_in) {
+      loggedIn = true;
+      syncLoginButton();
+      $("qr").classList.add("hide");
+      stopLoginPolling();
+      await loadSummary();
+    }
+    if (["done", "already_logged_in", "timeout", "error"].includes(r.login?.state)) stopLoginPolling();
+  } catch (e) {
+    stopLoginPolling();
+    showErr("查登录状态失败：" + (e?.message || e));
+  }
+}
+
+$("btn-login").onclick = async () => {
+  showErr("");
+  const btn = $("btn-login");
+  btn.disabled = true;
+  setHint("login-hint", "正在生成二维码…");
+  try {
+    const r = await api("login/start", loggedIn ? { force: true } : {});
+    if (r.qr) {
+      $("qr").src = r.qr;
+      $("qr").classList.remove("hide");
+      loggedIn = false;
+      syncLoginButton();
+    } else {
+      $("qr").classList.add("hide");
+    }
+    const [text, cls] = loginStateText(r.login);
+    setHint("login-hint", text, cls);
+    if (r.logged_in) {
+      loggedIn = true;
+      syncLoginButton();
+    } else {
+      stopLoginPolling();
+      loginTimer = setInterval(pollLogin, 2500);
+    }
+  } catch (e) {
+    setHint("login-hint", "", "");
+    showErr("生成二维码失败：" + (e?.message || e));
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+// ---------- 配置 ----------
+$("btn-save").onclick = async () => {
+  showErr("");
+  const btn = $("btn-save");
+  btn.disabled = true;
+  setHint("save-hint", "保存中…");
+  const payload = {
+    keywords: $("f-keywords").value,
+    candidates_per_keyword: Number($("f-candidates_per_keyword").value),
+    max_scan: Number($("f-max_scan").value),
+    search_order: $("f-search_order").value,
+    provider_id: $("f-provider_id").value.trim(),
+  };
+  try {
+    const r = await api("config/save", payload);
+    fillForm(r.values);
+    lastConfig = null;
+    setHint("save-hint", "已保存", "ok");
+    await loadSummary();
+  } catch (e) {
+    setHint("save-hint", "", "");
+    showErr("保存失败：" + (e?.message || e));
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+// ---------- 日报 / 历史 ----------
+let reportDates = [];
+
+async function loadReports() {
+  const d = await api("reports");
+  reportDates = d.dates || [];
+  const sel = $("report-date");
+  if (!reportDates.length) {
+    sel.innerHTML = '<option value="">（暂无）</option>';
+    $("report").innerHTML = '<span class="sub">（还没有日报，点上面「立刻刷一轮」）</span>';
+    return;
+  }
+  const keep = sel.value;
+  sel.innerHTML = reportDates.map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join("");
+  sel.value = reportDates.includes(keep) ? keep : reportDates[0];
+  await loadReport(sel.value);
+}
+
+async function loadReport(date) {
+  if (!date) return;
+  try {
+    const r = await api("report/" + date);
+    $("report").innerHTML = renderMarkdown(r.markdown);
+  } catch (e) {
+    $("report").innerHTML = `<span class="bad">读取失败：${esc(e?.message || e)}</span>`;
+  }
+}
+
+// 档位用颜色区分：值得看=绿，跳过=灰，其他（可以看）=默认
+function verdictClass(v) {
+  const s = String(v || "");
+  if (/值得|推荐/.test(s)) return "tag-good";
+  if (/跳过|不看/.test(s)) return "tag-skip";
+  return "";
+}
+
+async function loadHistory() {
+  const h = await api("history");
+  const rows = (h.items || []).map((it) => `<tr>
+      <td class="c-date">${esc(it.date || "")}</td>
+      <td><span class="tag ${verdictClass(it.verdict)}">${esc(it.verdict || "")}</span></td>
+      <td>${esc((it.title || "").slice(0, 70))}</td>
+      <td><a class="bvid" href="https://www.bilibili.com/video/${esc(it.bvid)}" target="_blank" rel="noreferrer">${esc(it.bvid)}</a></td>
+    </tr>`).join("");
+  const tbody = $("history").querySelector("tbody");
+  tbody.innerHTML = rows || '<tr><td colspan="4" class="sub">还没有记录</td></tr>';
+}
+
+// ---------- 刷新 / 跑一轮 ----------
+async function refreshAll() {
+  showErr("");
+  try {
+    const s = await loadSummary();
+    await loadReports();
+    await loadHistory();
+    return s;
+  } catch (e) {
+    showErr("加载失败：" + (e?.message || e));
+    return null;
+  }
+}
+
+let runTimer = null;
+async function watchRun() {
+  try {
+    const s = await api("summary");
+    if (s.running) return;
+    clearInterval(runTimer);
+    runTimer = null;
+    const last = s.last_run;
+    setHint("run-hint", last?.error ? `跑完了但出错：${last.error}` : "跑完了，已刷新", last?.error ? "bad" : "ok");
+    await refreshAll();
+  } catch { /* 静默重试 */ }
+}
+
+$("btn-run").onclick = async () => {
+  showErr("");
+  const btn = $("btn-run");
+  btn.disabled = true;
+  setHint("run-hint", "已触发，正在跑（读字幕+判断，几分钟）…", "warn");
+  try {
+    const r = await api("run", {});
+    setHint("run-hint", r.message || "正在跑…", "warn");
+    clearInterval(runTimer);
+    runTimer = setInterval(watchRun, 4000);
+  } catch (e) {
+    setHint("run-hint", "", "");
+    showErr("触发失败：" + (e?.message || e));
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+async function loadRuns() {
+  try {
+    const r = await api("rhythm/runs");
+    const rows = (r.items || []).slice(0, 10);
+    const tbody = $("m-runs").querySelector("tbody");
+    tbody.innerHTML = rows.length
+      ? rows.map((it) => `
+    <tr>
+      <td class="c-id">${esc(String(it.at || "").replace("T", " ").slice(5, 16))}</td>
+      <td>${esc(it.candidates ?? 0)} → ${esc(it.fresh ?? 0)}</td>
+      <td class="c-verdict">${esc(it.picked ?? 0)}</td>
+      <td class="c-verdict">${esc(it.scanned ?? 0)}</td>
+      <td class="c-verdict">${esc(it.skipped ?? 0)}</td>
+    </tr>`).join("")
+      : '<tr><td colspan="5" class="empty">还没跑过</td></tr>';
+  } catch (e) {
+    // 老版本没有这个接口也不该影响主面板
+    const tbody = $("m-runs").querySelector("tbody");
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="empty">读不到运行记录</td></tr>';
+  }
+}
+
+$("btn-refresh").onclick = async () => {
+  await refreshAll();
+  await loadRuns();
+};
+$("report-date").onchange = (e) => loadReport(e.target.value);
+
+// ---------- 回复 tab ----------
+const MODE_TEXT = { off: "不检测", draft: "先审再发", auto: "自己发" };
+
+function switchView(name) {
+  for (const [tab, view] of [["main", "main"], ["rhythm", "rhythm"], ["upload", "upload"], ["delivery", "delivery"], ["comments", "comments"], ["reply", "reply"]]) {
+    $("tab-" + tab).classList.toggle("active", name === tab);
+    $("view-" + view).classList.toggle("hide", name !== view);
+  }
+  if (name === "rhythm") loadRhythm();
+  if (name === "upload") loadUpload();
+  if (name === "delivery") loadDelivery();
+  if (name === "comments") loadComments();
+  if (name === "reply") loadReply();
+}
+
+$("tab-main").onclick = () => switchView("main");
+$("tab-rhythm").onclick = () => switchView("rhythm");
+$("tab-upload").onclick = () => switchView("upload");
+$("tab-delivery").onclick = () => switchView("delivery");
+$("tab-comments").onclick = () => switchView("comments");
+$("tab-reply").onclick = () => switchView("reply");
+
+// ---------- 作息 tab ----------
+function hShowErr(msg) { $("h-err").textContent = msg ? String(msg) : ""; }
+
+function fillRhythmForm(s) {
+  $("f-rhythm_windows").value = s.windows_text || "";
+  $("f-rhythm_min_gap_minutes").value = s.min_gap ?? 10;
+  $("f-rhythm_skip_percent").value = s.skip_percent ?? 30;
+  $("f-daily_count").value = s.max_videos ?? 4;
+}
+
+async function loadRhythm() {
+  hShowErr("");
+  try {
+    const s = await api("rhythm/state");
+    const seg = (s.windows || []).map((w) => `${w.label}×${w.wakes}`).join(" · ");
+    const hasWin = (s.windows || []).length > 0;
+    const next = !hasWin ? "不自动刷" : (s.at_text ? `${String(s.at_text).slice(11)} 醒来` : "今天没了");
+    $("h-cards").innerHTML = [
+      card("下次", next, s.pending ? "warn" : ""),
+      card("今天醒来", `${s.wakes_used ?? 0}/${s.max_wakes ?? 0} 次`),
+      card("窗口", seg || "没设置"),
+      card("不看概率", `${s.skip_percent ?? 0}% · 间隔 ${s.min_gap ?? 0} 分`),
+    ].join("");
+    fillRhythmForm({ ...s, windows_text: (s.windows_text || "") });
+    if (!s.windows_text) {
+      $("f-rhythm_windows").value = (s.windows || []).map((w) => `${w.label.replace("–", "-")} ${w.wakes}`).join("\n");
+    }
+
+    const r = await api("rhythm/runs");
+    const rows = r.items || [];
+    const tbody = $("h-runs").querySelector("tbody");
+    tbody.innerHTML = rows.length
+      ? rows.map((it) => `
+    <tr>
+      <td class="c-id">${esc(String(it.at || "").replace("T", " ").slice(5, 16))}</td>
+      <td>${esc(it.picked ?? 0)}</td>
+      <td>${esc(it.candidates ?? 0)} → ${esc(it.fresh ?? 0)}</td>
+      <td>${esc(it.scanned ?? 0)}</td>
+      <td>${esc(it.skipped ?? 0)}</td>
+    </tr>`).join("")
+      : '<tr><td colspan="5" class="empty">还没醒过</td></tr>';
+  } catch (e) {
+    hShowErr("加载失败：" + (e?.message || e));
+  }
+}
+
+// ---------- 评论 tab ----------
+function c2ShowErr(msg) { $("c2-err").textContent = msg ? String(msg) : ""; }
+
+let speakingStyleState = null;
+
+function syncSpeakingStyleForm() {
+  const bound = $("f-speaking_style_bind_persona").checked;
+  $("f-speaking_style").disabled = bound;
+  const status = $("c2s-persona-status");
+  if (!bound) {
+    status.textContent = "不绑定：使用下方文本框的内容，留空使用内置风格。";
+  } else if (speakingStyleState?.speaking_style_bind_persona === false || !speakingStyleState) {
+    status.textContent = "保存后将跟随 AstrBot 当前默认人设卡。";
+  } else if (speakingStyleState.speaking_style_error) {
+    status.textContent = speakingStyleState.speaking_style_error + "；修复前暂停生成评论和回复。";
+  } else {
+    status.textContent = "当前绑定：" + (speakingStyleState.speaking_style_persona_name || "AstrBot 默认人设") + "；每次生成时重新读取。";
+  }
+}
+
+$("f-speaking_style_bind_persona").onchange = () => {
+  syncSpeakingStyleForm();
+  $("c2s-save-hint").textContent = "尚未保存";
+};
+
+async function loadComments(fillInputs = true) {
+  c2ShowErr("");
+  try {
+    const s = await api("comments/state");
+    speakingStyleState = s;
+    const cap = s.per_day === -1 ? "不限" : `${s.today_auto ?? 0}/${s.per_day}`;
+    $("c2-cards").innerHTML = [
+      card("自动评论", s.auto_comment ? `开 · ${s.eagerness}` : "关", s.auto_comment ? "warn" : ""),
+      card("今天已评", cap),
+      card("评论时 @", s.at || "不 @"),
+      card("两条间隔", `${s.interval ?? 8} 秒`),
+    ].join("");
+    if (fillInputs) {
+      $("f-auto_comment").checked = s.auto_comment === true;
+      $("f-comment_eagerness").value = s.eagerness || "正常";
+      $("f-auto_comment_per_day").value = s.per_day ?? -1;
+      $("f-comment_interval_seconds").value = s.interval ?? 8;
+      $("f-comment_at").value = s.at || "";
+      $("f-comment_taste").value = s.taste || "";
+      $("f-comment_taste").placeholder = "留空 = 用内置口味：\n" + (s.taste_default || "");
+      $("f-speaking_style").value = s.speaking_style || "";
+      $("f-speaking_style_bind_persona").checked = s.speaking_style_bind_persona !== false;
+      $("f-speaking_style").placeholder = "留空 = 用内置风格：\n" + (s.speaking_style_default || "");
+    }
+    syncSpeakingStyleForm();
+
+    const rows = s.items || [];
+    const tbody = $("c2-history").querySelector("tbody");
+    tbody.innerHTML = rows.length
+      ? rows.map((it) => `
+    <tr>
+      <td class="c-id">${esc(String(it.at || "").replace("T", " ").slice(5, 16))}</td>
+      <td class="c-bv2"><a class="bvid" href="https://www.bilibili.com/video/${esc(it.bvid)}" target="_blank" rel="noreferrer">${esc(it.bvid)}</a></td>
+      <td>${esc(it.text || "")}</td>
+      <td class="c-who">${it.reply ? "回复" : (it.auto ? "自动" : "手动")}</td>
+    </tr>`).join("")
+      : '<tr><td colspan="4" class="empty">还没发过评论</td></tr>';
+  } catch (e) {
+    c2ShowErr("加载失败：" + (e?.message || e));
+  }
+}
+
+async function saveComments(btnId, hintId) {
+  const btn = $(btnId);
+  const hint = $(hintId);
+  btn.disabled = true;
+  hint.textContent = "保存中…";
+  c2ShowErr("");
+  const perDayRaw = String($("f-auto_comment_per_day").value || "").trim();
+  const payload = btnId === "c2s-btn-save" ? {
+    speaking_style: $("f-speaking_style").value.trim(),
+    speaking_style_bind_persona: $("f-speaking_style_bind_persona").checked,
+  } : btnId === "c2t-btn-save" ? {
+    comment_taste: $("f-comment_taste").value.trim(),
+  } : {
+    auto_comment: $("f-auto_comment").checked,
+    comment_eagerness: $("f-comment_eagerness").value,
+    auto_comment_per_day: perDayRaw === "" ? -1 : Number(perDayRaw),
+    comment_interval_seconds: Number($("f-comment_interval_seconds").value || 8),
+    comment_at: $("f-comment_at").value.trim(),
+  };
+  try {
+    await api("config/save", payload);
+    hint.textContent = "已保存";
+    // 只保存当前区块，保留其他区块尚未保存的输入。
+    await loadComments(false);
+  } catch (e) {
+    hint.textContent = "保存失败：" + (e?.message || e);
+    c2ShowErr("保存失败：" + (e?.message || e));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// 每个区块只保存自己的字段。
+$("c2-btn-save").onclick = () => saveComments("c2-btn-save", "c2-save-hint");
+$("c2t-btn-save").onclick = () => saveComments("c2t-btn-save", "c2t-save-hint");
+$("c2s-btn-save").onclick = () => saveComments("c2s-btn-save", "c2s-save-hint");
+
+// ---------- 投递 tab ----------
+function dShowErr(msg) { $("d-err").textContent = msg ? String(msg) : ""; }
+
+function fillDeliveryForm(s) {
+  $("f-push_qq").checked = s.push_qq !== false;
+  $("f-owner_qq").value = s.owner_qq || "";
+  $("f-dm_mode").value = s.dm_mode || "off";
+  $("f-dm_uid").value = s.dm_uid || "";
+  $("f-max_dm_items").value = s.max_dm_items ?? 4;
+}
+
+async function loadDelivery() {
+  dShowErr("");
+  try {
+    const s = await api("delivery/state");
+    const qq = s.push_qq ? (s.owner_qq ? `→ ${s.owner_qq}` : "没填号") : "关";
+    const dm = s.dm_mode === "only" ? (s.dm_uid ? `开 → ${s.dm_uid}` : "开但没填 UID") : "关";
+    $("d-cards").innerHTML = [
+      card("日报推 QQ", qq, s.push_qq && !s.owner_qq ? "bad" : (s.push_qq ? "ok" : "")),
+      card("B站 私信", dm, s.dm_mode === "only" && !s.dm_uid ? "bad" : (s.dm_mode === "only" ? "ok" : "")),
+      card("上次跑完", s.last_run_at ? String(s.last_run_at).replace(/^\d{4}-/, "") : "还没跑过"),
+      card("日报", `${s.reports ?? 0} 天`),
+    ].join("");
+    fillDeliveryForm(s);
+  } catch (e) {
+    dShowErr("加载失败：" + (e?.message || e));
+  }
+}
+
+$("d-btn-save").onclick = async () => {
+  const btn = $("d-btn-save");
+  btn.disabled = true;
+  $("d-save-hint").textContent = "保存中…";
+  dShowErr("");
+  const payload = {
+    push_qq: $("f-push_qq").checked,
+    owner_qq: $("f-owner_qq").value.trim(),
+    dm_mode: $("f-dm_mode").value,
+    dm_uid: $("f-dm_uid").value.trim(),
+    max_dm_items: Number($("f-max_dm_items").value || 4),
+  };
+  try {
+    await api("config/save", payload);
+    $("d-save-hint").textContent = "已保存";
+    await loadDelivery();
+  } catch (e) {
+    $("d-save-hint").textContent = "";
+    dShowErr("保存失败：" + (e?.message || e));
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+// ---------- 投稿 tab ----------
+let uploadTimer = null;
+
+function uShowErr(msg) { $("u-err").textContent = msg ? String(msg) : ""; }
+
+function stopUploadPoll() {
+  if (uploadTimer) { clearInterval(uploadTimer); uploadTimer = null; }
+}
+
+async function loadUpload() {
+  uShowErr("");
+  try {
+    const f = await api("upload/files");
+    const sel = $("u-file");
+    const items = f.items || [];
+    sel.innerHTML = items.length
+      ? items.map((it) => `<option value="${esc(it.name)}">${esc(it.name)} · ${(it.size / 1048576).toFixed(1)}MB · ${esc(it.mtime)}</option>`).join("")
+      : '<option value="">（media/ 里还没有文件）</option>';
+    // 选中的文件如果不在列表里（首次加载/删了），落到第一个
+    const names = new Set(items.map((it) => it.name));
+    if (sel.value && !names.has(sel.value)) sel.value = items.length ? items[0].name : "";
+    if (!sel.value && items.length) sel.value = items[0].name;
+  } catch (e) {
+    uShowErr("读素材目录失败：" + (e?.message || e));
+  }
+  await pollUpload();
+}
+
+async function pollUpload() {
+  try {
+    const s = await api("upload/status");
+    const res = s.result || {};
+    const last = s.running
+      ? `上传中… ${s.elapsed ?? 0}s`
+      : (res.success ? `上次成功 ${res.bvid || ""}` : (res.error ? "上次失败" : "还没投过"));
+    $("u-cards").innerHTML = [
+      card("B站", s.running ? "正在投稿" : "空闲", s.running ? "warn" : ""),
+      card("上次投稿", last, res.error ? "bad" : (res.success ? "ok" : "")),
+      card("素材目录", "media/"),
+      card("大小上限", "B站 按账号等级"),
+    ].join("");
+    $("u-hint").textContent = s.running ? `上传中…（${s.title || ""}）` : "";
+    if (res.error) uShowErr("B站 返回：" + res.error);
+    if (s.running) {
+      if (!uploadTimer) uploadTimer = setInterval(pollUpload, 3000);
+    } else {
+      stopUploadPoll();
+      $("u-btn-start").disabled = false;
+    }
+  } catch (e) {
+    stopUploadPoll();
+    $("u-btn-start").disabled = false;
+    uShowErr("查投稿状态失败：" + (e?.message || e));
+  }
+}
+
+$("u-btn-start").onclick = async () => {
+  const btn = $("u-btn-start");
+  btn.disabled = true;
+  uShowErr("");
+  $("u-hint").textContent = "提交中…";
+  const payload = {
+    file: $("u-path").value.trim() || $("u-file").value,
+    title: $("u-title").value.trim(),
+    tid: Number($("u-tid").value || 21),
+    tags: $("u-tags").value.trim(),
+    desc: $("u-desc").value.trim(),
+    cover_path: $("u-cover").value.trim(),
+    source: $("u-source").value.trim(),
+    dynamic: $("u-dynamic").value.trim(),
+    no_reprint: $("u-no_reprint").checked,
+  };
+  try {
+    await api("upload/start", payload);
+    $("u-hint").textContent = "已开始上传…";
+    if (!uploadTimer) uploadTimer = setInterval(pollUpload, 3000);
+    await pollUpload();
+  } catch (e) {
+    btn.disabled = false;
+    $("u-hint").textContent = "";
+    uShowErr("投稿没开始：" + (e?.message || e));
+  }
+};
+
+$("h-btn-save").onclick = async () => {
+  const btn = $("h-btn-save");
+  btn.disabled = true;
+  $("h-save-hint").textContent = "保存中…";
+  hShowErr("");
+  const payload = {
+    rhythm_windows: $("f-rhythm_windows").value.trim(),
+    rhythm_min_gap_minutes: Number($("f-rhythm_min_gap_minutes").value || 0),
+    rhythm_skip_percent: Number($("f-rhythm_skip_percent").value || 0),
+    daily_count: Number($("f-daily_count").value || 4),
+  };
+  try {
+    await api("config/save", payload);
+    $("h-save-hint").textContent = "已保存（计划已重排）";
+    await loadRhythm();
+  } catch (e) {
+    $("h-save-hint").textContent = "";
+    hShowErr("保存失败：" + (e?.message || e));
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+function rShowErr(msg) { $("r-err").textContent = msg ? String(msg) : ""; }
+
+function fillReplyForm(s) {
+  $("f-reply_mode").value = s.mode || "draft";
+  $("f-reply_check_minutes").value = s.check_minutes ?? 10;
+  $("f-reply_max_per_day").value = s.max_per_day ?? 3;
+  $("f-reply_interval_seconds").value = s.interval_seconds ?? 90;
+  $("f-reply_once_per_person").checked = s.once_per_person !== false;
+}
+
+async function loadReply() {
+  rShowErr("");
+  try {
+    const s = await api("reply/summary");
+    const cap = s.max_per_day === -1 ? "不限" : `${s.sent_today ?? 0}/${s.max_per_day ?? 0}`;
+    $("r-cards").innerHTML = [
+      card("模式", MODE_TEXT[s.mode] || s.mode || "不检测", s.mode === "auto" ? "warn" : ""),
+      card("待审", `${s.pending ?? 0} 条`, s.pending ? "warn" : ""),
+      card("今天已回", cap),
+    ].join("");
+    $("tab-reply-count").textContent = s.pending ? String(s.pending) : "";
+    fillReplyForm(s);
+
+    const p = await api("reply/pending");
+    const items = p.items || [];
+    const tbody = $("r-pending").querySelector("tbody");
+    tbody.innerHTML = items.length
+      ? items.map((it) => `
+    <tr>
+      <td class="c-id"><code>${esc(it.id)}</code></td>
+      <td class="c-who">${esc(it.who || "?")}</td>
+      <td class="quote">${esc(it.their_words || "")}</td>
+      <td>${esc(it.text || "")}</td>
+      <td class="c-act">
+        <button class="primary" data-act="send" data-id="${esc(it.id)}">发</button>
+        <button class="danger" data-act="drop" data-id="${esc(it.id)}">弃</button>
+      </td>
+    </tr>`).join("")
+      : '<tr><td colspan="5" class="empty">没有待审草稿</td></tr>';
+
+    const h = await api("reply/history");
+    const rows = h.items || [];
+    const hbody = $("r-history").querySelector("tbody");
+    hbody.innerHTML = rows.length
+      ? rows.map((it) => `
+    <tr>
+      <td class="c-id">${esc(String(it.at || "").replace("T", " ").slice(5, 16))}</td>
+      <td class="c-who">${esc(it.who || "?")}</td>
+      <td>${esc(it.text || "")}</td>
+      <td><a class="bvid" href="https://www.bilibili.com/video/${esc(it.bvid)}" target="_blank" rel="noreferrer">${esc(it.bvid)}</a></td>
+    </tr>`).join("")
+      : '<tr><td colspan="4" class="empty">还没回过</td></tr>';
+  } catch (e) {
+    rShowErr("加载失败：" + (e?.message || e));
+  }
+}
+
+$("r-btn-save").onclick = async () => {
+  const btn = $("r-btn-save");
+  btn.disabled = true;
+  $("r-save-hint").textContent = "保存中…";
+  rShowErr("");
+  const payload = {
+    reply_mode: $("f-reply_mode").value,
+    reply_check_minutes: Number($("f-reply_check_minutes").value || 10),
+    reply_max_per_day: Number($("f-reply_max_per_day").value || 3),
+    reply_interval_seconds: Number($("f-reply_interval_seconds").value || 90),
+    reply_once_per_person: $("f-reply_once_per_person").checked,
+  };
+  try {
+    await api("config/save", payload);
+    $("r-save-hint").textContent = "已保存";
+    await loadReply();
+  } catch (e) {
+    $("r-save-hint").textContent = "";
+    rShowErr("保存失败：" + (e?.message || e));
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+$("r-pending").addEventListener("click", async (ev) => {
+  const btn = ev.target.closest("button[data-act]");
+  if (!btn) return;
+  const act = btn.dataset.act;
+  const id = btn.dataset.id;
+  if (act === "drop" && !confirm(`撤掉草稿 ${id}？不会发出去。`)) return;
+  if (act === "send" && !confirm(`确认发出去？这是公开发言，撤不回。\n\n${id}`)) return;
+  btn.disabled = true;
+  rShowErr("");
+  try {
+    await api(act === "send" ? "reply/send" : "reply/drop", { id });
+    $("r-save-hint").textContent = act === "send" ? "已发出去" : "已撤掉";
+    await loadReply();
+  } catch (e) {
+    rShowErr((act === "send" ? "发送失败：" : "撤回失败：") + (e?.message || e));
+    btn.disabled = false;
+  }
+});
+
+// ---------- 可收纳区块（小箭头） ----------
+const COLLAPSE_KEY = "bili-panel-collapsed";
+function collapseState() {
+  try { return JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "{}") || {}; } catch { return {}; }
+}
+function saveCollapse(state) {
+  try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(state)); } catch { /* 隐私模式忽略 */ }
+}
+function setCollapsed(sec, collapsed, persist = true) {
+  if (!sec) return;
+  sec.classList.toggle("collapsed", !!collapsed);
+  if (persist) {
+    const state = collapseState();
+    state[sec.id] = !!collapsed;
+    saveCollapse(state);
+  }
+}
+document.querySelectorAll(".sec.collapsible").forEach((sec) => {
+  const head = sec.querySelector(".sec-head");
+  if (!head) return;
+  const saved = collapseState()[sec.id];
+  const defaultCollapsed = !sec.hasAttribute("data-default-open"); // 设置默认张开，其它默认收起
+  setCollapsed(sec, saved === undefined ? defaultCollapsed : !!saved, false);
+  const toggle = () => setCollapsed(sec, !sec.classList.contains("collapsed"));
+  head.setAttribute("role", "button");
+  head.setAttribute("tabindex", "0");
+  head.setAttribute("aria-expanded", String(!sec.classList.contains("collapsed")));
+  head.addEventListener("click", (ev) => {
+    if (ev.target.closest("a,button,input,select,textarea")) return;
+    toggle();
+    head.setAttribute("aria-expanded", String(!sec.classList.contains("collapsed")));
+  });
+  head.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(); }
+  });
+});
+
+// ---------- 启动 ----------
+(async () => {
+  try {
+    await getBridge();
+    const s = await refreshAll();
+    loadRuns();
+    // 顺手取一次待审数，让 tab 上的角标一开始就准；失败不影响主面板
+    api("reply/summary").then((r) => {
+      $("tab-reply-count").textContent = r?.pending ? String(r.pending) : "";
+    }).catch(() => {});
+    const login = s?.login;
+    const [text, cls] = loginStateText(login);
+    if (login && login.state !== "idle" && !s?.logged_in) setHint("login-hint", text, cls);
+    if (s?.running) { setHint("run-hint", "正在跑…", "warn"); runTimer = setInterval(watchRun, 4000); }
+  } catch (e) {
+    showErr("加载失败：" + (e?.message || e));
+  }
+})();
+</script>
+</body>
+</html>
