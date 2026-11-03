@@ -313,14 +313,15 @@
   .study-card-heading h3 { font-size: 12px; margin: 0; font-weight: 600; color: #4d6b83; }
   .study-card-heading button { padding: 0 2px; min-height: 22px; border: 0; box-shadow: none; background: transparent; color: #6287a5; font-size: 10px; }
   .study-timeline { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); margin: 0; padding: 0; gap: 18px 0; }
-  .timeline-item { position: relative; padding: 0 15px 0 0; min-width: 0; }
+  .timeline-item { position: relative; min-width: 0; }
   .timeline-time { display: block; margin: 0 0 12px; color: #6a8297; font-size: 10px; font-variant-numeric: tabular-nums; }
-  .timeline-line { position: relative; height: 1px; background: #d5e4f0; margin-bottom: 13px; }
-  .timeline-line::before { content: ""; position: absolute; width: 7px; height: 7px; border-radius: 50%; top: -3px; left: 0; background: #a0bed4; box-shadow: 0 0 0 4px #edf5fb; }
+  .timeline-line { display: block; position: relative; width: 100%; height: 2px; background: #c5dbea; margin: 0 0 16px 4px; }
+  .timeline-line::before { content: ""; position: absolute; width: 8px; height: 8px; box-sizing: border-box; border-radius: 50%; top: -3px; left: -4px; background: #a0bed4; box-shadow: 0 0 0 3px #edf5fb; }
+  .timeline-item:last-child .timeline-line { background: transparent; }
   .timeline-item.next .timeline-line::before, .timeline-item.running .timeline-line::before { background: #729fc2; box-shadow: 0 0 0 4px #e4f0f9; }
   .timeline-item.window .timeline-line::before { background: #f8fcff; border: 1px solid #9fbad0; }
-  .timeline-title { margin: 0; color: #405e77; font-size: 11px; font-weight: 500; }
-  .timeline-detail { margin: 5px 0 0; color: #687f92; font-size: 10px; line-height: 1.7; }
+  .timeline-title { margin: 0; padding-right: 15px; color: #405e77; font-size: 11px; font-weight: 500; }
+  .timeline-detail { margin: 5px 0 0; padding-right: 15px; color: #687f92; font-size: 10px; line-height: 1.7; }
   .timeline-empty { grid-column: 1 / -1; padding: 8px 0; color: #6c8497; font-size: 12px; }
   .study-lower-grid { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.35fr); gap: 17px; margin-top: 17px; }
   .study-progress-card { display: flex; align-items: center; gap: 18px; padding: 20px; border-radius: 22px; border: 1px solid #ffffffe6; background: #ffffffab; box-shadow: 0 8px 30px #6488a00a; }
@@ -409,7 +410,7 @@
     .study-timeline { grid-template-columns: 1fr; gap: 0; }
     .timeline-item { display: grid; grid-template-columns: 45px 15px minmax(0, 1fr); gap: 0 8px; padding: 0 0 15px; }
     .timeline-time { grid-row: 1 / 3; margin: 0; padding-top: 1px; font-size: 10px; }
-    .timeline-line { grid-column: 2; grid-row: 1 / 3; width: 1px; height: calc(100% + 15px); margin: 0; background: #d8e6f1; }
+    .timeline-line { grid-column: 2; grid-row: 1 / 3; width: 2px; height: calc(100% + 15px); margin: 0; }
     .timeline-line::before { top: 5px; left: -3px; }
     .timeline-item:last-child { padding-bottom: 0; } .timeline-item:last-child .timeline-line { height: 12px; }
     .timeline-title { grid-column: 3; font-size: 11px; }
