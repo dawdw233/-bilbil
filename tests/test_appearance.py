@@ -57,7 +57,8 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
         for settings in ({"zoom": 99}, {"opacity": 101}, {"x": True}, {"y": float("nan")},
                          {"strength": float("inf")}, {"mask": "url(test)"}, {"fit": "invalid"},
                          {"glass": -1}, {"glass": 101}, {"glass": True}, {"glass": float("nan")},
-                         {"glass_enabled": "false"}, {"glass_enabled": 0}):
+                         {"glass_enabled": "false"}, {"glass_enabled": 0}, {"sharpness": -1},
+                         {"sharpness": 101}, {"sharpness": True}, {"sharpness": float("nan")}):
             with self.subTest(settings=settings):
                 self.payload = {"settings": settings, "image": None}
                 self.assertIn("error", await self.instance._api_appearance_save())
@@ -89,6 +90,15 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(restored["settings"]["x"], 25)
         self.assertEqual(restored["settings"]["opacity"], 60)
         self.assertIsNone(restored["image"])
+        self.assertEqual(restored["settings"]["sharpness"], 0)
+
+    async def test_sharpness_persists_independently_of_glass(self):
+        for strength in (0, 35, 100):
+            self.payload = {"settings": {"glass_enabled": False, "sharpness": strength}, "image": None}
+            self.assertEqual(await self.instance._api_appearance_save(), {"saved": True})
+            settings = (await self.instance._api_appearance_state())["settings"]
+            self.assertEqual(settings["sharpness"], strength)
+            self.assertFalse(settings["glass_enabled"])
 
     async def test_storage_error_keeps_existing_appearance(self):
         self.payload = {"settings": {"zoom": 120}, "image": None}

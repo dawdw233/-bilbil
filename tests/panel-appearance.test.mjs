@@ -8,7 +8,7 @@ const script = html.match(/<script type="module" id="appearance-script">([\s\S]*
 const helpers = script.slice(0, script.indexOf("const artEl ="));
 function load(overrides = {}) {
   const sandbox = { console, ...overrides };
-  vm.runInNewContext(helpers + "; globalThis.api = {normalizeAppearance, appearanceStorage, prepareIllustration};", sandbox);
+  vm.runInNewContext(helpers + "; globalThis.api = {normalizeAppearance, appearanceStorage, prepareIllustration, sharpnessKernel};", sandbox);
   return sandbox.api;
 }
 const plain = (value) => JSON.parse(JSON.stringify(value));
@@ -16,7 +16,7 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 test("外观参数保留有效的 0、限制范围并拒绝无效颜色", () => {
   const { normalizeAppearance } = load();
   const settings = plain(normalizeAppearance({ x: -5, y: 110, zoom: 999, opacity: 0, strength: 0, fit: "contain", mask: "#ABCDEF" }));
-  assert.deepEqual(settings, { x: 0, y: 100, zoom: 250, opacity: 0, strength: 0, glass_enabled: true, glass: 50, fit: "contain", mask: "#abcdef" });
+  assert.deepEqual(settings, { x: 0, y: 100, zoom: 250, opacity: 0, strength: 0, glass_enabled: true, glass: 50, sharpness: 0, fit: "contain", mask: "#abcdef" });
   const fallback = plain(normalizeAppearance({ zoom: "bad", opacity: "", mask: "url(https://example.invalid)", fit: "invalid" }));
   assert.equal(fallback.zoom, 100);
   assert.equal(fallback.opacity, 85);
@@ -25,6 +25,17 @@ test("外观参数保留有效的 0、限制范围并拒绝无效颜色", () => 
   assert.equal(normalizeAppearance({glass_enabled:false,glass:0}).glass_enabled,false);
   assert.equal(normalizeAppearance({glass_enabled:false,glass:0}).glass,0);
   assert.equal(normalizeAppearance({glass:150}).glass,100);
+  assert.equal(normalizeAppearance({sharpness:150}).sharpness,100);
+  assert.equal(normalizeAppearance({sharpness:-1}).sharpness,0);
+});
+
+test("锐化在零强度不改变图像，增强边缘时保持平坦区域亮度", () => {
+  const {sharpnessKernel} = load();
+  assert.deepEqual(sharpnessKernel(0).split(" ").map(Number),[0,0,0,0,1,0,0,0,0]);
+  const kernel=sharpnessKernel(100).split(" ").map(Number);
+  assert.ok(Math.abs(kernel.reduce((a,b)=>a+b,0)-1)<1e-9);
+  const patch=[.4,.4,.4,.4,.5,.4,.4,.4,.4];
+  assert.ok(kernel.reduce((value,weight,i)=>value+weight*patch[i],0)>.5);
 });
 
 test("不支持的格式和超大文件在解码之前被拒绝", async () => {
