@@ -195,6 +195,8 @@ class BiliScrollPlugin(Star):
             ("appearance/save", self._api_appearance_save, ["POST"], "保存面板外观与插画"),
             ("avatar/state", self._api_avatar_state, ["GET"], "读取书房头像"),
             ("avatar/save", self._api_avatar_save, ["POST"], "保存书房头像"),
+            ("room/state", self._api_room_state, ["GET"], "读取书房名称"),
+            ("room/save", self._api_room_save, ["POST"], "保存书房名称"),
             ("login/start", self._api_login_start, ["POST"], "生成扫码登录二维码"),
             ("login/state", self._api_login_state, ["GET"], "扫码登录状态"),
             ("reports", self._api_reports, ["GET"], "日报日期列表"),
@@ -323,6 +325,44 @@ class BiliScrollPlugin(Star):
             except OSError:
                 pass
         return json_response({"saved": True})
+
+    @staticmethod
+    def _validate_room_name(name):
+        if not isinstance(name, str):
+            raise ValueError("请输入书房名称")
+        name = name.strip()
+        if not 1 <= len(name) <= 24 or re.search(r"[\x00-\x1f\x7f]", name):
+            raise ValueError("书房名称需为 1～24 个字符，不能包含换行或控制字符")
+        return name
+
+    async def _api_room_state(self):
+        try:
+            data = json.loads((self.data_dir / "room.json").read_text(encoding="utf-8"))
+            name = self._validate_room_name(data.get("name"))
+        except (OSError, ValueError, TypeError, AttributeError):
+            name = "一隅书房"
+        return json_response({"name": name})
+
+    async def _api_room_save(self):
+        payload = await request.json(default={})
+        try:
+            name = self._validate_room_name(payload.get("name") if isinstance(payload, dict) else None)
+        except ValueError as exc:
+            return error_response(str(exc))
+        target = self.data_dir / "room.json"
+        temporary = target.with_name(f"room.{uuid.uuid4().hex}.tmp")
+        try:
+            temporary.write_text(json.dumps({"name": name}, ensure_ascii=False), encoding="utf-8")
+            temporary.replace(target)
+        except OSError:
+            logger.exception("[bili-scroll] 保存书房名称失败")
+            return error_response("书房名称保存失败，请重试")
+        finally:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return json_response({"saved": True, "name": name})
 
     async def _api_appearance_save(self):
         payload = await request.json(default={})

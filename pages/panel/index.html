@@ -287,6 +287,12 @@
   .avatar-content .row { justify-content: center; }
   #avatar-status { margin-top: 12px; font-size: 12px; min-height: 22px; }
   .study-room-name { margin: 0; font: 600 17px/1.6 var(--serif); letter-spacing: .06em; color: #3d5971; }
+  .study-profile > div { min-width: 0; }
+  button.study-room-name { display: inline-flex; min-height: 30px; max-width: 100%; padding: 0 3px; gap: 6px; border: 1px solid transparent; border-radius: 8px; background: transparent; box-shadow: none; text-align: left; }
+  button.study-room-name:hover:not(:disabled) { background: #e7f1fb; box-shadow: none; transform: none; }
+  .study-room-name span { overflow-wrap: anywhere; }
+  .study-room-name svg { width: 12px; height: 12px; color: #7e9bb2; }
+  .toolbar-path [data-room-name] { overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
   .study-room-caption { margin: 3px 0 0; font-size: 10px; color: #71889a; letter-spacing: .03em; }
   .study-shell .side-menu { display: block; padding: 0; }
   .nav-group { margin: 0 0 18px; }
@@ -441,7 +447,7 @@
 <div class="wrap study-shell">
   <div class="layout">
   <aside class="side" id="tabs">
-    <div class="study-profile"><button type="button" class="study-avatar" id="avatar-open" aria-label="更换书房头像" aria-haspopup="dialog" title="点击更换头像">汐<img id="study-avatar" alt="" /></button><div><p class="study-room-name">一隅书房</p><p class="study-room-caption">私人的观影手记</p></div></div>
+    <div class="study-profile"><button type="button" class="study-avatar" id="avatar-open" aria-label="更换书房头像" aria-haspopup="dialog" title="点击更换头像">汐<img id="study-avatar" alt="" /></button><div><button type="button" class="study-room-name" id="room-open" aria-label="修改书房名称" aria-haspopup="dialog" title="点击修改书房名称"><span data-room-name>一隅书房</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z"/></svg></button><p class="study-room-caption">私人的观影手记</p></div></div>
     <nav class="side-menu" aria-label="书房导航"><div class="nav-group"><div class="nav-group-label">阅读</div><div class="nav-group-buttons"><button class="tab active" id="tab-main" aria-pressed="true" data-view="刷视频"><span class="tab-icon"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg></span><span class="tab-label">刷视频</span></button></div></div><div class="nav-group"><div class="nav-group-label">写作</div><div class="nav-group-buttons"><button class="tab" id="tab-comments" aria-pressed="false" data-view="评论"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span class="tab-label">评论</span></button>
 <button class="tab" id="tab-reply" aria-pressed="false" data-view="reply"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></span><span class="tab-label">回复<span id="tab-reply-count" class="badge"></span></span></button>
 <button class="tab" id="tab-upload" aria-pressed="false" data-view="投稿"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg></span><span class="tab-label">投稿</span></button></div></div><div class="nav-group"><div class="nav-group-label">生活</div><div class="nav-group-buttons"><button class="tab" id="tab-rhythm" aria-pressed="false" data-view="作息"><span class="tab-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span><span class="tab-label">作息</span></button>
@@ -450,7 +456,7 @@
   </aside>
   <main class="main">
     <div class="study-toolbar">
-      <div class="toolbar-path"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8M6 9v12h12V9M10 21v-7h4v7"/></svg><span>我的书房</span><span class="path-separator">/</span><strong id="study-page-title">观影手记</strong></div>
+      <div class="toolbar-path"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8M6 9v12h12V9M10 21v-7h4v7"/></svg><span data-room-name>一隅书房</span><span class="path-separator">/</span><strong id="study-page-title">观影手记</strong></div>
       <div class="toolbar-actions">
         <button id="btn-refresh"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></svg>刷新状态</button>
         <button id="appearance-open" type="button" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8" cy="9" r="1.5"/><path d="m4 17 5-5 4 4 3-3 5 5"/></svg>外观与插画</button>
@@ -459,7 +465,7 @@
     </div>
     <header class="hd" id="top">
       <div class="hero-art" aria-hidden="true"><img id="hero-illustration" alt="" decoding="async" /><div class="hero-wash"></div></div><div class="hero-readability" aria-hidden="true"></div>
-      <div class="hd-main"><div class="hero-eyebrow">A QUIET CORNER · BILIBILI JOURNAL</div><h1><span id="study-greeting">欢迎回来，</span><br/><strong>一隅书房</strong></h1><p class="hero-note">今日也留一点闲时，看看世界的有趣。<br/>让喜欢的内容，在这里慢慢留下来。</p><div class="hero-tags"><span class="hero-tag">B站观影手记</span><span class="hero-tag" id="study-style-tag">人设相伴</span></div></div>
+      <div class="hd-main"><div class="hero-eyebrow">A QUIET CORNER · BILIBILI JOURNAL</div><h1><span id="study-greeting">欢迎回来，</span><br/><strong data-room-name>一隅书房</strong></h1><p class="hero-note">今日也留一点闲时，看看世界的有趣。<br/>让喜欢的内容，在这里慢慢留下来。</p><div class="hero-tags"><span class="hero-tag">B站观影手记</span><span class="hero-tag" id="study-style-tag">人设相伴</span></div></div>
     </header>
     <div id="run-hint" class="sub" role="status" aria-live="polite"></div>
 
@@ -1048,6 +1054,13 @@
   </div>
   <div class="appearance-footer"><div class="row"><button type="button" id="avatar-cancel">取消</button><button type="button" id="avatar-save" class="primary">保存头像</button></div></div>
 </dialog>
+<dialog id="room-dialog" class="appearance-dialog avatar-dialog" aria-labelledby="room-title">
+  <form id="room-form">
+    <div class="appearance-heading"><div><h2 id="room-title">书房名称</h2><div class="sub">为这一隅，取个喜欢的名字。</div></div><button type="button" id="room-close" class="icon-button" aria-label="关闭名称设置">×</button></div>
+    <div class="avatar-content"><label class="field" for="room-name"><span class="lbl">书房名称</span><input id="room-name" type="text" maxlength="24" required autocomplete="off" placeholder="例如：一隅书房" /></label><div class="tip">1～24 个字符，保存后同步更新侧栏、页首标题和顶部路径。</div><div id="room-status" class="sub" role="status" aria-live="polite"></div></div>
+    <div class="appearance-footer"><div class="row"><button type="button" id="room-reset">恢复默认</button><button type="button" id="room-cancel">取消</button><button type="submit" id="room-save" class="primary">保存名称</button></div></div>
+  </form>
+</dialog>
 <div id="appearance-toast" class="appearance-toast hide" role="status" aria-live="polite"></div>
 
 <script type="module" id="appearance-script">
@@ -1376,6 +1389,70 @@ artEl("avatar-save").onclick = async () => {
 artEl("avatar-close").onclick = artEl("avatar-cancel").onclick = () => avatarDialog.close();
 avatarDialog.addEventListener("cancel", (event) => { if (avatarBusy) event.preventDefault(); });
 avatarDialog.addEventListener("close", () => { artEl("avatar-file").value = ""; });
+
+const roomDialog = artEl("room-dialog");
+let savedRoomName = "一隅书房";
+let roomBusy = false;
+function renderRoomName(name) {
+  savedRoomName = name;
+  for (const element of document.querySelectorAll("[data-room-name]")) element.textContent = name;
+}
+async function refreshRoomName() {
+  const bridge = await appearanceBridge();
+  const stored = await bridge.apiGet("room/state");
+  if (typeof stored?.name !== "string" || !stored.name.trim()) throw new Error("书房名称暂时无法读取，请重试");
+  renderRoomName(stored.name);
+}
+const roomReady = refreshRoomName().catch(() => {});
+function roomStatus(message, error = false) {
+  artEl("room-status").textContent = message;
+  artEl("room-status").classList.toggle("bad", error);
+}
+function setRoomBusy(value) {
+  roomBusy = value;
+  for (const id of ["room-save", "room-reset", "room-name", "room-close", "room-cancel"]) artEl(id).disabled = value;
+}
+artEl("room-open").onclick = async () => {
+  if (roomDialog.open) return;
+  artEl("room-open").disabled = true;
+  try {
+    await roomReady;
+    await refreshRoomName();
+    roomStatus("");
+    artEl("room-name").value = savedRoomName;
+    roomDialog.showModal();
+    artEl("room-name").focus();
+    artEl("room-name").select();
+  } catch (error) {
+    artEl("appearance-toast").textContent = error.message || "书房名称暂时无法读取，请重试";
+    artEl("appearance-toast").classList.remove("hide");
+    clearTimeout(artToastTimer);
+    artToastTimer = setTimeout(() => artEl("appearance-toast").classList.add("hide"), 3500);
+  } finally { artEl("room-open").disabled = false; }
+};
+artEl("room-form").onsubmit = async (event) => {
+  event.preventDefault();
+  if (roomBusy) return;
+  const name = artEl("room-name").value.trim();
+  if (!name || [...name].length > 24 || /[\u0000-\u001f\u007f]/.test(name)) { roomStatus("请输入 1～24 个字符的书房名称", true); return; }
+  setRoomBusy(true);
+  roomStatus("正在保存…");
+  try {
+    const bridge = await appearanceBridge();
+    const result = await bridge.apiPost("room/save", { name });
+    if (!result?.saved || typeof result.name !== "string") throw new Error("未收到保存确认，请重试");
+    renderRoomName(result.name);
+    roomDialog.close();
+    artEl("appearance-toast").textContent = "书房名称已保存";
+    artEl("appearance-toast").classList.remove("hide");
+    clearTimeout(artToastTimer);
+    artToastTimer = setTimeout(() => artEl("appearance-toast").classList.add("hide"), 2600);
+  } catch (error) { roomStatus("保存失败：" + (error.message || "请重试"), true); }
+  finally { setRoomBusy(false); }
+};
+artEl("room-reset").onclick = () => { artEl("room-name").value = "一隅书房"; roomStatus("保存后恢复为默认名称。"); };
+artEl("room-close").onclick = artEl("room-cancel").onclick = () => roomDialog.close();
+roomDialog.addEventListener("cancel", (event) => { if (roomBusy) event.preventDefault(); });
 
 </script>
 <script type="module" id="study-script">

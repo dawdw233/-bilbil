@@ -138,6 +138,44 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
             (self.instance.data_dir / "avatar.json").write_text(content, encoding="utf-8")
             self.assertEqual(await self.instance._api_avatar_state(), {"image": None})
 
+    async def test_room_name_persists_without_changing_avatar_or_cover(self):
+        self.assertEqual(await self.instance._api_room_state(), {"name": "一隅书房"})
+        self.payload = {"image": None}
+        await self.instance._api_avatar_save()
+        await self.instance._api_appearance_save()
+        originals = {name: (self.instance.data_dir / name).read_bytes() for name in ("avatar.json", "appearance.json")}
+        self.payload = {"name": "  蓝汐的书房  "}
+        self.assertEqual(await self.instance._api_room_save(), {"saved": True, "name": "蓝汐的书房"})
+        self.assertEqual(await self.instance._api_room_state(), {"name": "蓝汐的书房"})
+        for name, content in originals.items():
+            self.assertEqual((self.instance.data_dir / name).read_bytes(), content)
+        self.payload = {"name": "一隅书房"}
+        await self.instance._api_room_save()
+        self.assertEqual(await self.instance._api_room_state(), {"name": "一隅书房"})
+
+    async def test_invalid_room_names_leave_saved_name_unchanged(self):
+        self.payload = {"name": "安静的书房"}
+        await self.instance._api_room_save()
+        original = (self.instance.data_dir / "room.json").read_bytes()
+        for payload in ([], {}, {"name": None}, {"name": "  "}, {"name": "长" * 25},
+                        {"name": "书\n房"}, {"name": "书\x00房"}):
+            self.payload = payload
+            self.assertIn("error", await self.instance._api_room_save())
+            self.assertEqual((self.instance.data_dir / "room.json").read_bytes(), original)
+
+    async def test_room_storage_failure_and_broken_file(self):
+        self.payload = {"name": "安静的书房"}
+        await self.instance._api_room_save()
+        original = (self.instance.data_dir / "room.json").read_bytes()
+        self.payload = {"name": "新的书房"}
+        with patch.object(Path, "replace", side_effect=OSError("disk full")), patch.object(plugin.logger, "exception"):
+            self.assertIn("error", await self.instance._api_room_save())
+        self.assertEqual((self.instance.data_dir / "room.json").read_bytes(), original)
+        self.assertFalse(list(self.instance.data_dir.glob("*.tmp")))
+        for content in ('not json', '[]', '{"name":""}'):
+            (self.instance.data_dir / "room.json").write_text(content, encoding="utf-8")
+            self.assertEqual(await self.instance._api_room_state(), {"name": "一隅书房"})
+
 
 if __name__ == "__main__":
     unittest.main()
