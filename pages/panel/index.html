@@ -523,8 +523,8 @@
   :root[data-study-theme="night"] :is(tbody tr, .sec.collapsible > .sec-head, .check):hover { background: #35516a80; }
   .night-meteors { display: none; position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
   :root[data-study-theme="night"] .night-meteors { display: block; }
-  .night-meteor { position: absolute; width: clamp(90px, 14vw, 190px); height: 1px; border-radius: 99px; opacity: 0; background: linear-gradient(90deg, #d6ecffb3, #a3c9e459 25%, transparent); transform: rotate(-30deg); animation: study-meteor-flight 14s linear infinite; animation-delay: var(--meteor-delay, 0s); will-change: transform, opacity; }
-  .night-meteor::before { content: ""; position: absolute; left: 0; top: -1px; width: 3px; height: 3px; border-radius: 50%; background: #d3ebff; box-shadow: 0 0 7px #9bcdf27a; }
+  .night-meteor { position: absolute; width: clamp(90px, 14vw, 190px); height: 1px; border-radius: 99px; opacity: 0; background: linear-gradient(90deg, #e2f2ffdb, #b5d8ef80 25%, transparent); transform: rotate(-30deg); animation: study-meteor-flight 14s linear infinite; animation-delay: var(--meteor-delay, 0s); will-change: transform, opacity; }
+  .night-meteor::before { content: ""; position: absolute; left: 0; top: -1px; width: 3px; height: 3px; border-radius: 50%; background: #e3f3ff; box-shadow: 0 0 7px #acd9f599; }
   .night-meteor:nth-child(1) { left: 96%; top: 4%; }
   .night-meteor:nth-child(2) { left: 83%; top: -6%; --meteor-delay: .18s; }
   .night-meteor:nth-child(3) { left: 110%; top: 18%; --meteor-delay: .38s; }
@@ -573,13 +573,13 @@
   .night-meteor:nth-child(46) { left: 62%; top: -7%; --meteor-delay: 11s; }
   .night-meteor:nth-child(47) { left: 113%; top: 14%; --meteor-delay: 11.6s; }
   .night-meteor:nth-child(48) { left: 87%; top: 62%; --meteor-delay: 12.3s; }
-  .night-meteor:nth-child(3n) { width: clamp(55px, 8vw, 110px); --meteor-brightness: .38; }
-  .night-meteor:nth-child(4n) { width: clamp(120px, 20vw, 250px); height: 1.5px; --meteor-brightness: .65; }
-  .night-meteor:nth-child(n+33) { width: clamp(50px, 9vw, 125px); height: 1px; --meteor-brightness: .34; }
-  .night-meteor:nth-child(n+33)::before { top: -.5px; width: 2px; height: 2px; box-shadow: 0 0 4px #9bcdf247; }
+  .night-meteor:nth-child(3n) { width: clamp(55px, 8vw, 110px); --meteor-brightness: .5; }
+  .night-meteor:nth-child(4n) { width: clamp(120px, 20vw, 250px); height: 1.5px; --meteor-brightness: .8; }
+  .night-meteor:nth-child(n+33) { width: clamp(50px, 9vw, 125px); height: 1px; --meteor-brightness: .46; }
+  .night-meteor:nth-child(n+33)::before { top: -.5px; width: 2px; height: 2px; box-shadow: 0 0 4px #acd9f566; }
   @keyframes study-meteor-flight {
     0% { opacity: 0; transform: translate3d(0, 0, 0) rotate(-30deg); }
-    3%, 18% { opacity: var(--meteor-brightness, .58); }
+    3%, 18% { opacity: var(--meteor-brightness, .72); }
     24%, 100% { opacity: 0; transform: translate3d(-110vw, 64vw, 0) rotate(-30deg); }
   }
   @media (max-width: 600px) { .night-meteor:nth-child(even) { display: none; } }
