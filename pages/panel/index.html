@@ -523,186 +523,41 @@
   :root[data-study-theme="night"] :is(tbody tr, .sec.collapsible > .sec-head, .check):hover { background: #35516a80; }
   .night-meteors { display: none; position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
   :root[data-study-theme="night"] .night-meteors { display: block; }
-  .night-meteor { position: absolute; width: clamp(90px, 14vw, 190px); height: 1px; border-radius: 99px; opacity: 0; background: linear-gradient(90deg, #e2f2ffdb, #b5d8ef80 25%, transparent); transform: rotate(-30deg); animation: study-meteor-flight var(--meteor-duration, 14s) linear infinite; animation-delay: var(--meteor-delay, 0s); will-change: transform, opacity; }
+  .night-meteors[hidden] { display: none !important; }
+  .meteor-settings { margin: 0 24px 24px; padding-top: 20px; border-top: 1px solid var(--line); }
+  .meteor-settings h3 { margin: 0 0 12px; font: 400 20px/1.5 var(--serif); }
+  .meteor-settings-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 20px; align-items: start; }
+  .meteor-controls { display: grid; gap: 12px; }
+  .meteor-settings .check .tip { display: block; margin-top: 4px; }
+  .meteor-preview { position: relative; container-type: inline-size; height: 126px; margin-top: 12px; overflow: hidden; border: 1px solid #9db6ca40; border-radius: 18px; background: linear-gradient(135deg, #283c50, #202f40 60%, #1c2938); }
+  .meteor-preview .night-meteor { animation-name: study-meteor-preview-flight; }
+  .meteor-preview[hidden] { display: block; }
+  .meteor-preview[hidden] .night-meteor { display: none; }
+  @keyframes study-meteor-preview-flight {
+    0% { opacity: 0; transform: translate3d(0, 0, 0) rotate(-30deg); }
+    3%, 18% { opacity: calc(var(--meteor-brightness, .72) * var(--meteor-light, 1)); }
+    24%, 100% { opacity: 0; transform: translate3d(-110cqw, 64cqw, 0) rotate(-30deg); }
+  }
+  @media (max-width: 600px) { .meteor-settings-body { grid-template-columns: 1fr; } }
+  .night-meteor { position: absolute; width: clamp(90px, 14vw, 190px); height: 1px; border-radius: 99px; opacity: 0; background: linear-gradient(90deg, #e2f2ffdb, #b5d8ef80 25%, transparent); transform: rotate(-30deg); animation: study-meteor-flight calc(var(--meteor-duration, 14s) / var(--meteor-speed, 1)) linear infinite; animation-delay: var(--meteor-delay, 0s); will-change: transform, opacity; }
   .night-meteor::before { content: ""; position: absolute; left: 0; top: -1px; width: 3px; height: 3px; border-radius: 50%; background: #e3f3ff; box-shadow: 0 0 7px #acd9f599; }
-  .night-meteor:nth-child(1) { left: 16.2%; top: -32.8%; --meteor-delay: -0.05s; --meteor-duration: 12.5s; }
-  .night-meteor:nth-child(2) { left: 55.4%; top: 19.6%; --meteor-delay: -5.46s; --meteor-duration: 14.7s; }
-  .night-meteor:nth-child(3) { left: 90.5%; top: 72.0%; --meteor-delay: -12.48s; --meteor-duration: 16.9s; }
-  .night-meteor:nth-child(4) { left: 125.5%; top: -11.6%; --meteor-delay: -1.42s; --meteor-duration: 13.5s; }
-  .night-meteor:nth-child(5) { left: 45.4%; top: 57.8%; --meteor-delay: -7.42s; --meteor-duration: 15.7s; }
-  .night-meteor:nth-child(6) { left: 84.6%; top: -32.1%; --meteor-delay: -15.03s; --meteor-duration: 17.9s; }
-  .night-meteor:nth-child(7) { left: 119.7%; top: 20.3%; --meteor-delay: -3.00s; --meteor-duration: 14.5s; }
-  .night-meteor:nth-child(8) { left: 39.6%; top: 89.7%; --meteor-delay: -9.59s; --meteor-duration: 16.7s; }
-  .night-meteor:nth-child(9) { left: 74.7%; top: 6.1%; --meteor-delay: -12.52s; --meteor-duration: 13.3s; }
-  .night-meteor:nth-child(10) { left: 109.8%; top: 52.2%; --meteor-delay: -4.78s; --meteor-duration: 15.5s; }
-  .night-meteor:nth-child(11) { left: 33.8%; top: -14.4%; --meteor-delay: -11.96s; --meteor-duration: 17.7s; }
-  .night-meteor:nth-child(12) { left: 68.9%; top: 38.0%; --meteor-delay: -0.61s; --meteor-duration: 14.3s; }
-  .night-meteor:nth-child(13) { left: 104.0%; top: 90.4%; --meteor-delay: -6.77s; --meteor-duration: 16.5s; }
-  .night-meteor:nth-child(14) { left: 23.8%; top: 23.8%; --meteor-delay: -10.18s; --meteor-duration: 13.1s; }
-  .night-meteor:nth-child(15) { left: 63.0%; top: 69.9%; --meteor-delay: -2.21s; --meteor-duration: 15.3s; }
-  .night-meteor:nth-child(16) { left: 98.1%; top: -13.7%; --meteor-delay: -8.96s; --meteor-duration: 17.5s; }
-  .night-meteor:nth-child(17) { left: 18.0%; top: 55.7%; --meteor-delay: -12.39s; --meteor-duration: 14.1s; }
-  .night-meteor:nth-child(18) { left: 53.1%; top: -27.9%; --meteor-delay: -4.01s; --meteor-duration: 16.3s; }
-  .night-meteor:nth-child(19) { left: 88.2%; top: 18.2%; --meteor-delay: -7.91s; --meteor-duration: 12.9s; }
-  .night-meteor:nth-child(20) { left: 127.3%; top: 70.6%; --meteor-delay: -14.81s; --meteor-duration: 15.1s; }
-  .night-meteor:nth-child(21) { left: 47.2%; top: 4.0%; --meteor-delay: -6.01s; --meteor-duration: 17.3s; }
-  .night-meteor:nth-child(22) { left: 82.3%; top: 56.4%; --meteor-delay: -9.94s; --meteor-duration: 13.9s; }
-  .night-meteor:nth-child(23) { left: 117.5%; top: -27.2%; --meteor-delay: -1.32s; --meteor-duration: 16.1s; }
-  .night-meteor:nth-child(24) { left: 41.4%; top: 35.9%; --meteor-delay: -5.71s; --meteor-duration: 12.7s; }
-  .night-meteor:nth-child(25) { left: 76.5%; top: 88.3%; --meteor-delay: -12.16s; --meteor-duration: 14.9s; }
-  .night-meteor:nth-child(26) { left: 111.6%; top: 4.7%; --meteor-delay: -3.14s; --meteor-duration: 17.1s; }
-  .night-meteor:nth-child(27) { left: 31.5%; top: 74.1%; --meteor-delay: -7.55s; --meteor-duration: 13.7s; }
-  .night-meteor:nth-child(28) { left: 66.6%; top: -15.8%; --meteor-delay: -14.60s; --meteor-duration: 15.9s; }
-  .night-meteor:nth-child(29) { left: 105.8%; top: 36.6%; --meteor-delay: -3.56s; --meteor-duration: 12.5s; }
-  .night-meteor:nth-child(30) { left: 25.6%; top: -30.0%; --meteor-delay: -9.59s; --meteor-duration: 14.7s; }
-  .night-meteor:nth-child(31) { left: 60.8%; top: 22.4%; --meteor-delay: -0.33s; --meteor-duration: 16.9s; }
-  .night-meteor:nth-child(32) { left: 95.9%; top: 74.8%; --meteor-delay: -5.22s; --meteor-duration: 13.5s; }
-  .night-meteor:nth-child(33) { left: 19.8%; top: 1.9%; --meteor-delay: -11.84s; --meteor-duration: 15.7s; }
-  .night-meteor:nth-child(34) { left: 54.9%; top: 54.3%; --meteor-delay: -2.17s; --meteor-duration: 17.9s; }
-  .night-meteor:nth-child(35) { left: 90.0%; top: -29.3%; --meteor-delay: -7.08s; --meteor-duration: 14.5s; }
-  .night-meteor:nth-child(36) { left: 125.1%; top: 23.1%; --meteor-delay: -14.29s; --meteor-duration: 16.7s; }
-  .night-meteor:nth-child(37) { left: 45.0%; top: 86.2%; --meteor-delay: -2.96s; --meteor-duration: 13.3s; }
-  .night-meteor:nth-child(38) { left: 84.1%; top: 2.6%; --meteor-delay: -9.14s; --meteor-duration: 15.5s; }
-  .night-meteor:nth-child(39) { left: 119.2%; top: 55.0%; --meteor-delay: -16.94s; --meteor-duration: 17.7s; }
-  .night-meteor:nth-child(40) { left: 39.1%; top: -11.6%; --meteor-delay: -4.64s; --meteor-duration: 14.3s; }
-  .night-meteor:nth-child(41) { left: 74.2%; top: 40.8%; --meteor-delay: -11.41s; --meteor-duration: 16.5s; }
-  .night-meteor:nth-child(42) { left: 113.4%; top: 86.9%; --meteor-delay: -0.77s; --meteor-duration: 13.1s; }
-  .night-meteor:nth-child(43) { left: 33.3%; top: 20.3%; --meteor-delay: -6.51s; --meteor-duration: 15.3s; }
-  .night-meteor:nth-child(44) { left: 68.4%; top: 72.7%; --meteor-delay: -13.88s; --meteor-duration: 17.5s; }
-  .night-meteor:nth-child(45) { left: 103.5%; top: -10.9%; --meteor-delay: -2.26s; --meteor-duration: 14.1s; }
-  .night-meteor:nth-child(46) { left: 23.4%; top: 52.2%; --meteor-delay: -8.60s; --meteor-duration: 16.3s; }
-  .night-meteor:nth-child(47) { left: 62.6%; top: -31.4%; --meteor-delay: -11.54s; --meteor-duration: 12.9s; }
-  .night-meteor:nth-child(48) { left: 97.7%; top: 21.0%; --meteor-delay: -3.95s; --meteor-duration: 15.1s; }
-  .night-meteor:nth-child(49) { left: 17.6%; top: 90.4%; --meteor-delay: -10.88s; --meteor-duration: 17.3s; }
-  .night-meteor:nth-child(50) { left: 52.6%; top: 6.8%; --meteor-delay: -13.85s; --meteor-duration: 13.9s; }
-  .night-meteor:nth-child(51) { left: 91.8%; top: 52.9%; --meteor-delay: -5.85s; --meteor-duration: 16.1s; }
-  .night-meteor:nth-child(52) { left: 126.9%; top: -30.7%; --meteor-delay: -9.28s; --meteor-duration: 12.7s; }
-  .night-meteor:nth-child(53) { left: 46.8%; top: 38.7%; --meteor-delay: -1.46s; --meteor-duration: 14.9s; }
-  .night-meteor:nth-child(54) { left: 81.9%; top: 91.1%; --meteor-delay: -7.95s; --meteor-duration: 17.1s; }
-  .night-meteor:nth-child(55) { left: 117.0%; top: 1.2%; --meteor-delay: -11.40s; --meteor-duration: 13.7s; }
-  .night-meteor:nth-child(56) { left: 41.0%; top: 70.6%; --meteor-delay: -3.17s; --meteor-duration: 15.9s; }
-  .night-meteor:nth-child(57) { left: 76.0%; top: -13.0%; --meteor-delay: -7.08s; --meteor-duration: 12.5s; }
-  .night-meteor:nth-child(58) { left: 111.2%; top: 39.4%; --meteor-delay: -13.72s; --meteor-duration: 14.7s; }
-  .night-meteor:nth-child(59) { left: 31.0%; top: -27.2%; --meteor-delay: -5.08s; --meteor-duration: 16.9s; }
-  .night-meteor:nth-child(60) { left: 70.2%; top: 18.9%; --meteor-delay: -9.02s; --meteor-duration: 13.5s; }
-  .night-meteor:nth-child(61) { left: 105.3%; top: 71.3%; --meteor-delay: -0.55s; --meteor-duration: 15.7s; }
-  .night-meteor:nth-child(62) { left: 25.2%; top: 4.7%; --meteor-delay: -7.20s; --meteor-duration: 17.9s; }
-  .night-meteor:nth-child(63) { left: 60.3%; top: 57.1%; --meteor-delay: -11.16s; --meteor-duration: 14.5s; }
-  .night-meteor:nth-child(64) { left: 95.4%; top: -32.8%; --meteor-delay: -2.28s; --meteor-duration: 16.7s; }
-  .night-meteor:nth-child(65) { left: 19.4%; top: 36.6%; --meteor-delay: -6.70s; --meteor-duration: 13.3s; }
-  .night-meteor:nth-child(66) { left: 54.5%; top: 89.0%; --meteor-delay: -13.50s; --meteor-duration: 15.5s; }
-  .night-meteor:nth-child(67) { left: 89.5%; top: 5.4%; --meteor-delay: -4.22s; --meteor-duration: 17.7s; }
-  .night-meteor:nth-child(68) { left: 124.7%; top: 57.8%; --meteor-delay: -8.66s; --meteor-duration: 14.3s; }
-  .night-meteor:nth-child(69) { left: 48.6%; top: -15.1%; --meteor-delay: -16.05s; --meteor-duration: 16.5s; }
-  .night-meteor:nth-child(70) { left: 83.7%; top: 37.3%; --meteor-delay: -4.45s; --meteor-duration: 13.1s; }
-  .night-meteor:nth-child(71) { left: 118.8%; top: 89.7%; --meteor-delay: -10.82s; --meteor-duration: 15.3s; }
-  .night-meteor:nth-child(72) { left: 38.7%; top: 23.1%; --meteor-delay: -1.30s; --meteor-duration: 17.5s; }
-  .night-meteor:nth-child(73) { left: 73.8%; top: 69.2%; --meteor-delay: -6.22s; --meteor-duration: 14.1s; }
-  .night-meteor:nth-child(74) { left: 113.0%; top: -14.4%; --meteor-delay: -13.18s; --meteor-duration: 16.3s; }
-  .night-meteor:nth-child(75) { left: 32.9%; top: 55.0%; --meteor-delay: -2.27s; --meteor-duration: 12.9s; }
-  .night-meteor:nth-child(76) { left: 68.0%; top: -28.6%; --meteor-delay: -8.20s; --meteor-duration: 15.1s; }
-  .night-meteor:nth-child(77) { left: 103.1%; top: 23.8%; --meteor-delay: -15.75s; --meteor-duration: 17.3s; }
-  .night-meteor:nth-child(78) { left: 27.0%; top: 86.9%; --meteor-delay: -3.86s; --meteor-duration: 13.9s; }
-  .night-meteor:nth-child(79) { left: 62.1%; top: 3.3%; --meteor-delay: -10.38s; --meteor-duration: 16.1s; }
-  .night-meteor:nth-child(80) { left: 97.2%; top: 55.7%; --meteor-delay: -0.15s; --meteor-duration: 12.7s; }
-  .night-meteor:nth-child(81) { left: 17.1%; top: -10.9%; --meteor-delay: -5.65s; --meteor-duration: 14.9s; }
-  .night-meteor:nth-child(82) { left: 52.2%; top: 35.2%; --meteor-delay: -12.76s; --meteor-duration: 17.1s; }
-  .night-meteor:nth-child(83) { left: 91.3%; top: 87.6%; --meteor-delay: -1.55s; --meteor-duration: 13.7s; }
-  .night-meteor:nth-child(84) { left: 126.5%; top: 4.0%; --meteor-delay: -7.64s; --meteor-duration: 15.9s; }
-  .night-meteor:nth-child(85) { left: 46.3%; top: 73.4%; --meteor-delay: -10.60s; --meteor-duration: 12.5s; }
-  .night-meteor:nth-child(86) { left: 81.5%; top: -10.2%; --meteor-delay: -3.16s; --meteor-duration: 14.7s; }
-  .night-meteor:nth-child(87) { left: 120.6%; top: 35.9%; --meteor-delay: -9.84s; --meteor-duration: 16.9s; }
-  .night-meteor:nth-child(88) { left: 40.5%; top: -30.7%; --meteor-delay: -12.81s; --meteor-duration: 13.5s; }
-  .night-meteor:nth-child(89) { left: 75.6%; top: 21.7%; --meteor-delay: -4.97s; --meteor-duration: 15.7s; }
-  .night-meteor:nth-child(90) { left: 110.7%; top: 74.1%; --meteor-delay: -12.24s; --meteor-duration: 17.9s; }
-  .night-meteor:nth-child(91) { left: 30.6%; top: 1.2%; --meteor-delay: -0.74s; --meteor-duration: 14.5s; }
-  .night-meteor:nth-child(92) { left: 69.8%; top: 53.6%; --meteor-delay: -6.98s; --meteor-duration: 16.7s; }
-  .night-meteor:nth-child(93) { left: 104.9%; top: -30.0%; --meteor-delay: -10.44s; --meteor-duration: 13.3s; }
-  .night-meteor:nth-child(94) { left: 24.8%; top: 39.4%; --meteor-delay: -2.36s; --meteor-duration: 15.5s; }
-  .night-meteor:nth-child(95) { left: 59.9%; top: 91.8%; --meteor-delay: -9.20s; --meteor-duration: 17.7s; }
-  .night-meteor:nth-child(96) { left: 99.0%; top: 1.9%; --meteor-delay: -12.68s; --meteor-duration: 14.3s; }
-  .night-meteor:nth-child(97) { left: 18.9%; top: 71.3%; --meteor-delay: -4.19s; --meteor-duration: 16.5s; }
-  .night-meteor:nth-child(98) { left: 54.0%; top: -12.3%; --meteor-delay: -8.14s; --meteor-duration: 13.1s; }
-  .night-meteor:nth-child(99) { left: 89.1%; top: 40.1%; --meteor-delay: -15.12s; --meteor-duration: 15.3s; }
-  .night-meteor:nth-child(100) { left: 124.2%; top: 86.2%; --meteor-delay: -6.22s; --meteor-duration: 17.5s; }
-  .night-meteor:nth-child(101) { left: 48.1%; top: 19.6%; --meteor-delay: -10.19s; --meteor-duration: 14.1s; }
-  .night-meteor:nth-child(102) { left: 83.2%; top: 72.0%; --meteor-delay: -1.46s; --meteor-duration: 16.3s; }
-  .night-meteor:nth-child(103) { left: 118.3%; top: -11.6%; --meteor-delay: -5.90s; --meteor-duration: 12.9s; }
-  .night-meteor:nth-child(104) { left: 38.2%; top: 57.8%; --meteor-delay: -12.45s; --meteor-duration: 15.1s; }
-  .night-meteor:nth-child(105) { left: 77.4%; top: -32.1%; --meteor-delay: -3.31s; --meteor-duration: 17.3s; }
-  .night-meteor:nth-child(106) { left: 112.5%; top: 20.3%; --meteor-delay: -7.76s; --meteor-duration: 13.9s; }
-  .night-meteor:nth-child(107) { left: 32.4%; top: 89.7%; --meteor-delay: -14.91s; --meteor-duration: 16.1s; }
-  .night-meteor:nth-child(108) { left: 67.5%; top: 6.1%; --meteor-delay: -3.72s; --meteor-duration: 12.7s; }
-  .night-meteor:nth-child(109) { left: 102.6%; top: 52.2%; --meteor-delay: -9.84s; --meteor-duration: 14.9s; }
-  .night-meteor:nth-child(110) { left: 26.6%; top: -14.4%; --meteor-delay: -0.47s; --meteor-duration: 17.1s; }
-  .night-meteor:nth-child(111) { left: 61.7%; top: 38.0%; --meteor-delay: -5.41s; --meteor-duration: 13.7s; }
-  .night-meteor:nth-child(112) { left: 96.8%; top: 90.4%; --meteor-delay: -12.11s; --meteor-duration: 15.9s; }
-  .night-meteor:nth-child(113) { left: 16.6%; top: 23.8%; --meteor-delay: -1.61s; --meteor-duration: 12.5s; }
-  .night-meteor:nth-child(114) { left: 55.8%; top: 69.9%; --meteor-delay: -7.29s; --meteor-duration: 14.7s; }
-  .night-meteor:nth-child(115) { left: 90.9%; top: -13.7%; --meteor-delay: -14.59s; --meteor-duration: 16.9s; }
-  .night-meteor:nth-child(116) { left: 126.0%; top: 38.7%; --meteor-delay: -3.11s; --meteor-duration: 13.5s; }
-  .night-meteor:nth-child(117) { left: 45.9%; top: -27.9%; --meteor-delay: -9.38s; --meteor-duration: 15.7s; }
-  .night-meteor:nth-child(118) { left: 81.0%; top: 18.2%; --meteor-delay: -17.27s; --meteor-duration: 17.9s; }
-  .night-meteor:nth-child(119) { left: 120.1%; top: 70.6%; --meteor-delay: -4.81s; --meteor-duration: 14.5s; }
-  .night-meteor:nth-child(120) { left: 40.1%; top: 4.0%; --meteor-delay: -11.68s; --meteor-duration: 16.7s; }
-  .night-meteor:nth-child(121) { left: 75.1%; top: 56.4%; --meteor-delay: -0.88s; --meteor-duration: 13.3s; }
-  .night-meteor:nth-child(122) { left: 110.3%; top: -27.2%; --meteor-delay: -6.72s; --meteor-duration: 15.5s; }
-  .night-meteor:nth-child(123) { left: 34.2%; top: 35.9%; --meteor-delay: -14.17s; --meteor-duration: 17.7s; }
-  .night-meteor:nth-child(124) { left: 69.3%; top: 88.3%; --meteor-delay: -2.40s; --meteor-duration: 14.3s; }
-  .night-meteor:nth-child(125) { left: 104.4%; top: 4.7%; --meteor-delay: -8.83s; --meteor-duration: 16.5s; }
-  .night-meteor:nth-child(126) { left: 24.3%; top: 74.1%; --meteor-delay: -11.82s; --meteor-duration: 13.1s; }
-  .night-meteor:nth-child(127) { left: 59.4%; top: -15.8%; --meteor-delay: -4.12s; --meteor-duration: 15.3s; }
-  .night-meteor:nth-child(128) { left: 98.5%; top: 36.6%; --meteor-delay: -11.14s; --meteor-duration: 17.5s; }
   .night-meteor:nth-child(3n) { width: clamp(55px, 8vw, 110px); --meteor-brightness: .5; }
   .night-meteor:nth-child(4n) { width: clamp(120px, 20vw, 250px); height: 1.5px; --meteor-brightness: .8; }
   .night-meteor:nth-child(n+33) { width: clamp(50px, 9vw, 125px); height: 1px; --meteor-brightness: .46; }
   .night-meteor:nth-child(n+33)::before { top: -.5px; width: 2px; height: 2px; box-shadow: 0 0 4px #acd9f566; }
   @keyframes study-meteor-flight {
     0% { opacity: 0; transform: translate3d(0, 0, 0) rotate(-30deg); }
-    3%, 18% { opacity: var(--meteor-brightness, .72); }
+    3%, 18% { opacity: calc(var(--meteor-brightness, .72) * var(--meteor-light, 1)); }
     24%, 100% { opacity: 0; transform: translate3d(-110vw, 64vw, 0) rotate(-30deg); }
   }
   @media (max-width: 600px) { .night-meteor:nth-child(even) { display: none; } }
-  @media (prefers-reduced-motion: reduce) { .night-meteors { display: none !important; } }
+  @media (prefers-reduced-motion: reduce) { .night-meteors { display: none !important; } .meteor-preview .night-meteor { display: none !important; } }
 </style>
 <script src="/api/plugin/page/bridge-sdk.js"></script>
 </head>
 <body>
 <svg class="art-filter-defs" width="0" height="0" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><defs><filter id="art-sharpen-filter" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB"><feConvolveMatrix id="art-sharpen-kernel" order="3" kernelMatrix="0 0 0 0 1 0 0 0 0" divisor="1" bias="0" preserveAlpha="true" edgeMode="duplicate" /></filter></defs></svg>
-<div class="night-meteors" aria-hidden="true">
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-  <i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i><i class="night-meteor"></i>
-</div>
+<div class="night-meteors" id="night-meteors" aria-hidden="true"></div>
 <div class="wrap study-shell">
   <div class="layout">
   <aside class="side" id="tabs">
@@ -1267,7 +1122,7 @@
 </div>
 <dialog id="appearance-dialog" class="appearance-dialog" aria-labelledby="appearance-title" aria-describedby="appearance-description">
   <div class="appearance-heading">
-    <div><h2 id="appearance-title">布置这一隅</h2><div class="sub" id="appearance-description">调整页首插画，让喜欢的画面轻轻融入日常。</div></div>
+    <div><h2 id="appearance-title">布置这一隅</h2><div class="sub" id="appearance-description">调整插画与夜晚流星，让喜欢的画面轻轻融入日常。</div></div>
     <button type="button" id="art-close" class="icon-button" aria-label="关闭外观设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
   </div>
   <div class="appearance-content">
@@ -1302,6 +1157,21 @@
       <div class="tip span-all">铺满后调整位置和缩放，可裁取想保留的部分；遮罩强度越高，插画与文字区域的过渡越柔和。</div>
     </div>
   </div>
+  <section class="meteor-settings" aria-labelledby="meteor-settings-title">
+    <h3 id="meteor-settings-title">流星设置</h3>
+    <div class="meteor-settings-body">
+      <div>
+        <label class="check" for="art-meteor_enabled"><input id="art-meteor_enabled" type="checkbox" aria-label="开启流星效果" checked /><span><strong>开启流星效果</strong><span class="tip">夜晚模式下显示，关闭后保留调节参数。</span></span></label>
+        <div id="meteor-preview" class="meteor-preview" aria-hidden="true"></div>
+        <p class="tip">此处可随时预览。小屏幕自动减少显示数量；系统开启减少动态效果时暂停流星。</p>
+      </div>
+      <div class="meteor-controls">
+        <label class="range-field" for="art-meteor_count"><span class="range-label">流星数量<output id="art-meteor_count-value" for="art-meteor_count">128 道</output></span><input id="art-meteor_count" type="range" min="0" max="256" step="1" value="128" aria-label="流星数量" /><span class="tip">0～256 道，数量越多，背景中的流星越密集。</span></label>
+        <label class="range-field" for="art-meteor_brightness"><span class="range-label">流星亮度<output id="art-meteor_brightness-value" for="art-meteor_brightness">72%</output></span><input id="art-meteor_brightness" type="range" min="0" max="100" step="1" value="72" aria-label="流星亮度" /><span class="tip">调节光点和尾迹的明亮程度，0% 为不可见。</span></label>
+        <label class="range-field" for="art-meteor_speed"><span class="range-label">划过速度<output id="art-meteor_speed-value" for="art-meteor_speed">1.00×</output></span><input id="art-meteor_speed" type="range" min="25" max="200" step="5" value="100" aria-label="流星速度" /><span class="tip">0.25×～2.00×，数值越高，流星划过越快。</span></label>
+      </div>
+    </div>
+  </section>
   <div class="appearance-footer">
     <span class="sub">外观和插画保存在插件中，换浏览器也可读取。</span>
     <div class="row"><button type="button" id="art-reset" title="重置外观参数，保留当前插画">恢复默认</button><button type="button" id="art-cancel">取消</button><button type="button" id="art-save" class="primary">保存外观</button></div>
@@ -1395,7 +1265,7 @@ window.addEventListener("focus", applyStudyTheme);
 </script>
 <script type="module" id="appearance-script">
 // 通过插件 bridge 保存外观，兼容 AstrBot 的隔离面板。
-const ART_DEFAULTS = Object.freeze({ x: 75, y: 50, zoom: 100, opacity: 85, fit: "cover", mask: "#edf6fc", strength: 85, glass_enabled: true, glass: 50, sharpness: 0 });
+const ART_DEFAULTS = Object.freeze({ x: 75, y: 50, zoom: 100, opacity: 85, fit: "cover", mask: "#edf6fc", strength: 85, glass_enabled: true, glass: 50, sharpness: 0, meteor_enabled: true, meteor_count: 128, meteor_brightness: 72, meteor_speed: 100 });
 function normalizeAppearance(raw = {}) {
   const clamp = (key, min, max) => {
     const value = Number(raw[key]);
@@ -1407,6 +1277,8 @@ function normalizeAppearance(raw = {}) {
     opacity: clamp("opacity", 0, 100), strength: clamp("strength", 0, 100),
     glass_enabled: raw.glass_enabled !== false, glass: clamp("glass", 0, 100),
     sharpness: clamp("sharpness", 0, 100),
+    meteor_enabled: raw.meteor_enabled !== false, meteor_count: Math.round(clamp("meteor_count", 0, 256)),
+    meteor_brightness: clamp("meteor_brightness", 0, 100), meteor_speed: clamp("meteor_speed", 25, 200),
     fit: raw.fit === "contain" ? "contain" : "cover",
     mask: /^#[0-9a-f]{6}$/i.test(raw.mask || "") ? raw.mask.toLowerCase() : ART_DEFAULTS.mask,
   };
@@ -1414,6 +1286,39 @@ function normalizeAppearance(raw = {}) {
 function sharpnessKernel(value) {
   const amount = Math.min(100, Math.max(0, Number(value) || 0)) / 100 * .3;
   return [0, -amount, 0, -amount, 1 + 4 * amount, -amount, 0, -amount, 0].map(v => Number(v.toFixed(4))).join(" ");
+}
+function meteorLayout(index) {
+  const cell = index * 53 % 128;
+  // 分区交错放置，并给第二层流星少量偏移，避免数量增加时轨迹重叠。
+  const layer = Math.floor(index / 128);
+  const duration = 12.5 + (index * 11 % 28) * .2;
+  const phase = ((index * 47 % 256) + .5) / 256;
+  return {
+    left: (18 + (cell % 16) * 7.2 + (index * 7 % 9 - 4) * .45 + layer * 3.3).toFixed(1) + "%",
+    top: (-30 + Math.floor(cell / 16) * 17 + (index * 11 % 9 - 4) * .7 + layer * 5.1).toFixed(1) + "%",
+    delay: (-phase * duration).toFixed(2) + "s", duration: duration.toFixed(1) + "s",
+  };
+}
+function renderMeteors(settings) {
+  for (const id of ["night-meteors", "meteor-preview"]) {
+    const layer = document.getElementById(id);
+    layer.hidden = !settings.meteor_enabled;
+    layer.style.setProperty("--meteor-light", String(settings.meteor_brightness / 72));
+    layer.style.setProperty("--meteor-speed", String(settings.meteor_speed / 100));
+    if (layer.children.length === settings.meteor_count) continue;
+    const fragment = document.createDocumentFragment();
+    for (let index = 0; index < settings.meteor_count; index++) {
+      const meteor = document.createElement("i");
+      const layout = meteorLayout(index);
+      meteor.className = "night-meteor";
+      meteor.style.left = layout.left;
+      meteor.style.top = layout.top;
+      meteor.style.setProperty("--meteor-delay", layout.delay);
+      meteor.style.setProperty("--meteor-duration", layout.duration);
+      fragment.append(meteor);
+    }
+    layer.replaceChildren(fragment);
+  }
 }
 async function appearanceBridge() {
   for (let attempt = 0; attempt < 40; attempt++) {
@@ -1476,6 +1381,7 @@ function artStatus(text, error = false) {
   artEl("art-status").classList.toggle("bad", error);
 }
 function renderAppearance(settings, illustration) {
+  renderMeteors(settings);
   const root = document.documentElement.style;
   root.setProperty("--art-x", settings.x + "%");
   root.setProperty("--art-y", settings.y + "%");
@@ -1498,21 +1404,23 @@ function renderAppearance(settings, illustration) {
 }
 function fillAppearanceControls() {
   for (const key of Object.keys(ART_DEFAULTS)) {
-    if (key === "glass_enabled") artEl("art-" + key).checked = draftAppearance[key];
+    if (key.endsWith("_enabled")) artEl("art-" + key).checked = draftAppearance[key];
     else artEl("art-" + key).value = draftAppearance[key];
   }
   syncAppearanceControls();
 }
 function syncAppearanceControls() {
-  for (const key of ["x", "y", "zoom", "opacity", "strength", "glass", "sharpness"]) {
+  for (const key of ["x", "y", "zoom", "opacity", "strength", "glass", "sharpness", "meteor_count", "meteor_brightness", "meteor_speed"]) {
     const slider = artEl("art-" + key);
-    artEl("art-" + key + "-value").textContent = draftAppearance[key] + "%";
+    artEl("art-" + key + "-value").textContent = key === "meteor_count" ? draftAppearance[key] + " 道" : key === "meteor_speed" ? (draftAppearance[key] / 100).toFixed(2) + "×" : draftAppearance[key] + "%";
     slider.style.setProperty("--range-progress", ((draftAppearance[key] - Number(slider.min)) / (Number(slider.max) - Number(slider.min)) * 100) + "%");
   }
   const imageControls = ["x", "y", "zoom", "opacity", "fit", "sharpness"];
   for (const key of imageControls) artEl("art-" + key).disabled = !draftIllustration || artBusy;
   artEl("art-glass_enabled").disabled = !draftIllustration || artBusy;
   artEl("art-glass").disabled = !draftIllustration || !draftAppearance.glass_enabled || artBusy;
+  artEl("art-meteor_enabled").disabled = artBusy;
+  for (const key of ["meteor_count", "meteor_brightness", "meteor_speed"]) artEl("art-" + key).disabled = !draftAppearance.meteor_enabled || artBusy;
   for (const key of ["mask", "strength"]) artEl("art-" + key).disabled = artBusy;
   artEl("art-remove").disabled = !draftIllustration || artBusy;
   artEl("art-recenter").disabled = !draftIllustration || artBusy;
@@ -1548,7 +1456,7 @@ artEl("appearance-open").onclick = async () => {
 for (const key of Object.keys(ART_DEFAULTS)) {
   artEl("art-" + key).addEventListener("input", () => {
     const control = artEl("art-" + key);
-    draftAppearance = normalizeAppearance({ ...draftAppearance, [key]: key === "glass_enabled" ? control.checked : control.value });
+    draftAppearance = normalizeAppearance({ ...draftAppearance, [key]: key.endsWith("_enabled") ? control.checked : control.value });
     syncAppearanceControls();
     artStatus("预览已更新，点击「保存外观」后保留。");
   });

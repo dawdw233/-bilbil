@@ -8,7 +8,7 @@ const script = html.match(/<script type="module" id="appearance-script">([\s\S]*
 const helpers = script.slice(0, script.indexOf("const artEl ="));
 function load(overrides = {}) {
   const sandbox = { console, ...overrides };
-  vm.runInNewContext(helpers + "; globalThis.api = {normalizeAppearance, appearanceStorage, prepareIllustration, sharpnessKernel};", sandbox);
+  vm.runInNewContext(helpers + "; globalThis.api = {normalizeAppearance, appearanceStorage, prepareIllustration, sharpnessKernel, meteorLayout, renderMeteors};", sandbox);
   return sandbox.api;
 }
 const plain = (value) => JSON.parse(JSON.stringify(value));
@@ -16,7 +16,7 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 test("外观参数保留有效的 0、限制范围并拒绝无效颜色", () => {
   const { normalizeAppearance } = load();
   const settings = plain(normalizeAppearance({ x: -5, y: 110, zoom: 999, opacity: 0, strength: 0, fit: "contain", mask: "#ABCDEF" }));
-  assert.deepEqual(settings, { x: 0, y: 100, zoom: 250, opacity: 0, strength: 0, glass_enabled: true, glass: 50, sharpness: 0, fit: "contain", mask: "#abcdef" });
+  assert.deepEqual(settings, { x: 0, y: 100, zoom: 250, opacity: 0, strength: 0, glass_enabled: true, glass: 50, sharpness: 0, meteor_enabled: true, meteor_count: 128, meteor_brightness: 72, meteor_speed: 100, fit: "contain", mask: "#abcdef" });
   const fallback = plain(normalizeAppearance({ zoom: "bad", opacity: "", mask: "url(https://example.invalid)", fit: "invalid" }));
   assert.equal(fallback.zoom, 100);
   assert.equal(fallback.opacity, 85);
@@ -27,6 +27,49 @@ test("外观参数保留有效的 0、限制范围并拒绝无效颜色", () => 
   assert.equal(normalizeAppearance({glass:150}).glass,100);
   assert.equal(normalizeAppearance({sharpness:150}).sharpness,100);
   assert.equal(normalizeAppearance({sharpness:-1}).sharpness,0);
+});
+
+test("流星参数支持关闭、零亮度、零数量并限制数量和速度范围", () => {
+  const {normalizeAppearance} = load();
+  const zero = normalizeAppearance({meteor_enabled:false,meteor_count:0,meteor_brightness:0,meteor_speed:25});
+  assert.equal(zero.meteor_enabled,false);
+  assert.equal(zero.meteor_count,0);
+  assert.equal(zero.meteor_brightness,0);
+  assert.equal(zero.meteor_speed,25);
+  const limited = normalizeAppearance({meteor_count:999,meteor_brightness:999,meteor_speed:0});
+  assert.equal(limited.meteor_count,256);
+  assert.equal(limited.meteor_brightness,100);
+  assert.equal(limited.meteor_speed,25);
+  assert.equal(normalizeAppearance({meteor_count:12.6}).meteor_count,13);
+});
+
+test("流星预览更新数量、亮度、速度和开关，调亮度时保持已有轨迹", () => {
+  const style = () => ({setProperty(key,value){this[key]=value;}});
+  const layers = Object.fromEntries(["night-meteors","meteor-preview"].map(id => [id,{
+    style:style(),children:[],replaceChildren(fragment){this.children=fragment.items;},
+  }]));
+  const {normalizeAppearance,renderMeteors,meteorLayout} = load({document:{
+    getElementById:id=>layers[id],
+    createDocumentFragment:()=>({items:[],append(item){this.items.push(item);}}),
+    createElement:()=>({style:style()}),
+  }});
+  const settings = normalizeAppearance({meteor_count:256});
+  renderMeteors(settings);
+  for (const layer of Object.values(layers)) assert.equal(layer.children.length,256);
+  const original = layers["night-meteors"].children[0];
+  renderMeteors({...settings,meteor_enabled:false,meteor_brightness:0,meteor_speed:200});
+  for (const layer of Object.values(layers)) {
+    assert.equal(layer.hidden,true);
+    assert.equal(layer.style["--meteor-light"],"0");
+    assert.equal(layer.style["--meteor-speed"],"2");
+  }
+  assert.equal(layers["night-meteors"].children[0],original);
+  renderMeteors({...settings,meteor_count:0});
+  assert.equal(layers["night-meteors"].children.length,0);
+  assert.equal(layers["night-meteors"].hidden,false);
+  const positions = Array.from({length:256},(_,i)=>meteorLayout(i));
+  assert.equal(new Set(positions.map(p=>p.left+","+p.top)).size,256);
+  assert.ok(positions.every(p=>parseFloat(p.delay)<0 && parseFloat(p.duration)>0));
 });
 
 test("锐化在零强度不改变图像，增强边缘时保持平坦区域亮度", () => {
@@ -91,7 +134,7 @@ test("页面保留主要业务入口，插画设置具备独立的可访问标�
   const markup = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
   const ids = [...markup.matchAll(/\sid="([^"]+)"/g)].map(match => match[1]);
   assert.equal(ids.length, new Set(ids).size, "页面元素 ID 不得重复");
-  for (const id of ["btn-run", "btn-login", "tab-main", "tab-rhythm", "tab-upload", "tab-delivery", "tab-comments", "tab-reply", "f-speaking_style_bind_persona", "appearance-dialog", "art-file", "art-save", "art-cancel"]) assert.ok(ids.includes(id), id);
+  for (const id of ["btn-run", "btn-login", "tab-main", "tab-rhythm", "tab-upload", "tab-delivery", "tab-comments", "tab-reply", "f-speaking_style_bind_persona", "appearance-dialog", "art-file", "art-save", "art-cancel", "art-meteor_enabled", "art-meteor_count", "art-meteor_brightness", "art-meteor_speed"]) assert.ok(ids.includes(id), id);
   assert.match(html, /<dialog[^>]*aria-labelledby="appearance-title"/);
   assert.match(html, /prefers-reduced-motion/);
   assert.equal((html.match(/<\/body>/g) || []).length, 1);

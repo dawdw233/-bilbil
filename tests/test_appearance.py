@@ -100,6 +100,39 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(settings["sharpness"], strength)
             self.assertFalse(settings["glass_enabled"])
 
+    async def test_meteor_settings_persist_without_illustration(self):
+        for enabled, count, brightness, speed in ((False, 128, 72, 100), (True, 0, 0, 25), (True, 256, 100, 200)):
+            self.payload = {"settings": {"meteor_enabled": enabled, "meteor_count": count,
+                         "meteor_brightness": brightness, "meteor_speed": speed}, "image": None}
+            self.assertEqual(await self.instance._api_appearance_save(), {"saved": True})
+            restored = await self.instance._api_appearance_state()
+            self.assertIsNone(restored["image"])
+            for key, value in self.payload["settings"].items():
+                self.assertEqual(restored["settings"][key], value)
+
+    async def test_invalid_meteor_settings_preserve_saved_appearance(self):
+        self.payload = {"settings": {"x": 30}, "image": None}
+        await self.instance._api_appearance_save()
+        original = (self.instance.data_dir / "appearance.json").read_bytes()
+        for settings in ({"meteor_enabled": "false"}, {"meteor_enabled": 1}, {"meteor_count": True},
+                         {"meteor_count": -1}, {"meteor_count": 257}, {"meteor_count": 1.5},
+                         {"meteor_brightness": -1}, {"meteor_brightness": 101},
+                         {"meteor_speed": 0}, {"meteor_speed": 201}, {"meteor_speed": float("nan")}):
+            with self.subTest(settings=settings):
+                self.payload = {"settings": settings, "image": None}
+                self.assertIn("error", await self.instance._api_appearance_save())
+                self.assertEqual((self.instance.data_dir / "appearance.json").read_bytes(), original)
+
+    async def test_old_appearance_uses_meteor_defaults(self):
+        record = {"version": 2, "settings": {"x": 25}, "image": None}
+        (self.instance.data_dir / "appearance.json").write_text(json.dumps(record), encoding="utf-8")
+        settings = self.instance._load_appearance()["settings"]
+        self.assertTrue(settings["meteor_enabled"])
+        self.assertEqual(settings["meteor_count"], 128)
+        self.assertEqual(settings["meteor_brightness"], 72)
+        self.assertEqual(settings["meteor_speed"], 100)
+        self.assertEqual(settings["x"], 25)
+
     async def test_storage_error_keeps_existing_appearance(self):
         self.payload = {"settings": {"zoom": 120}, "image": None}
         await self.instance._api_appearance_save()

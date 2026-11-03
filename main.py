@@ -61,6 +61,7 @@ APPEARANCE_DEFAULTS = {
     "x": 75, "y": 50, "zoom": 100, "opacity": 85,
     "fit": "cover", "mask": "#edf6fc", "strength": 85,
     "glass_enabled": True, "glass": 50, "sharpness": 0,
+    "meteor_enabled": True, "meteor_count": 128, "meteor_brightness": 72, "meteor_speed": 100,
 }
 MAX_ILLUSTRATION_BYTES = 3 * 1024 * 1024
 
@@ -239,15 +240,20 @@ class BiliScrollPlugin(Star):
             raise ValueError("外观参数格式不正确")
         result = dict(APPEARANCE_DEFAULTS)
         for key, lo, hi in (("x", 0, 100), ("y", 0, 100), ("zoom", 100, 250),
-                            ("opacity", 0, 100), ("strength", 0, 100), ("glass", 0, 100), ("sharpness", 0, 100)):
+                            ("opacity", 0, 100), ("strength", 0, 100), ("glass", 0, 100), ("sharpness", 0, 100),
+                            ("meteor_count", 0, 256), ("meteor_brightness", 0, 100), ("meteor_speed", 25, 200)):
             value = settings.get(key, result[key])
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not lo <= value <= hi:
                 raise ValueError(f"{key} 必须在 {lo}~{hi} 之间")
             result[key] = value
-        enabled = settings.get("glass_enabled", result["glass_enabled"])
-        if not isinstance(enabled, bool):
-            raise ValueError("玻璃质感开关必须为开启或关闭")
-        result["glass_enabled"] = enabled
+        if result["meteor_count"] != int(result["meteor_count"]):
+            raise ValueError("流星数量必须为整数")
+        result["meteor_count"] = int(result["meteor_count"])
+        for key, label in (("glass_enabled", "玻璃质感"), ("meteor_enabled", "流星")):
+            enabled = settings.get(key, result[key])
+            if not isinstance(enabled, bool):
+                raise ValueError(f"{label}开关必须为开启或关闭")
+            result[key] = enabled
         if settings.get("fit", "cover") not in ("cover", "contain"):
             raise ValueError("请选择铺满裁剪或完整显示")
         result["fit"] = settings.get("fit", "cover")
