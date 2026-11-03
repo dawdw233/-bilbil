@@ -124,6 +124,39 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.instance._load_appearance()["image"])
         self.assertTrue((await self.instance._api_appearance_default())["image"].startswith("data:image/png;base64,"))
 
+    async def test_theme_mode_defaults_to_auto_and_saves_independently(self):
+        self.assertEqual(await self.instance._api_theme_state(), {"mode": "auto"})
+        self.payload = {"settings": {"glass": 60}, "image": None}
+        await self.instance._api_appearance_save()
+        appearance = (self.instance.data_dir / "appearance.json").read_bytes()
+        for mode in ("night", "light", "auto"):
+            self.payload = {"mode": mode}
+            self.assertEqual(await self.instance._api_theme_save(), {"saved": True})
+            self.assertEqual(await self.instance._api_theme_state(), {"mode": mode})
+            self.assertEqual((self.instance.data_dir / "appearance.json").read_bytes(), appearance)
+
+    async def test_invalid_theme_modes_keep_saved_mode(self):
+        self.payload = {"mode": "night"}
+        await self.instance._api_theme_save()
+        original = (self.instance.data_dir / "theme.json").read_bytes()
+        for payload in ([], {}, {"mode": None}, {"mode": "dark"}, {"mode": {}}, {"mode": 1}):
+            self.payload = payload
+            self.assertIn("error", await self.instance._api_theme_save())
+            self.assertEqual((self.instance.data_dir / "theme.json").read_bytes(), original)
+
+    async def test_theme_storage_failure_and_corrupt_record(self):
+        self.payload = {"mode": "night"}
+        await self.instance._api_theme_save()
+        original = (self.instance.data_dir / "theme.json").read_bytes()
+        self.payload = {"mode": "light"}
+        with patch.object(Path, "replace", side_effect=OSError("disk full")), patch.object(plugin.logger, "exception"):
+            self.assertIn("error", await self.instance._api_theme_save())
+        self.assertEqual((self.instance.data_dir / "theme.json").read_bytes(), original)
+        self.assertFalse(list(self.instance.data_dir.glob("*.tmp")))
+        for content in ("not json", "[]", '{"mode":"invalid"}'):
+            (self.instance.data_dir / "theme.json").write_text(content, encoding="utf-8")
+            self.assertEqual(await self.instance._api_theme_state(), {"mode": "auto"})
+
     async def test_avatar_persists_independently_and_resets(self):
         image = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\navatar").decode()
         self.payload = {"settings": {"zoom": 140}, "image": None}

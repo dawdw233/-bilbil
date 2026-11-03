@@ -76,7 +76,7 @@
     display: block; width: 100%; height: 100%; object-fit: var(--art-fit);
     object-position: var(--art-x) var(--art-y); opacity: var(--art-opacity);
     transform: scale(var(--art-scale)); transform-origin: var(--art-x) var(--art-y);
-    filter: contrast(calc(1 + var(--glass-level, .5) * .14)) saturate(calc(1 + var(--glass-level, .5) * .12)) brightness(calc(1 - var(--glass-level, .5) * .015)) var(--art-detail-filter, blur(0px));
+    filter: contrast(calc(1 + var(--glass-level, .5) * .14)) saturate(calc(1 + var(--glass-level, .5) * .12)) brightness(calc(1 - var(--glass-level, .5) * .015)) var(--art-detail-filter, blur(0px)) var(--night-art-filter, brightness(1));
   }
   .hero-art img:not([src]), .preview-art img:not([src]) { display: none; }
   .hero-art:has(img[src])::before, .preview-art:has(img[src])::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: var(--glass-level, .5); background: radial-gradient(ellipse at 75% -12%, #ffffff99, #ffffff18 42%, transparent 70%); }
@@ -327,6 +327,7 @@
   .toolbar-actions { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
   .toolbar-actions button { min-height: 35px; padding: 7px 13px; font-size: 11px; }
   .toolbar-actions #appearance-open { margin: 0; font-size: 11px; padding: 7px 12px; }
+  .toolbar-actions #theme-mode { width: auto; max-width: 130px; min-height: 35px; padding: 6px 10px; border-radius: 999px; font-size: 11px; }
   .study-shell .hd { --hero-radius: 26px; min-height: 282px; padding: 33px 36px; border: 1px solid #dce8f170; border-radius: var(--hero-radius); margin-bottom: 28px; display: flex; align-items: center; box-shadow: var(--shadow-hero); }
   .study-shell .hd::before { inset: 0; width: auto; height: auto; z-index: 2; border: 0; border-radius: calc(var(--hero-radius) - 1px); background: none; box-shadow: inset 0 2px 5px #45648212, inset 0 -1px 2px #ffffff55; pointer-events: none; }
   .study-shell .hd::after { display: none; }
@@ -459,6 +460,67 @@
     .study-shell .top-row { grid-template-columns: 1fr; }
   }
 
+  :root[data-study-theme="night"] {
+    color-scheme: dark; --ink: #dce7f0; --muted: #adbfce; --line: #7894ab40; --line-2: #506c82;
+    --surface: #263b4ee8; --surface-2: #30485c; --panel-bg: #263b4ee8; --accent: #9ac6e5; --accent-fill: #83afcf; --blue-soft: #2d4d67;
+    --gold: #bfa76f; --gold-ink: #1e3040; --ok: #95cbb9; --bad: #e5a8b6; --warn: #d9bf87;
+    --shadow: 0 14px 30px -16px #07132199, 0 4px 10px #07132133, inset 0 1px 0 #a8bfd112;
+    --shadow-up: 0 18px 34px -14px #071321b3, 0 6px 14px #0713214d, inset 0 1px 0 #a8bfd11a;
+    --shadow-hero: 0 24px 40px -14px #071321a6, 0 5px 14px #07132140, inset 0 1px 0 #a8bfd112;
+    --night-art-filter: brightness(.9) saturate(.96);
+  }
+  body, .hero-art, .preview-art { transition: background 200ms ease, color 200ms ease; }
+  :root[data-study-theme="night"] body { background: radial-gradient(ellipse at 82% 0, #2a4055 0, transparent 58%), linear-gradient(125deg, #192a3a, #1c3043 70%, #20364a); }
+  :root[data-study-theme="night"] .study-shell .side { background: #23384be8; border-color: #7894ab33; box-shadow: 10px 16px 36px -18px #07132199, inset 0 1px 0 #a8bfd112; }
+  :root[data-study-theme="night"] .study-toolbar { background: #203448ed; }
+  :root[data-study-theme="night"] :is(.card, .panel, .md, .tbl-wrap, .study-timeline-card, .study-progress-card, .study-stat) { background: var(--surface); border-color: var(--line); }
+  :root[data-study-theme="night"] :is(h1, h2, .panel-title, .field > .lbl, .study-room-name, .study-card-heading h3, .timeline-title, .progress-copy h3, .study-stat .stat-number, .toolbar-path strong, .side-footnote span) { color: var(--ink); }
+  :root[data-study-theme="night"] :is(.hero-eyebrow, .hero-note, .nav-group-label, .study-room-caption, .side-footnote, .toolbar-path, .timeline-time, .timeline-detail, .timeline-empty, .progress-copy p, .study-stat .stat-key, .orbit-label span, #study-feedback) { color: var(--muted); }
+  :root[data-study-theme="night"] :is(.side-footnote, th, td) { border-color: var(--line); }
+  :root[data-study-theme="night"] .study-shell .hd { background: linear-gradient(112deg, #21374b, #2c465c 62%, #344e63); border-color: #7894ab24; }
+  :root[data-study-theme="night"] .study-shell .hd::before { box-shadow: inset 0 2px 5px #06132126, inset 0 -1px 2px #a8bfd112; }
+  :root[data-study-theme="night"] .study-shell .hero-readability { background: linear-gradient(90deg, #21374bfa, #21374bf2 28%, #233b50b8 45%, #2c465c3b 65%, transparent 82%); }
+  :root[data-study-theme="night"] :is(.hero-wash, .preview-wash) { background: linear-gradient(90deg, #21374b, rgba(33,55,75,var(--art-mask-strength)) 36%, rgba(33,55,75,calc(var(--art-mask-strength) * .36)) 72%, #21374b0f); }
+  :root[data-study-theme="night"] :is(.hero-art, .preview-art)::before, :root[data-study-theme="night"] :is(.hero-art, .preview-art)::after { opacity: calc(var(--glass-level, .5) * .45); }
+  :root[data-study-theme="night"] :is(.hero-tag, .stat-icon, .tag, .check, .md blockquote, code, th) { background: #304a60b3; border-color: #66849c66; color: #c1d5e5; }
+  :root[data-study-theme="night"] .hero-tag::before { background: #95bdda; }
+  :root[data-study-theme="night"] .stat-icon { color: #a9c7dd; }
+  :root[data-study-theme="night"] .progress-orbit .orbit-track { stroke: #3c556a; }
+  :root[data-study-theme="night"] .progress-orbit .orbit-value { stroke: #94bedc; }
+  :root[data-study-theme="night"] .orbit-label strong, :root[data-study-theme="night"] .progress-copy .progress-count { color: #b0d4ee; }
+  :root[data-study-theme="night"] .timeline-line { background: #52718a; }
+  :root[data-study-theme="night"] .timeline-item:last-child .timeline-line { background: transparent; }
+  :root[data-study-theme="night"] .timeline-line::before { background: #94b7d1; box-shadow: 0 0 0 3px #30495e; }
+  :root[data-study-theme="night"] :is(.timeline-item.next, .timeline-item.running) .timeline-line::before { background: #b0d4ee; box-shadow: 0 0 0 4px #355670; }
+  :root[data-study-theme="night"] .timeline-item.window .timeline-line::before { background: #263b4e; border-color: #94b7d1; }
+  :root[data-study-theme="night"] button { background: #30485ce0; border-color: var(--line-2); color: var(--ink); box-shadow: 0 3px 7px #07132133, inset 0 1px 0 #a8bfd112; }
+  :root[data-study-theme="night"] button:hover:not(:disabled) { background: #3a566e; border-color: #7496af; box-shadow: var(--shadow-up); }
+  :root[data-study-theme="night"] button.primary { background: var(--gold); border-color: #c4ad7b; color: var(--gold-ink); box-shadow: 0 5px 12px #07132140; }
+  :root[data-study-theme="night"] button.primary:hover:not(:disabled) { background: #ceb984; }
+  :root[data-study-theme="night"] :is(button.study-room-name, .study-shell .tab, .study-card-heading button) { background: transparent; box-shadow: none; border-color: transparent; }
+  :root[data-study-theme="night"] :is(button.study-room-name, .study-shell .tab):hover:not(:disabled) { background: #304b63; box-shadow: none; }
+  :root[data-study-theme="night"] .study-shell .tab.active { background: #2d4d67; border-color: #4a7091; color: #c9e6fb; }
+  :root[data-study-theme="night"] .tab .badge { background: #436783; color: #d6eaff; }
+  :root[data-study-theme="night"] #appearance-open { background: #30485ce0; }
+  :root[data-study-theme="night"] button.study-avatar { background: var(--avatar-frame); border-color: var(--avatar-color); box-shadow: 0 6px 10px #07132166, inset 1px 1px 2px #ffffff66; }
+  :root[data-study-theme="night"] .avatar-palette button { background: var(--swatch); border-color: #263b4e; }
+  :root[data-study-theme="night"] :is(input, select, textarea) { background: #1e3346; border-color: #526d83; color: var(--ink); }
+  :root[data-study-theme="night"] :is(input, select, textarea):focus-visible { background: #263e53; border-color: #8ab6d6; box-shadow: 0 0 0 4px #8ab6d624; }
+  :root[data-study-theme="night"] :is(input, textarea)::placeholder { color: #93acbf; }
+  :root[data-study-theme="night"] :is(input, textarea):disabled { background: #263b4e; }
+  :root[data-study-theme="night"] input[type="range"] { background: transparent; }
+  :root[data-study-theme="night"] input[type="range"]::-webkit-slider-runnable-track { background: linear-gradient(to right, #8db7d5 var(--range-progress, 50%), #415e76 var(--range-progress, 50%)); }
+  :root[data-study-theme="night"] input[type="range"]::-moz-range-track { background: #415e76; }
+  :root[data-study-theme="night"] input[type="range"]::-moz-range-progress { background: #8db7d5; }
+  :root[data-study-theme="night"] .appearance-dialog { background: #22374a; border-color: #7894ab40; box-shadow: 0 24px 100px #06101b99; }
+  :root[data-study-theme="night"] .appearance-dialog::backdrop { background: #08172599; }
+  :root[data-study-theme="night"] :is(.appearance-heading, .appearance-footer) { background: #22374af5; }
+  :root[data-study-theme="night"] .art-preview { background: linear-gradient(115deg, #21374b, #344e63); border-color: #66849c66; }
+  :root[data-study-theme="night"] .preview-label { background: #21374bb3; }
+  :root[data-study-theme="night"] .appearance-toast { background: #304b63f5; border-color: #66849c; color: var(--ink); }
+  :root[data-study-theme="night"] .err { background: #503747; border-color: #926073; }
+  :root[data-study-theme="night"] .tag-good { background: #294c48; color: #b8e0d2; border-color: #507e74; }
+  :root[data-study-theme="night"] :is(tbody tr, .sec.collapsible > .sec-head, .check):hover { background: #35516a80; }
 </style>
 <script src="/api/plugin/page/bridge-sdk.js"></script>
 </head>
@@ -478,6 +540,7 @@
     <div class="study-toolbar">
       <div class="toolbar-path"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8M6 9v12h12V9M10 21v-7h4v7"/></svg><span data-room-name>一隅书房</span><span class="path-separator">/</span><strong id="study-page-title">观影手记</strong></div>
       <div class="toolbar-actions">
+        <select id="theme-mode" aria-label="页面昼夜模式" title="随时间：北京时间 19:00 至次日 07:00 使用夜晚模式" disabled><option value="auto">随时间</option><option value="light">浅色模式</option><option value="night">夜晚模式</option></select>
         <button id="btn-refresh"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></svg>刷新状态</button>
         <button id="appearance-open" type="button" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8" cy="9" r="1.5"/><path d="m4 17 5-5 4 4 3-3 5 5"/></svg>外观与插画</button>
         <button id="btn-run" class="primary"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 10 7-10 7z"/></svg>立刻刷一轮</button>
@@ -1089,6 +1152,70 @@
 </dialog>
 <div id="appearance-toast" class="appearance-toast hide" role="status" aria-live="polite"></div>
 
+<div id="theme-feedback" class="appearance-toast hide" role="status" aria-live="polite"></div>
+<script type="module" id="theme-script">
+function studyThemeFor(mode, instant = new Date()) {
+  if (mode === "light" || mode === "night") return mode;
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Shanghai", hour: "2-digit", hourCycle: "h23" }).format(instant));
+  return hour >= 19 || hour < 7 ? "night" : "light";
+}
+async function themeBridge() {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const bridge = window.AstrBotPluginView;
+    if (bridge) { await bridge.ready(); return bridge; }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error("页面模式服务暂未连接，请重试");
+}
+const themeModeControl = document.getElementById("theme-mode");
+let savedThemeMode = "auto";
+let currentThemeMode = "auto";
+let themeFeedbackTimer;
+function applyStudyTheme() {
+  const theme = studyThemeFor(currentThemeMode);
+  document.documentElement.dataset.studyTheme = theme;
+  themeModeControl.value = currentThemeMode;
+  themeModeControl.title = `随时间：北京时间 19:00 至次日 07:00 使用夜晚模式；当前${theme === "night" ? "夜晚" : "浅色"}模式`;
+}
+function themeFeedback(message) {
+  const element = document.getElementById("theme-feedback");
+  element.textContent = message;
+  element.classList.remove("hide");
+  clearTimeout(themeFeedbackTimer);
+  themeFeedbackTimer = setTimeout(() => element.classList.add("hide"), 3000);
+}
+applyStudyTheme();
+async function loadThemeMode() {
+  try {
+    const bridge = await themeBridge();
+    const stored = await bridge.apiGet("theme/state");
+    if (!["auto", "light", "night"].includes(stored?.mode)) throw new Error("页面模式暂时无法读取，请重试");
+    savedThemeMode = currentThemeMode = stored.mode;
+    applyStudyTheme();
+  } catch (error) { themeFeedback(error.message || "页面模式暂时无法读取，请重试"); }
+  finally { themeModeControl.disabled = false; }
+}
+themeModeControl.onchange = async () => {
+  currentThemeMode = themeModeControl.value;
+  themeModeControl.disabled = true;
+  applyStudyTheme();
+  try {
+    const bridge = await themeBridge();
+    const result = await bridge.apiPost("theme/save", {mode:currentThemeMode});
+    if (!result?.saved) throw new Error("未收到保存确认，请重试");
+    savedThemeMode = currentThemeMode;
+    themeFeedback(currentThemeMode === "auto" ? "已设为随时间切换 · 北京时间 19:00—次日 07:00 为夜晚" : currentThemeMode === "night" ? "已切换夜晚模式" : "已切换浅色模式");
+  } catch (error) {
+    currentThemeMode = savedThemeMode;
+    applyStudyTheme();
+    themeFeedback("保存失败：" + (error.message || "请重试"));
+  } finally { themeModeControl.disabled = false; }
+};
+loadThemeMode();
+setInterval(() => { if (!document.hidden && currentThemeMode === "auto") applyStudyTheme(); }, 30000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) applyStudyTheme(); });
+window.addEventListener("focus", applyStudyTheme);
+</script>
 <script type="module" id="appearance-script">
 // 通过插件 bridge 保存外观，兼容 AstrBot 的隔离面板。
 const ART_DEFAULTS = Object.freeze({ x: 75, y: 50, zoom: 100, opacity: 85, fit: "cover", mask: "#edf6fc", strength: 85, glass_enabled: true, glass: 50, sharpness: 0 });

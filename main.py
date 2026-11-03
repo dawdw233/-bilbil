@@ -198,6 +198,8 @@ class BiliScrollPlugin(Star):
             ("avatar/save", self._api_avatar_save, ["POST"], "保存书房头像"),
             ("room/state", self._api_room_state, ["GET"], "读取书房名称"),
             ("room/save", self._api_room_save, ["POST"], "保存书房名称"),
+            ("theme/state", self._api_theme_state, ["GET"], "读取页面昼夜模式"),
+            ("theme/save", self._api_theme_save, ["POST"], "保存页面昼夜模式"),
             ("login/start", self._api_login_start, ["POST"], "生成扫码登录二维码"),
             ("login/state", self._api_login_state, ["GET"], "扫码登录状态"),
             ("reports", self._api_reports, ["GET"], "日报日期列表"),
@@ -385,6 +387,35 @@ class BiliScrollPlugin(Star):
             except OSError:
                 pass
         return json_response({"saved": True, "name": name})
+
+    async def _api_theme_state(self):
+        try:
+            mode = json.loads((self.data_dir / "theme.json").read_text(encoding="utf-8")).get("mode")
+            if mode not in ("auto", "light", "night"):
+                mode = "auto"
+        except (OSError, ValueError, TypeError, AttributeError):
+            mode = "auto"
+        return json_response({"mode": mode})
+
+    async def _api_theme_save(self):
+        payload = await request.json(default={})
+        mode = payload.get("mode") if isinstance(payload, dict) else None
+        if mode not in ("auto", "light", "night"):
+            return error_response("请选择随时间、浅色或夜晚模式")
+        target = self.data_dir / "theme.json"
+        temporary = target.with_name(f"theme.{uuid.uuid4().hex}.tmp")
+        try:
+            temporary.write_text(json.dumps({"mode": mode}), encoding="utf-8")
+            temporary.replace(target)
+        except OSError:
+            logger.exception("[bili-scroll] 保存昼夜模式失败")
+            return error_response("昼夜模式保存失败，请重试")
+        finally:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return json_response({"saved": True})
 
     async def _api_appearance_save(self):
         payload = await request.json(default={})
