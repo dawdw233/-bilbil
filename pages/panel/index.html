@@ -523,6 +523,7 @@
   :root[data-study-theme="night"] :is(tbody tr, .sec.collapsible > .sec-head, .check):hover { background: #35516a80; }
   .night-meteors { display: none; position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
   :root[data-study-theme="night"] .night-meteors { display: block; }
+  :root:not([data-study-theme="night"]) #meteor-open { display: none; }
   .night-meteors[hidden] { display: none !important; }
   .meteor-dialog { width: min(780px, calc(100% - 40px)); }
   .meteor-settings { margin: 0; padding: 24px 28px 12px; }
@@ -1229,6 +1230,8 @@ let themeFeedbackTimer;
 function applyStudyTheme() {
   const theme = studyThemeFor(currentThemeMode);
   document.documentElement.dataset.studyTheme = theme;
+  const meteorDialog = document.getElementById("meteor-dialog");
+  if (theme !== "night" && meteorDialog.open) meteorDialog.close();
   themeModeControl.value = currentThemeMode;
   themeModeControl.title = `随时间：北京时间 19:00 至次日 07:00 使用夜晚模式；当前${theme === "night" ? "夜晚" : "浅色"}模式`;
 }
@@ -1356,9 +1359,11 @@ async function refreshMeteors() {
 }
 const meteorsReady = refreshMeteors();
 meteorEl("meteor-open").onclick = async () => {
+  if (document.documentElement.dataset.studyTheme !== "night") return;
   await meteorsReady;
   if (meteorDialog.open) return;
   await refreshMeteors();
+  if (document.documentElement.dataset.studyTheme !== "night") return;
   draftMeteors = {...savedMeteors};
   fillMeteorControls();
   meteorStatus(meteorWarning);

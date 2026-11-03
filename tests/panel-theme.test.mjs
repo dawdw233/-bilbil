@@ -22,3 +22,21 @@ test("手动选择浅色或夜晚不受时间影响",()=>{
     assert.equal(context.resolve('night',new Date(date)),'night');
   }
 });
+
+test("切回浅色时收起流星面板，夜晚时保留面板并显示入口",()=>{
+  const dialog={open:true,closes:0,close(){this.open=false;this.closes++;}};
+  const sandbox={currentThemeMode:"night",studyThemeFor:mode=>mode,themeModeControl:{},
+    document:{documentElement:{dataset:{}},getElementById:id=>{assert.equal(id,"meteor-dialog");return dialog;}}};
+  const apply=script.slice(script.indexOf("function applyStudyTheme()"),script.indexOf("function themeFeedback("));
+  vm.runInNewContext(apply+";globalThis.apply=applyStudyTheme;",sandbox);
+  sandbox.apply();
+  assert.equal(sandbox.document.documentElement.dataset.studyTheme,"night");
+  assert.equal(dialog.open,true);
+  sandbox.currentThemeMode="light";
+  sandbox.apply();
+  assert.equal(dialog.open,false);
+  assert.equal(dialog.closes,1);
+  sandbox.apply();
+  assert.equal(dialog.closes,1);
+  assert.match(html,/:root:not\(\[data-study-theme="night"\]\) #meteor-open \{ display: none; \}/);
+});
