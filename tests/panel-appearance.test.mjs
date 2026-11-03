@@ -16,12 +16,15 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 test("外观参数保留有效的 0、限制范围并拒绝无效颜色", () => {
   const { normalizeAppearance } = load();
   const settings = plain(normalizeAppearance({ x: -5, y: 110, zoom: 999, opacity: 0, strength: 0, fit: "contain", mask: "#ABCDEF" }));
-  assert.deepEqual(settings, { x: 0, y: 100, zoom: 250, opacity: 0, strength: 0, fit: "contain", mask: "#abcdef" });
+  assert.deepEqual(settings, { x: 0, y: 100, zoom: 250, opacity: 0, strength: 0, glass_enabled: true, glass: 50, fit: "contain", mask: "#abcdef" });
   const fallback = plain(normalizeAppearance({ zoom: "bad", opacity: "", mask: "url(https://example.invalid)", fit: "invalid" }));
   assert.equal(fallback.zoom, 100);
   assert.equal(fallback.opacity, 85);
   assert.equal(fallback.fit, "cover");
   assert.equal(fallback.mask, "#edf6fc");
+  assert.equal(normalizeAppearance({glass_enabled:false,glass:0}).glass_enabled,false);
+  assert.equal(normalizeAppearance({glass_enabled:false,glass:0}).glass,0);
+  assert.equal(normalizeAppearance({glass:150}).glass,100);
 });
 
 test("不支持的格式和超大文件在解码之前被拒绝", async () => {

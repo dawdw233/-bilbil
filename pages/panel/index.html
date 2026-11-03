@@ -78,8 +78,8 @@
     transform: scale(var(--art-scale)); transform-origin: var(--art-x) var(--art-y);
   }
   .hero-art img:not([src]), .preview-art img:not([src]) { display: none; }
-  .hero-art:has(img[src])::before, .preview-art:has(img[src])::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: radial-gradient(ellipse at 75% -12%, #ffffff73, #ffffff12 42%, transparent 70%); }
-  .hero-art:has(img[src])::after, .preview-art:has(img[src])::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; background: linear-gradient(118deg, transparent 0% 41%, #ffffff38 41.3%, #ffffff09 56%, transparent 56.3% 70%, #ffffff24 70.3%, #ffffff05 79%, transparent 79.3%), linear-gradient(180deg, #ffffff24, transparent 28% 75%, #d5e9f51a); backdrop-filter: blur(.3px) saturate(1.04); -webkit-backdrop-filter: blur(.3px) saturate(1.04); mask-image: linear-gradient(90deg, transparent, #000 28%); box-shadow: inset 0 1px 0 #ffffff66, inset -1px 0 0 #ffffff29; }
+  .hero-art:has(img[src])::before, .preview-art:has(img[src])::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: var(--glass-level, .5); background: radial-gradient(ellipse at 75% -12%, #ffffffe6, #ffffff24 42%, transparent 70%); }
+  .hero-art:has(img[src])::after, .preview-art:has(img[src])::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: var(--glass-level, .5); background: linear-gradient(118deg, transparent 0% 41%, #ffffff70 41.3%, #ffffff12 56%, transparent 56.3% 70%, #ffffff48 70.3%, #ffffff0a 79%, transparent 79.3%), linear-gradient(180deg, #ffffff48, transparent 28% 75%, #d5e9f534); backdrop-filter: blur(calc(var(--glass-level, .5) * .6px)) saturate(calc(1 + var(--glass-level, .5) * .08)); -webkit-backdrop-filter: blur(calc(var(--glass-level, .5) * .6px)) saturate(calc(1 + var(--glass-level, .5) * .08)); mask-image: linear-gradient(90deg, transparent, #000 28%); box-shadow: inset 0 1px 0 #ffffffcc, inset -1px 0 0 #ffffff52; }
   .hero-wash, .preview-wash { pointer-events: none; position: absolute; inset: 0;
     background: linear-gradient(90deg, rgb(var(--art-mask)) 0%,
       rgba(var(--art-mask), var(--art-mask-strength)) 36%, rgba(var(--art-mask), calc(var(--art-mask-strength) * .36)) 72%, rgba(var(--art-mask), .06) 100%);
@@ -197,6 +197,8 @@
   .art-file-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 10px; }
   .art-file-actions button { font-size: 12px; padding: 8px 14px; }
   .art-controls { display: grid; gap: 18px; align-content: start; }
+  .glass-controls { display: grid; gap: 14px; margin-top: 20px; }
+  .glass-controls .check .tip { display: block; margin-top: 4px; }
   .range-field { display: grid; gap: 7px; min-width: 0; }
   .range-label { display: flex; justify-content: space-between; align-items: center; font-size: 12px; gap: 10px; }
   output { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -1040,6 +1042,10 @@
       <div class="tip">支持 PNG、JPG、WebP，最大 20 MB。</div>
       <div class="tip" id="art-empty-note">尚未设置插画，当前使用柔和渐变背景。</div>
       <div id="art-status" role="status" aria-live="polite"></div>
+      <div class="glass-controls">
+        <label class="check" for="art-glass_enabled"><input id="art-glass_enabled" type="checkbox" aria-label="开启玻璃质感" checked /><span><strong>开启玻璃质感</strong><span class="tip">为插画叠加轻透反光和柔光，可随时关闭。</span></span></label>
+        <label class="range-field" for="art-glass"><span class="range-label">玻璃质感强度<output id="art-glass-value" for="art-glass">50%</output></span><input id="art-glass" type="range" min="0" max="100" step="1" value="50" aria-label="玻璃质感强度" /><span class="tip">0% 无玻璃效果；数值越高，反光和柔光越明显。</span></label>
+      </div>
     </div>
     <div class="art-controls">
       <label class="field span-all" for="art-fit"><span class="lbl">裁剪方式</span><select id="art-fit"><option value="cover">铺满画面 · 超出部分裁剪</option><option value="contain">完整显示 · 保留整张图片</option></select></label>
@@ -1081,7 +1087,7 @@
 
 <script type="module" id="appearance-script">
 // 通过插件 bridge 保存外观，兼容 AstrBot 的隔离面板。
-const ART_DEFAULTS = Object.freeze({ x: 75, y: 50, zoom: 100, opacity: 85, fit: "cover", mask: "#edf6fc", strength: 85 });
+const ART_DEFAULTS = Object.freeze({ x: 75, y: 50, zoom: 100, opacity: 85, fit: "cover", mask: "#edf6fc", strength: 85, glass_enabled: true, glass: 50 });
 function normalizeAppearance(raw = {}) {
   const clamp = (key, min, max) => {
     const value = Number(raw[key]);
@@ -1091,6 +1097,7 @@ function normalizeAppearance(raw = {}) {
   return {
     x: clamp("x", 0, 100), y: clamp("y", 0, 100), zoom: clamp("zoom", 100, 250),
     opacity: clamp("opacity", 0, 100), strength: clamp("strength", 0, 100),
+    glass_enabled: raw.glass_enabled !== false, glass: clamp("glass", 0, 100),
     fit: raw.fit === "contain" ? "contain" : "cover",
     mask: /^#[0-9a-f]{6}$/i.test(raw.mask || "") ? raw.mask.toLowerCase() : ART_DEFAULTS.mask,
   };
@@ -1162,6 +1169,7 @@ function renderAppearance(settings, illustration) {
   root.setProperty("--art-scale", String(settings.zoom / 100));
   root.setProperty("--art-opacity", String(settings.opacity / 100));
   root.setProperty("--art-fit", settings.fit);
+  root.setProperty("--glass-level", String(settings.glass_enabled ? settings.glass / 100 : 0));
   root.setProperty("--art-mask-strength", String(settings.strength / 100));
   root.setProperty("--art-mask", [1, 3, 5].map((offset) => parseInt(settings.mask.slice(offset, offset + 2), 16)).join(", "));
   if (illustration !== displayedIllustration) {
@@ -1174,17 +1182,22 @@ function renderAppearance(settings, illustration) {
   renderStudyAvatar();
 }
 function fillAppearanceControls() {
-  for (const key of Object.keys(ART_DEFAULTS)) artEl("art-" + key).value = draftAppearance[key];
+  for (const key of Object.keys(ART_DEFAULTS)) {
+    if (key === "glass_enabled") artEl("art-" + key).checked = draftAppearance[key];
+    else artEl("art-" + key).value = draftAppearance[key];
+  }
   syncAppearanceControls();
 }
 function syncAppearanceControls() {
-  for (const key of ["x", "y", "zoom", "opacity", "strength"]) {
+  for (const key of ["x", "y", "zoom", "opacity", "strength", "glass"]) {
     const slider = artEl("art-" + key);
     artEl("art-" + key + "-value").textContent = draftAppearance[key] + "%";
     slider.style.setProperty("--range-progress", ((draftAppearance[key] - Number(slider.min)) / (Number(slider.max) - Number(slider.min)) * 100) + "%");
   }
   const imageControls = ["x", "y", "zoom", "opacity", "fit"];
   for (const key of imageControls) artEl("art-" + key).disabled = !draftIllustration || artBusy;
+  artEl("art-glass_enabled").disabled = !draftIllustration || artBusy;
+  artEl("art-glass").disabled = !draftIllustration || !draftAppearance.glass_enabled || artBusy;
   for (const key of ["mask", "strength"]) artEl("art-" + key).disabled = artBusy;
   artEl("art-remove").disabled = !draftIllustration || artBusy;
   artEl("art-recenter").disabled = !draftIllustration || artBusy;
@@ -1218,7 +1231,8 @@ artEl("appearance-open").onclick = async () => {
 };
 for (const key of Object.keys(ART_DEFAULTS)) {
   artEl("art-" + key).addEventListener("input", () => {
-    draftAppearance = normalizeAppearance({ ...draftAppearance, [key]: artEl("art-" + key).value });
+    const control = artEl("art-" + key);
+    draftAppearance = normalizeAppearance({ ...draftAppearance, [key]: key === "glass_enabled" ? control.checked : control.value });
     syncAppearanceControls();
     artStatus("预览已更新，点击「保存外观」后保留。");
   });

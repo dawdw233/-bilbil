@@ -55,7 +55,9 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_invalid_settings_are_not_written(self):
         for settings in ({"zoom": 99}, {"opacity": 101}, {"x": True}, {"y": float("nan")},
-                         {"strength": float("inf")}, {"mask": "url(test)"}, {"fit": "invalid"}):
+                         {"strength": float("inf")}, {"mask": "url(test)"}, {"fit": "invalid"},
+                         {"glass": -1}, {"glass": 101}, {"glass": True}, {"glass": float("nan")},
+                         {"glass_enabled": "false"}, {"glass_enabled": 0}):
             with self.subTest(settings=settings):
                 self.payload = {"settings": settings, "image": None}
                 self.assertIn("error", await self.instance._api_appearance_save())
@@ -69,6 +71,24 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
                 self.payload = {"settings": {}, "image": image}
                 self.assertIn("error", await self.instance._api_appearance_save())
         self.assertFalse((self.instance.data_dir / "appearance.json").exists())
+
+    async def test_glass_settings_persist_off_zero_and_full_strength(self):
+        for enabled, strength in ((False, 0), (True, 100), (False, 75), (True, 75)):
+            self.payload = {"settings": {"glass_enabled": enabled, "glass": strength}, "image": None}
+            self.assertEqual(await self.instance._api_appearance_save(), {"saved": True})
+            settings = (await self.instance._api_appearance_state())["settings"]
+            self.assertIs(settings["glass_enabled"], enabled)
+            self.assertEqual(settings["glass"], strength)
+
+    async def test_old_appearance_uses_glass_defaults_and_preserves_other_settings(self):
+        record = {"version": 2, "settings": {"x": 25, "opacity": 60, "mask": "#aabbcc"}, "image": None}
+        (self.instance.data_dir / "appearance.json").write_text(json.dumps(record), encoding="utf-8")
+        restored = self.instance._load_appearance()
+        self.assertTrue(restored["settings"]["glass_enabled"])
+        self.assertEqual(restored["settings"]["glass"], 50)
+        self.assertEqual(restored["settings"]["x"], 25)
+        self.assertEqual(restored["settings"]["opacity"], 60)
+        self.assertIsNone(restored["image"])
 
     async def test_storage_error_keeps_existing_appearance(self):
         self.payload = {"settings": {"zoom": 120}, "image": None}
