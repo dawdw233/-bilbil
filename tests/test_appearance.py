@@ -102,13 +102,11 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_meteor_settings_persist_without_illustration(self):
         for enabled, count, brightness, speed in ((False, 128, 72, 100), (True, 0, 0, 25), (True, 256, 100, 200)):
-            self.payload = {"settings": {"meteor_enabled": enabled, "meteor_count": count,
-                         "meteor_brightness": brightness, "meteor_speed": speed}, "image": None}
-            self.assertEqual(await self.instance._api_appearance_save(), {"saved": True})
-            restored = await self.instance._api_appearance_state()
-            self.assertIsNone(restored["image"])
-            for key, value in self.payload["settings"].items():
-                self.assertEqual(restored["settings"][key], value)
+            self.payload = {"meteor_enabled": enabled, "meteor_count": count,
+                            "meteor_brightness": brightness, "meteor_speed": speed}
+            self.assertEqual(await self.instance._api_meteor_save(), {"saved": True})
+            self.assertEqual(await self.instance._api_meteor_state(), self.payload)
+            self.assertFalse((self.instance.data_dir / "appearance.json").exists())
 
     async def test_invalid_meteor_settings_preserve_saved_appearance(self):
         self.payload = {"settings": {"x": 30}, "image": None}
@@ -119,19 +117,58 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
                          {"meteor_brightness": -1}, {"meteor_brightness": 101},
                          {"meteor_speed": 0}, {"meteor_speed": 201}, {"meteor_speed": float("nan")}):
             with self.subTest(settings=settings):
-                self.payload = {"settings": settings, "image": None}
-                self.assertIn("error", await self.instance._api_appearance_save())
+                self.payload = settings
+                self.assertIn("error", await self.instance._api_meteor_save())
                 self.assertEqual((self.instance.data_dir / "appearance.json").read_bytes(), original)
 
     async def test_old_appearance_uses_meteor_defaults(self):
         record = {"version": 2, "settings": {"x": 25}, "image": None}
         (self.instance.data_dir / "appearance.json").write_text(json.dumps(record), encoding="utf-8")
-        settings = self.instance._load_appearance()["settings"]
+        settings = self.instance._load_meteors()
         self.assertTrue(settings["meteor_enabled"])
         self.assertEqual(settings["meteor_count"], 128)
         self.assertEqual(settings["meteor_brightness"], 72)
         self.assertEqual(settings["meteor_speed"], 100)
-        self.assertEqual(settings["x"], 25)
+        self.assertEqual(self.instance._load_appearance()["settings"]["x"], 25)
+
+    async def test_resetting_meteors_and_illustration_are_independent(self):
+        image = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nsample").decode()
+        self.payload = {"settings": {"zoom": 170, "glass": 24, "sharpness": 30}, "image": image}
+        await self.instance._api_appearance_save()
+        appearance = (self.instance.data_dir / "appearance.json").read_bytes()
+        self.payload = dict(plugin.METEOR_DEFAULTS)
+        await self.instance._api_meteor_save()
+        self.assertEqual((self.instance.data_dir / "appearance.json").read_bytes(), appearance)
+        self.payload = {"meteor_enabled": False, "meteor_count": 36, "meteor_brightness": 40, "meteor_speed": 60}
+        await self.instance._api_meteor_save()
+        meteors = (self.instance.data_dir / "meteor.json").read_bytes()
+        self.payload = {"settings": dict(plugin.APPEARANCE_DEFAULTS), "image": image}
+        await self.instance._api_appearance_save()
+        self.assertEqual((self.instance.data_dir / "meteor.json").read_bytes(), meteors)
+        self.assertEqual(self.instance._load_appearance()["image"], image)
+
+    async def test_legacy_meteor_preferences_survive_illustration_save_until_migrated(self):
+        legacy = {"meteor_enabled": False, "meteor_count": 48, "meteor_brightness": 35, "meteor_speed": 150}
+        path = self.instance.data_dir / "appearance.json"
+        path.write_text(json.dumps({"version":2,"settings":{**legacy,"zoom":170},"image":None}), encoding="utf-8")
+        self.assertEqual(await self.instance._api_meteor_state(), legacy)
+        self.payload = {"settings":dict(plugin.APPEARANCE_DEFAULTS),"image":None}
+        await self.instance._api_appearance_save()
+        self.assertEqual(await self.instance._api_meteor_state(), legacy)
+        self.payload = dict(plugin.METEOR_DEFAULTS)
+        await self.instance._api_meteor_save()
+        self.assertEqual(await self.instance._api_meteor_state(), plugin.METEOR_DEFAULTS)
+
+    async def test_meteor_storage_failure_preserves_saved_settings(self):
+        self.payload = dict(plugin.METEOR_DEFAULTS)
+        await self.instance._api_meteor_save()
+        path = self.instance.data_dir / "meteor.json"
+        original = path.read_bytes()
+        self.payload = {"meteor_count":24}
+        with patch.object(Path,"replace",side_effect=OSError("disk full")), patch.object(plugin.logger,"exception"):
+            self.assertIn("error", await self.instance._api_meteor_save())
+        self.assertEqual(path.read_bytes(),original)
+        self.assertFalse(list(self.instance.data_dir.glob("*.tmp")))
 
     async def test_storage_error_keeps_existing_appearance(self):
         self.payload = {"settings": {"zoom": 120}, "image": None}

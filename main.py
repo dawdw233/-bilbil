@@ -61,6 +61,8 @@ APPEARANCE_DEFAULTS = {
     "x": 75, "y": 50, "zoom": 100, "opacity": 85,
     "fit": "cover", "mask": "#edf6fc", "strength": 85,
     "glass_enabled": True, "glass": 50, "sharpness": 0,
+}
+METEOR_DEFAULTS = {
     "meteor_enabled": True, "meteor_count": 128, "meteor_brightness": 72, "meteor_speed": 100,
 }
 MAX_ILLUSTRATION_BYTES = 3 * 1024 * 1024
@@ -195,6 +197,8 @@ class BiliScrollPlugin(Star):
             ("appearance/state", self._api_appearance_state, ["GET"], "读取面板外观"),
             ("appearance/default", self._api_appearance_default, ["GET"], "读取默认书房插画"),
             ("appearance/save", self._api_appearance_save, ["POST"], "保存面板外观与插画"),
+            ("meteor/state", self._api_meteor_state, ["GET"], "读取流星设置"),
+            ("meteor/save", self._api_meteor_save, ["POST"], "保存流星设置"),
             ("avatar/state", self._api_avatar_state, ["GET"], "读取书房头像"),
             ("avatar/save", self._api_avatar_save, ["POST"], "保存书房头像"),
             ("room/state", self._api_room_state, ["GET"], "读取书房名称"),
@@ -240,20 +244,15 @@ class BiliScrollPlugin(Star):
             raise ValueError("外观参数格式不正确")
         result = dict(APPEARANCE_DEFAULTS)
         for key, lo, hi in (("x", 0, 100), ("y", 0, 100), ("zoom", 100, 250),
-                            ("opacity", 0, 100), ("strength", 0, 100), ("glass", 0, 100), ("sharpness", 0, 100),
-                            ("meteor_count", 0, 256), ("meteor_brightness", 0, 100), ("meteor_speed", 25, 200)):
+                            ("opacity", 0, 100), ("strength", 0, 100), ("glass", 0, 100), ("sharpness", 0, 100)):
             value = settings.get(key, result[key])
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not lo <= value <= hi:
                 raise ValueError(f"{key} 必须在 {lo}~{hi} 之间")
             result[key] = value
-        if result["meteor_count"] != int(result["meteor_count"]):
-            raise ValueError("流星数量必须为整数")
-        result["meteor_count"] = int(result["meteor_count"])
-        for key, label in (("glass_enabled", "玻璃质感"), ("meteor_enabled", "流星")):
-            enabled = settings.get(key, result[key])
-            if not isinstance(enabled, bool):
-                raise ValueError(f"{label}开关必须为开启或关闭")
-            result[key] = enabled
+        enabled = settings.get("glass_enabled", result["glass_enabled"])
+        if not isinstance(enabled, bool):
+            raise ValueError("玻璃质感开关必须为开启或关闭")
+        result["glass_enabled"] = enabled
         if settings.get("fit", "cover") not in ("cover", "contain"):
             raise ValueError("请选择铺满裁剪或完整显示")
         result["fit"] = settings.get("fit", "cover")
@@ -288,6 +287,60 @@ class BiliScrollPlugin(Star):
 
     async def _api_appearance_state(self):
         return json_response(self._load_appearance())
+
+    @staticmethod
+    def _normalize_meteors(settings):
+        if not isinstance(settings, dict):
+            raise ValueError("流星设置格式不正确")
+        result = dict(METEOR_DEFAULTS)
+        for key, lo, hi in (("meteor_count", 0, 256), ("meteor_brightness", 0, 100), ("meteor_speed", 25, 200)):
+            value = settings.get(key, result[key])
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not lo <= value <= hi:
+                raise ValueError(f"{key} 必须在 {lo}~{hi} 之间")
+            result[key] = value
+        if result["meteor_count"] != int(result["meteor_count"]):
+            raise ValueError("流星数量必须为整数")
+        result["meteor_count"] = int(result["meteor_count"])
+        enabled = settings.get("meteor_enabled", result["meteor_enabled"])
+        if not isinstance(enabled, bool):
+            raise ValueError("流星开关必须为开启或关闭")
+        result["meteor_enabled"] = enabled
+        return result
+
+    def _load_meteors(self):
+        target = self.data_dir / "meteor.json"
+        try:
+            if target.exists():
+                settings = json.loads(target.read_text(encoding="utf-8"))
+            else:
+                # 兼容流星设置曾保存在插画外观中的版本，不改写原插画文件。
+                settings = json.loads((self.data_dir / "appearance.json").read_text(encoding="utf-8")).get("settings", {})
+            return self._normalize_meteors(settings)
+        except (OSError, ValueError, TypeError, AttributeError):
+            return dict(METEOR_DEFAULTS)
+
+    async def _api_meteor_state(self):
+        return json_response(self._load_meteors())
+
+    async def _api_meteor_save(self):
+        try:
+            settings = self._normalize_meteors(await request.json(default={}))
+        except ValueError as exc:
+            return error_response(str(exc))
+        target = self.data_dir / "meteor.json"
+        temporary = target.with_name(f"meteor.{uuid.uuid4().hex}.tmp")
+        try:
+            temporary.write_text(json.dumps(settings, ensure_ascii=False), encoding="utf-8")
+            temporary.replace(target)
+        except OSError:
+            logger.exception("[bili-scroll] 保存流星设置失败")
+            return error_response("流星设置保存失败，请重试")
+        finally:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return json_response({"saved": True})
 
     @staticmethod
     def _validate_panel_image(image, label="插画"):
@@ -434,6 +487,12 @@ class BiliScrollPlugin(Star):
         except (ValueError, binascii.Error) as exc:
             return error_response(str(exc))
         target = self.data_dir / "appearance.json"
+        # 旧版流星参数在首次独立保存前仍需保留，插画重置不能覆盖它们。
+        try:
+            previous = json.loads(target.read_text(encoding="utf-8")).get("settings", {})
+            settings.update({key: previous[key] for key in METEOR_DEFAULTS if key in previous})
+        except (OSError, ValueError, TypeError, AttributeError):
+            pass
         temporary = target.with_name(f"appearance.{uuid.uuid4().hex}.tmp")
         try:
             temporary.write_text(json.dumps({"version": 2, "settings": settings, "image": image}, ensure_ascii=False), encoding="utf-8")
