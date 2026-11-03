@@ -76,12 +76,8 @@
     display: block; width: 100%; height: 100%; object-fit: var(--art-fit);
     object-position: var(--art-x) var(--art-y); opacity: var(--art-opacity);
     transform: scale(var(--art-scale)); transform-origin: var(--art-x) var(--art-y);
-    filter: contrast(calc(1 + var(--glass-level, .5) * .14)) saturate(calc(1 + var(--glass-level, .5) * .12)) brightness(calc(1 - var(--glass-level, .5) * .015)) var(--art-detail-filter, blur(0px)) var(--night-art-filter, brightness(1)) var(--art-depth-filter, blur(0px));
+    filter: contrast(calc(1 + var(--glass-level, .5) * .14)) saturate(calc(1 + var(--glass-level, .5) * .12)) brightness(calc(1 - var(--glass-level, .5) * .015)) var(--art-detail-filter, blur(0px)) var(--night-art-filter, brightness(1));
   }
-  .hero-art > img, .preview-art > img { --art-depth-filter: blur(.6px); opacity: calc(var(--art-opacity) * .6); }
-  .art-foreground-layer { position: absolute; inset: 0; z-index: 3; pointer-events: none; transform: translateY(-5px); filter: drop-shadow(0 11px 14px #375c7840) drop-shadow(0 3px 4px #29475e21); }
-  .art-foreground-layer img { mask-image: radial-gradient(ellipse 70% 90% at 78% 48%, #000 42%, #000000f2 63%, transparent 95%); }
-  .art-foreground-layer:has(img[src])::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: calc(var(--art-opacity) * .6); background: radial-gradient(ellipse at 73% 45%, #d9f0ff38, transparent 64%); }
   .hero-art img:not([src]), .preview-art img:not([src]) { display: none; }
   .hero-art:has(img[src])::before, .preview-art:has(img[src])::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: var(--glass-level, .5); background: radial-gradient(ellipse at 75% -12%, #ffffff99, #ffffff18 42%, transparent 70%); }
   .hero-art:has(img[src])::after, .preview-art:has(img[src])::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: var(--glass-level, .5); background: linear-gradient(118deg, transparent 0% 41%, #ffffff50 41.3%, #ffffff0c 56%, transparent 56.3% 70%, #ffffff34 70.3%, #ffffff08 79%, transparent 79.3%), linear-gradient(180deg, #ffffff28, transparent 28% 75%, #d5e9f520); backdrop-filter: blur(calc(var(--glass-level, .5) * .2px)) saturate(calc(1 + var(--glass-level, .5) * .04)); -webkit-backdrop-filter: blur(calc(var(--glass-level, .5) * .2px)) saturate(calc(1 + var(--glass-level, .5) * .04)); mask-image: linear-gradient(90deg, transparent, #000 28%); box-shadow: inset 0 1px 0 #ffffffcc, inset -1px 0 0 #ffffff52; }
@@ -486,7 +482,6 @@
   :root[data-study-theme="night"] .study-shell .hero-readability { background: linear-gradient(90deg, #3a5369fa, #3a5369f2 28%, #405c73b8 45%, #4d687f3b 65%, transparent 82%); }
   :root[data-study-theme="night"] :is(.hero-wash, .preview-wash) { background: linear-gradient(90deg, #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
   :root[data-study-theme="night"] :is(.hero-art, .preview-art)::before, :root[data-study-theme="night"] :is(.hero-art, .preview-art)::after { opacity: calc(var(--glass-level, .5) * .45); }
-  :root[data-study-theme="night"] .art-foreground-layer { filter: drop-shadow(0 12px 16px #10213959) drop-shadow(0 3px 5px #10213933); }
   :root[data-study-theme="night"] :is(.hero-tag, .stat-icon, .tag, .check, .md blockquote, code, th) { background: #46627bb3; border-color: #9db6ca66; color: #e0ebf3; }
   :root[data-study-theme="night"] .hero-tag::before { background: #95bdda; }
   :root[data-study-theme="night"] .stat-icon { color: #a9c7dd; }
@@ -552,7 +547,7 @@
       </div>
     </div>
     <header class="hd" id="top">
-      <div class="hero-art" aria-hidden="true"><img id="hero-illustration" alt="" decoding="async" /><div class="hero-wash"></div><div class="art-foreground-layer"><img id="hero-foreground" alt="" decoding="async" /></div></div><div class="hero-readability" aria-hidden="true"></div>
+      <div class="hero-art" aria-hidden="true"><img id="hero-illustration" alt="" decoding="async" /><div class="hero-wash"></div></div><div class="hero-readability" aria-hidden="true"></div>
       <div class="hd-main"><div class="hero-eyebrow">A QUIET CORNER · BILIBILI JOURNAL</div><h1><span id="study-greeting">欢迎回来，</span><br/><strong data-room-name>一隅书房</strong></h1><p class="hero-note">今日也留一点闲时，看看世界的有趣。<br/>让喜欢的内容，在这里慢慢留下来。</p><div class="hero-tags"><span class="hero-tag">B站观影手记</span><span class="hero-tag" id="study-style-tag">人设相伴</span></div></div>
     </header>
     <div id="run-hint" class="sub" role="status" aria-live="polite"></div>
@@ -1101,7 +1096,7 @@
   <div class="appearance-content">
     <div class="appearance-preview-col">
       <div class="art-preview" aria-label="插画效果预览">
-        <div class="preview-art" aria-hidden="true"><img id="preview-illustration" alt="" /><div class="preview-wash"></div><div class="art-foreground-layer"><img id="preview-foreground" alt="" /></div></div>
+        <div class="preview-art" aria-hidden="true"><img id="preview-illustration" alt="" /><div class="preview-wash"></div></div>
         <div class="preview-label"><strong>刷 B站</strong><span>留一点闲时，遇见有趣。</span></div>
       </div>
       <div class="art-file-actions">
@@ -1316,7 +1311,7 @@ function renderAppearance(settings, illustration) {
   root.setProperty("--art-mask-strength", String(settings.strength / 100));
   root.setProperty("--art-mask", [1, 3, 5].map((offset) => parseInt(settings.mask.slice(offset, offset + 2), 16)).join(", "));
   if (illustration !== displayedIllustration) {
-    for (const id of ["hero-illustration", "preview-illustration", "hero-foreground", "preview-foreground"]) {
+    for (const id of ["hero-illustration", "preview-illustration"]) {
       if (illustration) artEl(id).src = illustration;
       else artEl(id).removeAttribute("src");
     }
