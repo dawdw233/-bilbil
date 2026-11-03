@@ -85,3 +85,18 @@ test("页面保留主要业务入口，插画设置具备独立的可访问标�
   assert.match(html, /prefers-reduced-motion/);
   assert.equal((html.match(/<\/body>/g) || []).length, 1);
 });
+
+test("恢复默认仅重置参数，保留当前图片或无插画状态，忙碌时不重置", () => {
+  const handler = script.slice(script.indexOf('artEl("art-reset").onclick ='), script.indexOf('artEl("art-save").onclick ='));
+  for (const image of ["data:image/png;base64,current-custom-image", null]) {
+    const button = {};
+    const context = { artEl: () => button, artBusy: false, draftAppearance: {zoom:180,glass:0}, draftIllustration:image, fillAppearanceControls(){}, artStatus(){} };
+    vm.runInNewContext(helpers + handler + '; artEl("art-reset").onclick();', context);
+    assert.equal(context.draftIllustration,image);
+    assert.deepEqual(plain(context.draftAppearance),plain(load().normalizeAppearance()));
+    context.artBusy=true;
+    context.draftAppearance={zoom:180};
+    button.onclick();
+    assert.deepEqual(plain(context.draftAppearance),{zoom:180});
+  }
+});

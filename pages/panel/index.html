@@ -1061,7 +1061,7 @@
   </div>
   <div class="appearance-footer">
     <span class="sub">外观和插画保存在插件中，换浏览器也可读取。</span>
-    <div class="row"><button type="button" id="art-reset">恢复默认</button><button type="button" id="art-cancel">取消</button><button type="button" id="art-save" class="primary">保存外观</button></div>
+    <div class="row"><button type="button" id="art-reset" title="重置外观参数，保留当前插画">恢复默认</button><button type="button" id="art-cancel">取消</button><button type="button" id="art-save" class="primary">保存外观</button></div>
   </div>
 </dialog>
 <dialog id="avatar-dialog" class="appearance-dialog avatar-dialog" aria-labelledby="avatar-title" aria-describedby="avatar-description">
@@ -1204,6 +1204,7 @@ function syncAppearanceControls() {
   artEl("art-recenter").disabled = !draftIllustration || artBusy;
   artEl("art-upload").disabled = artBusy;
   artEl("art-save").disabled = artBusy;
+  artEl("art-reset").disabled = artBusy;
   artEl("art-upload-label").textContent = draftIllustration ? "替换插画" : "上传插画";
   artEl("art-empty-note").textContent = draftIllustration ? "调整后可在预览和页首查看效果。" : "尚未设置插画，当前使用柔和渐变背景。";
   renderAppearance(draftAppearance, draftIllustration);
@@ -1273,21 +1274,11 @@ artEl("art-recenter").onclick = () => {
   fillAppearanceControls();
   artStatus("已恢复居中铺满，可继续调整。");
 };
-artEl("art-reset").onclick = async () => {
-  const revision = ++artRevision;
-  artBusy = true;
-  syncAppearanceControls();
-  artStatus("正在恢复默认插画…");
-  try {
-    const defaults = await appearanceStorage("default");
-    if (revision !== artRevision || !artDialog.open) return;
-    draftAppearance = normalizeAppearance(defaults.settings);
-    draftIllustration = defaults.image || null;
-    artEl("art-file").value = "";
-    fillAppearanceControls();
-    artStatus("已恢复默认书房插画，保存后保留。");
-  } catch { artStatus("默认插画暂时无法读取，请重试。", true); }
-  finally { if (revision === artRevision) { artBusy = false; syncAppearanceControls(); } }
+artEl("art-reset").onclick = () => {
+  if (artBusy) return;
+  draftAppearance = { ...ART_DEFAULTS };
+  fillAppearanceControls();
+  artStatus("已恢复默认外观参数，当前插画保持不变，保存后生效。");
 };
 artEl("art-save").onclick = async () => {
   if (artBusy) return;
