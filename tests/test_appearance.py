@@ -99,17 +99,17 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
         self.payload = {"settings": {"zoom": 140}, "image": None}
         await self.instance._api_appearance_save()
         cover = (self.instance.data_dir / "appearance.json").read_bytes()
-        self.assertEqual(await self.instance._api_avatar_state(), {"image": None})
+        self.assertEqual(await self.instance._api_avatar_state(), {"image": None, "border_color": "#74bfa7"})
         self.payload = {"image": image}
         self.assertEqual(await self.instance._api_avatar_save(), {"saved": True})
-        self.assertEqual(await self.instance._api_avatar_state(), {"image": image})
+        self.assertEqual((await self.instance._api_avatar_state())["image"], image)
         self.assertEqual((self.instance.data_dir / "appearance.json").read_bytes(), cover)
         self.payload = {"settings": {}, "image": None}
         await self.instance._api_appearance_save()
-        self.assertEqual(await self.instance._api_avatar_state(), {"image": image})
+        self.assertEqual((await self.instance._api_avatar_state())["image"], image)
         self.payload = {"image": None}
         await self.instance._api_avatar_save()
-        self.assertEqual(await self.instance._api_avatar_state(), {"image": None})
+        self.assertEqual((await self.instance._api_avatar_state())["image"], None)
         self.assertFalse(list(self.instance.data_dir.glob("*.tmp")))
 
     async def test_invalid_avatar_does_not_replace_saved_image(self):
@@ -136,7 +136,33 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
     async def test_corrupt_avatar_uses_default(self):
         for content in ('not json', '[]', '{"image":"data:image/png;base64,YQ=="}'):
             (self.instance.data_dir / "avatar.json").write_text(content, encoding="utf-8")
-            self.assertEqual(await self.instance._api_avatar_state(), {"image": None})
+            self.assertEqual((await self.instance._api_avatar_state())["image"], None)
+
+    async def test_avatar_color_persists_and_legacy_save_keeps_color(self):
+        self.payload = {"image": None, "border_color": "#B39BD0"}
+        self.assertEqual(await self.instance._api_avatar_save(), {"saved": True})
+        self.assertEqual(await self.instance._api_avatar_state(), {"image": None, "border_color": "#b39bd0"})
+        self.payload = {"image": None}
+        await self.instance._api_avatar_save()
+        self.assertEqual((await self.instance._api_avatar_state())["border_color"], "#b39bd0")
+        self.payload = {"image": None, "border_color": "#74bfa7"}
+        await self.instance._api_avatar_save()
+        self.assertEqual((await self.instance._api_avatar_state())["border_color"], "#74bfa7")
+
+    async def test_invalid_avatar_colors_do_not_change_saved_record(self):
+        self.payload = {"image": None, "border_color": "#82acca"}
+        await self.instance._api_avatar_save()
+        original = (self.instance.data_dir / "avatar.json").read_bytes()
+        for color in (None, {}, "", "red", "#abc", "url(test)", "#GGGGGG", 123):
+            self.payload = {"image": None, "border_color": color}
+            self.assertIn("error", await self.instance._api_avatar_save())
+            self.assertEqual((self.instance.data_dir / "avatar.json").read_bytes(), original)
+
+    async def test_old_or_invalid_avatar_color_retains_custom_image(self):
+        image = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\navatar").decode()
+        for record in ({"image": image}, {"image": image, "border_color": "invalid"}):
+            (self.instance.data_dir / "avatar.json").write_text(json.dumps(record), encoding="utf-8")
+            self.assertEqual(await self.instance._api_avatar_state(), {"image": image, "border_color": "#74bfa7"})
 
     async def test_room_name_persists_without_changing_avatar_or_cover(self):
         self.assertEqual(await self.instance._api_room_state(), {"name": "一隅书房"})

@@ -273,15 +273,15 @@
     box-shadow: 10px 16px 36px -18px #4e65813d, -5px -5px 18px #ffffffbf, inset 0 1px 0 #fff;
   }
   .study-profile { display: flex; align-items: center; gap: 12px; padding: 19px 9px 25px; }
-  .study-avatar, .avatar-preview { --avatar-inset: 3px; --avatar-frame: linear-gradient(140deg, #459d85 3%, #c7f5e4 30%, #9bd8c5 54%, #4a9c83 78%, #c2eddf 100%); border: 1px solid #8bc6b4; background: var(--avatar-frame); box-shadow: 0 6px 10px #3c756541, -2px -2px 7px #ffffffd9, inset 1px 1px 2px #ffffffc4, inset -2px -2px 3px #316d5b59; }
+  .study-avatar, .avatar-preview { --avatar-inset: 3px; --avatar-color: var(--avatar-border-color, #74bfa7); --avatar-shade: color-mix(in srgb, var(--avatar-color) 65%, #182e29); --avatar-frame: linear-gradient(140deg, color-mix(in srgb, var(--avatar-color) 85%, #194e3d) 3%, color-mix(in srgb, var(--avatar-color) 30%, white) 30%, color-mix(in srgb, var(--avatar-color) 70%, white) 54%, var(--avatar-shade) 78%, color-mix(in srgb, var(--avatar-color) 35%, white) 100%); border: 1px solid color-mix(in srgb, var(--avatar-color) 80%, white); background: var(--avatar-frame); box-shadow: 0 6px 10px color-mix(in srgb, var(--avatar-shade) 26%, transparent), -2px -2px 7px #ffffffd9, inset 1px 1px 2px #ffffffc4, inset -2px -2px 3px color-mix(in srgb, var(--avatar-shade) 35%, transparent); }
   .study-avatar { position: relative; flex: 0 0 49px; width: 49px; height: 49px; display: grid; place-items: center; overflow: hidden; border-radius: 50%; font: 22px var(--serif); color: #406c60; }
   .study-avatar img, .avatar-preview img { position: absolute; inset: var(--avatar-inset); width: calc(100% - var(--avatar-inset) * 2); height: calc(100% - var(--avatar-inset) * 2); border-radius: 50%; object-fit: cover; }
   .study-avatar img { object-position: 84% 34%; }
-  .study-avatar::before, .avatar-preview::before { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; pointer-events: none; background: radial-gradient(ellipse at 39% 3%, #ffffff80 0%, #ffffff17 31%, transparent 56%), linear-gradient(145deg, transparent 57%, #31725d1f); box-shadow: inset 1px 1px 1px #ffffffa6, inset -1px -2px 3px #28634e40; }
+  .study-avatar::before, .avatar-preview::before { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; pointer-events: none; background: radial-gradient(ellipse at 39% 3%, #ffffff80 0%, #ffffff17 31%, transparent 56%), linear-gradient(145deg, transparent 57%, color-mix(in srgb, var(--avatar-shade) 12%, transparent)); box-shadow: inset 1px 1px 1px #ffffffa6, inset -1px -2px 3px color-mix(in srgb, var(--avatar-shade) 25%, transparent); }
   .study-avatar img:not([src]) { display: none; }
   button.study-avatar { padding: 0; cursor: pointer; }
-  button.study-avatar:hover:not(:disabled) { background: var(--avatar-frame); border-color: #71b49f; box-shadow: 0 8px 14px #3c75654d, -2px -2px 8px #fff, inset 1px 1px 2px #ffffffc4; }
-  button.study-avatar:active:not(:disabled) { transform: translateY(1px) scale(.985); box-shadow: 0 2px 5px #3c756533, inset 1px 1px 2px #ffffffc4; }
+  button.study-avatar:hover:not(:disabled) { background: var(--avatar-frame); border-color: var(--avatar-color); box-shadow: 0 8px 14px color-mix(in srgb, var(--avatar-shade) 30%, transparent), -2px -2px 8px #fff, inset 1px 1px 2px #ffffffc4; }
+  button.study-avatar:active:not(:disabled) { transform: translateY(1px) scale(.985); box-shadow: 0 2px 5px color-mix(in srgb, var(--avatar-shade) 20%, transparent), inset 1px 1px 2px #ffffffc4; }
   button.study-avatar::after { content: "换图"; position: absolute; z-index: 2; inset: auto 0 0; background: #30475bbd; color: #fff; font: 9px/1.6 "Microsoft YaHei", sans-serif; opacity: 0; transition: opacity 200ms ease; }
   button.study-avatar:hover::after, button.study-avatar:focus-visible::after { opacity: 1; }
   .avatar-dialog { width: min(420px, calc(100% - 24px)); }
@@ -290,6 +290,13 @@
   .avatar-preview img:not([src]) { display: none; }
   .avatar-content .row { justify-content: center; }
   #avatar-status { margin-top: 12px; font-size: 12px; min-height: 22px; }
+  .avatar-colors { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .avatar-colors .color-field { display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 12px; }
+  .avatar-colors output { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .avatar-palette { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 13px; }
+  .avatar-palette button { width: 27px; height: 27px; min-height: 27px; padding: 0; border: 3px solid #fff; background: var(--swatch); box-shadow: 0 2px 5px #526d8a26; }
+  .avatar-palette button:hover:not(:disabled) { background: var(--swatch); }
+  .avatar-palette button[aria-pressed="true"] { outline: 2px solid #729fbe; outline-offset: 2px; }
   .study-room-name { margin: 0; font: 600 17px/1.6 var(--serif); letter-spacing: .06em; color: #3d5971; }
   .study-profile > div { min-width: 0; }
   button.study-room-name { display: inline-flex; min-height: 30px; max-width: 100%; padding: 0 3px; gap: 6px; border: 1px solid transparent; border-radius: 8px; background: transparent; box-shadow: none; text-align: left; }
@@ -1054,6 +1061,7 @@
     <input type="file" id="avatar-file" class="sr-only" tabindex="-1" aria-label="选择头像文件" accept="image/png,image/jpeg,image/webp" />
     <div class="tip">支持 PNG、JPG、WebP，最大 20 MB。图片居中裁剪为圆形。</div>
     <div class="tip">默认头像跟随页首插画；自选头像单独保存。</div>
+    <div class="avatar-colors"><label class="color-field" for="avatar-border-color">边框颜色<input id="avatar-border-color" type="color" value="#74bfa7" aria-label="边框颜色" /><output id="avatar-color-value" for="avatar-border-color">#74bfa7</output></label><div class="avatar-palette" role="group" aria-label="常用边框颜色"><button type="button" data-avatar-color="#74bfa7" style="--swatch:#74bfa7" aria-label="薄荷绿边框" aria-pressed="true"></button><button type="button" data-avatar-color="#82acca" style="--swatch:#82acca" aria-label="冰蓝色边框" aria-pressed="false"></button><button type="button" data-avatar-color="#b39bd0" style="--swatch:#b39bd0" aria-label="浅紫色边框" aria-pressed="false"></button><button type="button" data-avatar-color="#d99caf" style="--swatch:#d99caf" aria-label="樱粉色边框" aria-pressed="false"></button><button type="button" data-avatar-color="#c6a262" style="--swatch:#c6a262" aria-label="暖金色边框" aria-pressed="false"></button><button type="button" data-avatar-color="#8194a8" style="--swatch:#8194a8" aria-label="灰蓝色边框" aria-pressed="false"></button></div><div class="tip">点击色块或选择任意颜色，高光与阴影随边框颜色变化。</div></div>
     <div id="avatar-status" role="status" aria-live="polite"></div>
   </div>
   <div class="appearance-footer"><div class="row"><button type="button" id="avatar-cancel">取消</button><button type="button" id="avatar-save" class="primary">保存头像</button></div></div>
@@ -1138,6 +1146,7 @@ let artBusy = false;
 let artToastTimer;
 let artStorageWarning = "";
 let savedAvatar = null;
+let savedAvatarColor = "#74bfa7";
 function artStatus(text, error = false) {
   artEl("art-status").textContent = text;
   artEl("art-status").classList.toggle("bad", error);
@@ -1302,6 +1311,7 @@ artDialog.addEventListener("close", () => {
 
 const avatarDialog = artEl("avatar-dialog");
 let draftAvatar = null;
+let draftAvatarColor = "#74bfa7";
 let avatarBusy = false;
 function renderStudyAvatar() {
   const image = savedAvatar || displayedIllustration;
@@ -1320,14 +1330,23 @@ function updateAvatarControls() {
   if (image) preview.src = image;
   else preview.removeAttribute("src");
   preview.style.objectPosition = draftAvatar ? "50% 50%" : "84% 34%";
-  for (const id of ["avatar-upload", "avatar-reset", "avatar-save", "avatar-close", "avatar-cancel"]) artEl(id).disabled = avatarBusy;
+  for (const id of ["avatar-upload", "avatar-reset", "avatar-save", "avatar-close", "avatar-cancel", "avatar-border-color"]) artEl(id).disabled = avatarBusy;
   artEl("avatar-upload").textContent = draftAvatar ? "替换图片" : "选择图片";
+  artEl("avatar-border-color").value = draftAvatarColor;
+  artEl("avatar-color-value").textContent = draftAvatarColor;
+  document.documentElement.style.setProperty("--avatar-border-color", draftAvatarColor);
+  for (const swatch of document.querySelectorAll("[data-avatar-color]")) {
+    swatch.disabled = avatarBusy;
+    swatch.setAttribute("aria-pressed", String(swatch.dataset.avatarColor === draftAvatarColor));
+  }
 }
 async function refreshSavedAvatar() {
   const bridge = await appearanceBridge();
   const stored = await bridge.apiGet("avatar/state");
   if (!stored || !("image" in stored)) throw new Error("头像暂时无法读取，请稍后重试");
   savedAvatar = typeof stored.image === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(stored.image) ? stored.image : null;
+  savedAvatarColor = /^#[0-9a-f]{6}$/i.test(stored.border_color || "") ? stored.border_color.toLowerCase() : "#74bfa7";
+  document.documentElement.style.setProperty("--avatar-border-color", savedAvatarColor);
   renderStudyAvatar();
 }
 const avatarReady = refreshSavedAvatar().catch(() => {});
@@ -1338,6 +1357,7 @@ artEl("avatar-open").onclick = async () => {
     await Promise.all([appearanceReady, avatarReady]);
     await refreshSavedAvatar();
     draftAvatar = savedAvatar;
+    draftAvatarColor = savedAvatarColor;
     avatarBusy = false;
     updateAvatarControls();
     avatarStatus("");
@@ -1350,6 +1370,16 @@ artEl("avatar-open").onclick = async () => {
   } finally { artEl("avatar-open").disabled = false; }
 };
 artEl("avatar-upload").onclick = () => artEl("avatar-file").click();
+artEl("avatar-border-color").oninput = () => {
+  draftAvatarColor = artEl("avatar-border-color").value.toLowerCase();
+  updateAvatarControls();
+  avatarStatus("边框预览已更新，点击「保存头像」后保留。");
+};
+for (const swatch of document.querySelectorAll("[data-avatar-color]")) swatch.onclick = () => {
+  draftAvatarColor = swatch.dataset.avatarColor;
+  updateAvatarControls();
+  avatarStatus("边框预览已更新，点击「保存头像」后保留。");
+};
 artEl("avatar-file").onchange = async () => {
   const file = artEl("avatar-file").files?.[0];
   if (!file || avatarBusy) return;
@@ -1368,8 +1398,9 @@ artEl("avatar-file").onchange = async () => {
 };
 artEl("avatar-reset").onclick = () => {
   draftAvatar = null;
+  draftAvatarColor = "#74bfa7";
   updateAvatarControls();
-  avatarStatus("已恢复默认预览，保存后跟随页首插画。");
+  avatarStatus("已恢复默认头像与薄荷绿边框预览，保存后保留。");
 };
 artEl("avatar-save").onclick = async () => {
   if (avatarBusy) return;
@@ -1378,9 +1409,10 @@ artEl("avatar-save").onclick = async () => {
   avatarStatus("正在保存头像…");
   try {
     const bridge = await appearanceBridge();
-    const result = await bridge.apiPost("avatar/save", { image: draftAvatar });
+    const result = await bridge.apiPost("avatar/save", { image: draftAvatar, border_color: draftAvatarColor });
     if (!result?.saved) throw new Error("未收到保存确认，请重试");
     savedAvatar = draftAvatar;
+    savedAvatarColor = draftAvatarColor;
     renderStudyAvatar();
     avatarDialog.close();
     artEl("appearance-toast").textContent = "头像已保存";
@@ -1392,7 +1424,7 @@ artEl("avatar-save").onclick = async () => {
 };
 artEl("avatar-close").onclick = artEl("avatar-cancel").onclick = () => avatarDialog.close();
 avatarDialog.addEventListener("cancel", (event) => { if (avatarBusy) event.preventDefault(); });
-avatarDialog.addEventListener("close", () => { artEl("avatar-file").value = ""; });
+avatarDialog.addEventListener("close", () => { artEl("avatar-file").value = ""; document.documentElement.style.setProperty("--avatar-border-color", savedAvatarColor); });
 
 const roomDialog = artEl("room-dialog");
 let savedRoomName = "一隅书房";

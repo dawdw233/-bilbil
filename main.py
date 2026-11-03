@@ -295,12 +295,16 @@ class BiliScrollPlugin(Star):
             raise ValueError(f"{label}文件内容或大小不正确")
 
     async def _api_avatar_state(self):
+        data = {}
         try:
-            image = json.loads((self.data_dir / "avatar.json").read_text(encoding="utf-8")).get("image")
+            data = json.loads((self.data_dir / "avatar.json").read_text(encoding="utf-8"))
+            image = data.get("image")
             self._validate_panel_image(image, "头像")
         except (OSError, ValueError, TypeError, AttributeError, binascii.Error):
             image = None
-        return json_response({"image": image})
+        color = data.get("border_color") if isinstance(data, dict) else None
+        color = color.lower() if isinstance(color, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", color) else "#74bfa7"
+        return json_response({"image": image, "border_color": color})
 
     async def _api_avatar_save(self):
         payload = await request.json(default={})
@@ -309,12 +313,25 @@ class BiliScrollPlugin(Star):
         image = payload["image"]
         try:
             self._validate_panel_image(image, "头像")
+            if "border_color" in payload:
+                color = payload["border_color"]
+            else:
+                # 兼容旧面板保存头像时保留已选边框颜色。
+                try:
+                    color = json.loads((self.data_dir / "avatar.json").read_text(encoding="utf-8")).get("border_color", "#74bfa7")
+                except (OSError, ValueError, TypeError, AttributeError):
+                    color = "#74bfa7"
+                if not isinstance(color, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+                    color = "#74bfa7"
+            if not isinstance(color, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+                raise ValueError("请选择有效的头像边框颜色")
+            color = color.lower()
         except (ValueError, binascii.Error) as exc:
             return error_response(str(exc))
         target = self.data_dir / "avatar.json"
         temporary = target.with_name(f"avatar.{uuid.uuid4().hex}.tmp")
         try:
-            temporary.write_text(json.dumps({"image": image}, ensure_ascii=False), encoding="utf-8")
+            temporary.write_text(json.dumps({"image": image, "border_color": color}, ensure_ascii=False), encoding="utf-8")
             temporary.replace(target)
         except OSError:
             logger.exception("[bili-scroll] 保存书房头像失败")
