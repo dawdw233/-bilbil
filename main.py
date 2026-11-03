@@ -193,6 +193,8 @@ class BiliScrollPlugin(Star):
             ("appearance/state", self._api_appearance_state, ["GET"], "读取面板外观"),
             ("appearance/default", self._api_appearance_default, ["GET"], "读取默认书房插画"),
             ("appearance/save", self._api_appearance_save, ["POST"], "保存面板外观与插画"),
+            ("avatar/state", self._api_avatar_state, ["GET"], "读取书房头像"),
+            ("avatar/save", self._api_avatar_save, ["POST"], "保存书房头像"),
             ("login/start", self._api_login_start, ["POST"], "生成扫码登录二维码"),
             ("login/state", self._api_login_state, ["GET"], "扫码登录状态"),
             ("reports", self._api_reports, ["GET"], "日报日期列表"),
@@ -272,6 +274,56 @@ class BiliScrollPlugin(Star):
     async def _api_appearance_state(self):
         return json_response(self._load_appearance())
 
+    @staticmethod
+    def _validate_panel_image(image, label="插画"):
+        if image is None:
+            return
+        if not isinstance(image, str) or len(image) > MAX_ILLUSTRATION_BYTES * 4 // 3 + 100:
+            raise ValueError(f"处理后的{label}不能超过 3 MB，请缩小图片后重试")
+        header, separator, encoded = image.partition(",")
+        if not separator or header not in ("data:image/webp;base64", "data:image/png;base64", "data:image/jpeg;base64"):
+            raise ValueError(f"{label}仅支持 PNG、JPG 或 WebP")
+        raw = base64.b64decode(encoded, validate=True)
+        signatures = {
+            "data:image/png;base64": raw.startswith(b"\x89PNG\r\n\x1a\n"),
+            "data:image/jpeg;base64": raw.startswith(b"\xff\xd8\xff"),
+            "data:image/webp;base64": raw.startswith(b"RIFF") and raw[8:12] == b"WEBP",
+        }
+        if len(raw) > MAX_ILLUSTRATION_BYTES or not signatures[header]:
+            raise ValueError(f"{label}文件内容或大小不正确")
+
+    async def _api_avatar_state(self):
+        try:
+            image = json.loads((self.data_dir / "avatar.json").read_text(encoding="utf-8")).get("image")
+            self._validate_panel_image(image, "头像")
+        except (OSError, ValueError, TypeError, AttributeError, binascii.Error):
+            image = None
+        return json_response({"image": image})
+
+    async def _api_avatar_save(self):
+        payload = await request.json(default={})
+        if not isinstance(payload, dict) or "image" not in payload:
+            return error_response("请选择头像图片，或恢复默认头像")
+        image = payload["image"]
+        try:
+            self._validate_panel_image(image, "头像")
+        except (ValueError, binascii.Error) as exc:
+            return error_response(str(exc))
+        target = self.data_dir / "avatar.json"
+        temporary = target.with_name(f"avatar.{uuid.uuid4().hex}.tmp")
+        try:
+            temporary.write_text(json.dumps({"image": image}, ensure_ascii=False), encoding="utf-8")
+            temporary.replace(target)
+        except OSError:
+            logger.exception("[bili-scroll] 保存书房头像失败")
+            return error_response("头像保存失败，请重试")
+        finally:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return json_response({"saved": True})
+
     async def _api_appearance_save(self):
         payload = await request.json(default={})
         if not isinstance(payload, dict):
@@ -279,20 +331,7 @@ class BiliScrollPlugin(Star):
         try:
             settings = self._normalize_appearance(payload.get("settings", {}))
             image = payload.get("image")
-            if image is not None:
-                if not isinstance(image, str) or len(image) > MAX_ILLUSTRATION_BYTES * 4 // 3 + 100:
-                    raise ValueError("处理后的插画不能超过 3 MB，请缩小图片后重试")
-                header, separator, encoded = image.partition(",")
-                if not separator or header not in ("data:image/webp;base64", "data:image/png;base64", "data:image/jpeg;base64"):
-                    raise ValueError("插画仅支持 PNG、JPG 或 WebP")
-                raw = base64.b64decode(encoded, validate=True)
-                signatures = {
-                    "data:image/png;base64": raw.startswith(b"\x89PNG\r\n\x1a\n"),
-                    "data:image/jpeg;base64": raw.startswith(b"\xff\xd8\xff"),
-                    "data:image/webp;base64": raw.startswith(b"RIFF") and raw[8:12] == b"WEBP",
-                }
-                if len(raw) > MAX_ILLUSTRATION_BYTES or not signatures[header]:
-                    raise ValueError("插画文件内容或大小不正确")
+            self._validate_panel_image(image)
         except (ValueError, binascii.Error) as exc:
             return error_response(str(exc))
         target = self.data_dir / "appearance.json"

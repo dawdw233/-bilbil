@@ -94,6 +94,50 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.instance._load_appearance()["image"])
         self.assertTrue((await self.instance._api_appearance_default())["image"].startswith("data:image/png;base64,"))
 
+    async def test_avatar_persists_independently_and_resets(self):
+        image = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\navatar").decode()
+        self.payload = {"settings": {"zoom": 140}, "image": None}
+        await self.instance._api_appearance_save()
+        cover = (self.instance.data_dir / "appearance.json").read_bytes()
+        self.assertEqual(await self.instance._api_avatar_state(), {"image": None})
+        self.payload = {"image": image}
+        self.assertEqual(await self.instance._api_avatar_save(), {"saved": True})
+        self.assertEqual(await self.instance._api_avatar_state(), {"image": image})
+        self.assertEqual((self.instance.data_dir / "appearance.json").read_bytes(), cover)
+        self.payload = {"settings": {}, "image": None}
+        await self.instance._api_appearance_save()
+        self.assertEqual(await self.instance._api_avatar_state(), {"image": image})
+        self.payload = {"image": None}
+        await self.instance._api_avatar_save()
+        self.assertEqual(await self.instance._api_avatar_state(), {"image": None})
+        self.assertFalse(list(self.instance.data_dir.glob("*.tmp")))
+
+    async def test_invalid_avatar_does_not_replace_saved_image(self):
+        self.payload = {"image": None}
+        await self.instance._api_avatar_save()
+        original = (self.instance.data_dir / "avatar.json").read_bytes()
+        for payload in ({}, [], {"image": {}}, {"image": "data:image/svg+xml;base64,PHN2Zz4="},
+                        {"image": "data:image/png;base64,!!!!"}, {"image": "data:image/png;base64,YQ=="},
+                        {"image": "a" * (plugin.MAX_ILLUSTRATION_BYTES * 4 // 3 + 101)}):
+            with self.subTest(payload_type=type(payload).__name__):
+                self.payload = payload
+                self.assertIn("error", await self.instance._api_avatar_save())
+                self.assertEqual((self.instance.data_dir / "avatar.json").read_bytes(), original)
+
+    async def test_avatar_storage_failure_retains_old_file(self):
+        self.payload = {"image": None}
+        await self.instance._api_avatar_save()
+        original = (self.instance.data_dir / "avatar.json").read_bytes()
+        with patch.object(Path, "replace", side_effect=OSError("disk full")), patch.object(plugin.logger, "exception"):
+            self.assertIn("error", await self.instance._api_avatar_save())
+        self.assertEqual((self.instance.data_dir / "avatar.json").read_bytes(), original)
+        self.assertFalse(list(self.instance.data_dir.glob("*.tmp")))
+
+    async def test_corrupt_avatar_uses_default(self):
+        for content in ('not json', '[]', '{"image":"data:image/png;base64,YQ=="}'):
+            (self.instance.data_dir / "avatar.json").write_text(content, encoding="utf-8")
+            self.assertEqual(await self.instance._api_avatar_state(), {"image": None})
+
 
 if __name__ == "__main__":
     unittest.main()

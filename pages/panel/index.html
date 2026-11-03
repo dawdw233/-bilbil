@@ -276,6 +276,16 @@
   .study-avatar { position: relative; flex: 0 0 49px; width: 49px; height: 49px; display: grid; place-items: center; overflow: hidden; border: 3px solid #fff; border-radius: 50%; background: #e2eef8; box-shadow: 0 7px 13px #526d8a38, -3px -3px 9px #fff; font: 22px var(--serif); color: #6487a2; }
   .study-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 84% 34%; }
   .study-avatar img:not([src]) { display: none; }
+  button.study-avatar { padding: 0; cursor: pointer; }
+  button.study-avatar::after { content: "换图"; position: absolute; inset: auto 0 0; background: #30475bbd; color: #fff; font: 9px/1.6 "Microsoft YaHei", sans-serif; opacity: 0; transition: opacity 200ms ease; }
+  button.study-avatar:hover::after, button.study-avatar:focus-visible::after { opacity: 1; }
+  .avatar-dialog { width: min(420px, calc(100% - 24px)); }
+  .avatar-content { padding: 25px 28px; text-align: center; }
+  .avatar-preview { position: relative; display: grid; place-items: center; overflow: hidden; width: 120px; height: 120px; margin: 0 auto 22px; border-radius: 50%; border: 4px solid #fff; background: #e2eef8; box-shadow: var(--shadow); font: 40px var(--serif); color: #6487a2; }
+  .avatar-preview img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .avatar-preview img:not([src]) { display: none; }
+  .avatar-content .row { justify-content: center; }
+  #avatar-status { margin-top: 12px; font-size: 12px; min-height: 22px; }
   .study-room-name { margin: 0; font: 600 17px/1.6 var(--serif); letter-spacing: .06em; color: #3d5971; }
   .study-room-caption { margin: 3px 0 0; font-size: 10px; color: #71889a; letter-spacing: .03em; }
   .study-shell .side-menu { display: block; padding: 0; }
@@ -431,7 +441,7 @@
 <div class="wrap study-shell">
   <div class="layout">
   <aside class="side" id="tabs">
-    <div class="study-profile"><div class="study-avatar" aria-hidden="true">汐<img id="study-avatar" alt="" /></div><div><p class="study-room-name">一隅书房</p><p class="study-room-caption">私人的观影手记</p></div></div>
+    <div class="study-profile"><button type="button" class="study-avatar" id="avatar-open" aria-label="更换书房头像" aria-haspopup="dialog" title="点击更换头像">汐<img id="study-avatar" alt="" /></button><div><p class="study-room-name">一隅书房</p><p class="study-room-caption">私人的观影手记</p></div></div>
     <nav class="side-menu" aria-label="书房导航"><div class="nav-group"><div class="nav-group-label">阅读</div><div class="nav-group-buttons"><button class="tab active" id="tab-main" aria-pressed="true" data-view="刷视频"><span class="tab-icon"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg></span><span class="tab-label">刷视频</span></button></div></div><div class="nav-group"><div class="nav-group-label">写作</div><div class="nav-group-buttons"><button class="tab" id="tab-comments" aria-pressed="false" data-view="评论"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span class="tab-label">评论</span></button>
 <button class="tab" id="tab-reply" aria-pressed="false" data-view="reply"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></span><span class="tab-label">回复<span id="tab-reply-count" class="badge"></span></span></button>
 <button class="tab" id="tab-upload" aria-pressed="false" data-view="投稿"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg></span><span class="tab-label">投稿</span></button></div></div><div class="nav-group"><div class="nav-group-label">生活</div><div class="nav-group-buttons"><button class="tab" id="tab-rhythm" aria-pressed="false" data-view="作息"><span class="tab-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span><span class="tab-label">作息</span></button>
@@ -1026,6 +1036,18 @@
     <div class="row"><button type="button" id="art-reset">恢复默认</button><button type="button" id="art-cancel">取消</button><button type="button" id="art-save" class="primary">保存外观</button></div>
   </div>
 </dialog>
+<dialog id="avatar-dialog" class="appearance-dialog avatar-dialog" aria-labelledby="avatar-title" aria-describedby="avatar-description">
+  <div class="appearance-heading"><div><h2 id="avatar-title">书房头像</h2><div class="sub" id="avatar-description">选一张喜欢的图片，作为书房的小小标记。</div></div><button type="button" id="avatar-close" class="icon-button" aria-label="关闭头像设置">×</button></div>
+  <div class="avatar-content">
+    <div class="avatar-preview" aria-label="头像预览">汐<img id="avatar-preview" alt="" /></div>
+    <div class="row"><button type="button" id="avatar-upload">选择图片</button><button type="button" id="avatar-reset">恢复默认</button></div>
+    <input type="file" id="avatar-file" class="sr-only" tabindex="-1" aria-label="选择头像文件" accept="image/png,image/jpeg,image/webp" />
+    <div class="tip">支持 PNG、JPG、WebP，最大 20 MB。图片居中裁剪为圆形。</div>
+    <div class="tip">默认头像跟随页首插画；自选头像单独保存。</div>
+    <div id="avatar-status" role="status" aria-live="polite"></div>
+  </div>
+  <div class="appearance-footer"><div class="row"><button type="button" id="avatar-cancel">取消</button><button type="button" id="avatar-save" class="primary">保存头像</button></div></div>
+</dialog>
 <div id="appearance-toast" class="appearance-toast hide" role="status" aria-live="polite"></div>
 
 <script type="module" id="appearance-script">
@@ -1068,13 +1090,13 @@ function illustrationDataURL(blob) {
     reader.readAsDataURL(blob);
   });
 }
-async function prepareIllustration(file) {
+async function prepareIllustration(file, maxDimension = 1600) {
   if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("请选择 PNG、JPG 或 WebP 图片");
   if (file.size > 20 * 1024 * 1024) throw new Error("图片不能超过 20 MB");
   let bitmap;
   try {
     bitmap = await createImageBitmap(file);
-    const ratio = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    const ratio = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(bitmap.width * ratio));
     canvas.height = Math.max(1, Math.round(bitmap.height * ratio));
@@ -1098,6 +1120,7 @@ let artRevision = 0;
 let artBusy = false;
 let artToastTimer;
 let artStorageWarning = "";
+let savedAvatar = null;
 function artStatus(text, error = false) {
   artEl("art-status").textContent = text;
   artEl("art-status").classList.toggle("bad", error);
@@ -1112,12 +1135,13 @@ function renderAppearance(settings, illustration) {
   root.setProperty("--art-mask-strength", String(settings.strength / 100));
   root.setProperty("--art-mask", [1, 3, 5].map((offset) => parseInt(settings.mask.slice(offset, offset + 2), 16)).join(", "));
   if (illustration !== displayedIllustration) {
-    for (const id of ["hero-illustration", "preview-illustration", "study-avatar"]) {
+    for (const id of ["hero-illustration", "preview-illustration"]) {
       if (illustration) artEl(id).src = illustration;
       else artEl(id).removeAttribute("src");
     }
     displayedIllustration = illustration;
   }
+  renderStudyAvatar();
 }
 function fillAppearanceControls() {
   for (const key of Object.keys(ART_DEFAULTS)) artEl("art-" + key).value = draftAppearance[key];
@@ -1258,6 +1282,100 @@ artDialog.addEventListener("close", () => {
   renderAppearance(savedAppearance, savedIllustration);
   artEl("art-file").value = "";
 });
+
+const avatarDialog = artEl("avatar-dialog");
+let draftAvatar = null;
+let avatarBusy = false;
+function renderStudyAvatar() {
+  const image = savedAvatar || displayedIllustration;
+  const element = artEl("study-avatar");
+  if (image) { if (element.getAttribute("src") !== image) element.src = image; }
+  else element.removeAttribute("src");
+  element.style.objectPosition = savedAvatar ? "50% 50%" : "84% 34%";
+}
+function avatarStatus(message, error = false) {
+  artEl("avatar-status").textContent = message;
+  artEl("avatar-status").classList.toggle("bad", error);
+}
+function updateAvatarControls() {
+  const image = draftAvatar || savedIllustration;
+  const preview = artEl("avatar-preview");
+  if (image) preview.src = image;
+  else preview.removeAttribute("src");
+  preview.style.objectPosition = draftAvatar ? "50% 50%" : "84% 34%";
+  for (const id of ["avatar-upload", "avatar-reset", "avatar-save", "avatar-close", "avatar-cancel"]) artEl(id).disabled = avatarBusy;
+  artEl("avatar-upload").textContent = draftAvatar ? "替换图片" : "选择图片";
+}
+async function refreshSavedAvatar() {
+  const bridge = await appearanceBridge();
+  const stored = await bridge.apiGet("avatar/state");
+  if (!stored || !("image" in stored)) throw new Error("头像暂时无法读取，请稍后重试");
+  savedAvatar = typeof stored.image === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(stored.image) ? stored.image : null;
+  renderStudyAvatar();
+}
+const avatarReady = refreshSavedAvatar().catch(() => {});
+artEl("avatar-open").onclick = async () => {
+  if (avatarDialog.open) return;
+  artEl("avatar-open").disabled = true;
+  try {
+    await Promise.all([appearanceReady, avatarReady]);
+    await refreshSavedAvatar();
+    draftAvatar = savedAvatar;
+    avatarBusy = false;
+    updateAvatarControls();
+    avatarStatus("");
+    avatarDialog.showModal();
+  } catch (error) {
+    artEl("appearance-toast").textContent = error.message || "头像暂时无法读取，请重试";
+    artEl("appearance-toast").classList.remove("hide");
+    clearTimeout(artToastTimer);
+    artToastTimer = setTimeout(() => artEl("appearance-toast").classList.add("hide"), 3500);
+  } finally { artEl("avatar-open").disabled = false; }
+};
+artEl("avatar-upload").onclick = () => artEl("avatar-file").click();
+artEl("avatar-file").onchange = async () => {
+  const file = artEl("avatar-file").files?.[0];
+  if (!file || avatarBusy) return;
+  avatarBusy = true;
+  updateAvatarControls();
+  avatarStatus("正在处理头像…");
+  try {
+    draftAvatar = await prepareIllustration(file, 512);
+    avatarStatus("头像已载入，点击「保存头像」后保留。");
+  } catch (error) { avatarStatus(error.message || "图片读取失败，请重试", true); }
+  finally {
+    avatarBusy = false;
+    artEl("avatar-file").value = "";
+    updateAvatarControls();
+  }
+};
+artEl("avatar-reset").onclick = () => {
+  draftAvatar = null;
+  updateAvatarControls();
+  avatarStatus("已恢复默认预览，保存后跟随页首插画。");
+};
+artEl("avatar-save").onclick = async () => {
+  if (avatarBusy) return;
+  avatarBusy = true;
+  updateAvatarControls();
+  avatarStatus("正在保存头像…");
+  try {
+    const bridge = await appearanceBridge();
+    const result = await bridge.apiPost("avatar/save", { image: draftAvatar });
+    if (!result?.saved) throw new Error("未收到保存确认，请重试");
+    savedAvatar = draftAvatar;
+    renderStudyAvatar();
+    avatarDialog.close();
+    artEl("appearance-toast").textContent = "头像已保存";
+    artEl("appearance-toast").classList.remove("hide");
+    clearTimeout(artToastTimer);
+    artToastTimer = setTimeout(() => artEl("appearance-toast").classList.add("hide"), 2600);
+  } catch (error) { avatarStatus("保存失败：" + (error.message || "请重试"), true); }
+  finally { avatarBusy = false; updateAvatarControls(); }
+};
+artEl("avatar-close").onclick = artEl("avatar-cancel").onclick = () => avatarDialog.close();
+avatarDialog.addEventListener("cancel", (event) => { if (avatarBusy) event.preventDefault(); });
+avatarDialog.addEventListener("close", () => { artEl("avatar-file").value = ""; });
 
 </script>
 <script type="module" id="study-script">
