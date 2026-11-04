@@ -490,7 +490,7 @@
     --shadow: 0 14px 30px -16px #10213266, 0 4px 10px #10213224, inset 0 1px 0 #d5e4ef1a;
     --shadow-up: 0 18px 34px -14px #10213280, 0 6px 14px #10213233, inset 0 1px 0 #d5e4ef24;
     --shadow-hero: 0 24px 40px -14px #10213280, 0 5px 14px #10213233;
-    --night-art-filter: brightness(.92) saturate(.98); --art-ambient: #3a53691a;
+    --night-art-filter: brightness(.99) saturate(1.06); --art-ambient: #304a610a;
   }
   body, .hero-art, .preview-art { transition: background 200ms ease, color 200ms ease; }
   :root[data-study-theme="night"] body { background: radial-gradient(ellipse at 82% 0, #7896b42e, transparent 60%), radial-gradient(ellipse at 12% 95%, #4b67852b, transparent 65%), linear-gradient(135deg, #283c50, #202f40 60%, #1c2938); }
@@ -504,14 +504,15 @@
   :root[data-study-theme="night"] .art-float-plane, :root[data-study-theme="night"] .left-illustration { --art-depth-shadow: #08152345; }
   :root[data-study-theme="night"] { --art-edge-tone: 58, 83, 105; }
   :root[data-study-theme="night"] .art-canvas .hero-readability { background: linear-gradient(90deg, #3a5369 0%, #3a5369f7 34%, #405c7399 53%, #4d687f33 74%, transparent 91%); }
-  :root[data-study-theme="night"][data-left-art="true"] .art-canvas .hero-readability { background: linear-gradient(90deg, #3a536938 0%, #3a53694d 25%, #405c7324 47%, #4d687f12 74%, transparent 91%); }
-  :root[data-study-theme="night"][data-left-art="true"] .hd-main::before, :root[data-study-theme="night"][data-left-art="true"] .preview-label::before { background: radial-gradient(ellipse at 0% 48%, #3a5369e6, #3a5369b3 48%, transparent 78%); }
+  :root[data-study-theme="night"][data-left-art="true"] .art-canvas .hero-readability { background: linear-gradient(90deg, #2c465f1f 0%, #304a611f 23%, #38566f0f 46%, transparent 72%); }
+  :root[data-study-theme="night"][data-left-art="true"] .hd-main::before, :root[data-study-theme="night"][data-left-art="true"] .preview-label::before { background: radial-gradient(ellipse at 0% 45%, #243d55cc, #29445c70 30%, transparent 65%); }
+  :root[data-study-theme="night"] :is(.hd-main h1, .preview-label strong) { text-shadow: 0 1px 2px #172e44a6; }
   :root[data-study-theme="night"][data-left-art="true"] :is(.hero-note, .hero-eyebrow, .preview-label span) { color: var(--muted); -webkit-text-stroke-color: #3a5369; }
   :root[data-study-theme="night"] :is(.hero-wash, .preview-wash) { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(90deg, #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
   :root[data-study-theme="night"] .left-illustration .hero-wash { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(270deg, #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
   :root[data-study-theme="night"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .left-illustration .hero-wash { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(270deg, rgba(58, 83, 105, calc(.06 + var(--art-mask-strength) * .5)) 0%, rgba(58, 83, 105, calc(.02 + var(--art-mask-strength) * .22)) 22%, rgba(58, 83, 105, calc(var(--art-mask-strength) * .1)) 52%, rgba(58, 83, 105, .04) 100%); }
   :root[data-study-theme="night"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .art-float-plane .hero-wash { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(90deg, rgba(58, 83, 105, calc(.06 + var(--art-mask-strength) * .5)) 0%, rgba(58, 83, 105, calc(.02 + var(--art-mask-strength) * .22)) 14%, rgba(58, 83, 105, calc(var(--art-mask-strength) * .1)) 32%, rgba(58, 83, 105, .04) 100%); }
-  :root[data-study-theme="night"] :is(.hero-art, .preview-art, .left-illustration)::before, :root[data-study-theme="night"] :is(.hero-art, .preview-art, .left-illustration)::after { opacity: calc(var(--glass-level, .5) * .45); }
+  :root[data-study-theme="night"] :is(.hero-art, .preview-art, .left-illustration)::before, :root[data-study-theme="night"] :is(.hero-art, .preview-art, .left-illustration)::after { opacity: calc(var(--glass-level, .5) * .55); }
   :root[data-study-theme="night"] :is(.hero-tag, .stat-icon, .tag, .check, .md blockquote, code, th) { background: #46627bb3; border-color: #9db6ca66; color: #e0ebf3; }
   :root[data-study-theme="night"] .hero-tag::before { background: #95bdda; }
   :root[data-study-theme="night"] .stat-icon { color: #a9c7dd; }
