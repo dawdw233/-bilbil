@@ -79,8 +79,8 @@
     filter: contrast(calc(1.035 + var(--glass-level, .5) * .14)) saturate(calc(1.02 + var(--glass-level, .5) * .12)) brightness(calc(1 - var(--glass-level, .5) * .015)) var(--art-detail-filter, blur(0px)) var(--night-art-filter, brightness(1));
   }
   .hero-art img:not([src]), .preview-art img:not([src]) { display: none; }
-  .hero-art:has(img[src])::before, .preview-art:has(img[src])::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: var(--glass-level, .5); background: radial-gradient(ellipse at 92% 18%, #ffffff4d, #ffffff05 38%, transparent 65%); mask-image: linear-gradient(180deg, transparent, #000 20px); }
-  .hero-art:has(img[src])::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: var(--glass-level, .5); background: linear-gradient(118deg, transparent 0% 80%, #ffffff40 80.3%, #ffffff08 87%, transparent 87.3%), linear-gradient(180deg, #ffffff14, transparent 22% 82%, #d5e9f518); backdrop-filter: blur(calc(var(--glass-level, .5) * .2px)) saturate(calc(1 + var(--glass-level, .5) * .04)); -webkit-backdrop-filter: blur(calc(var(--glass-level, .5) * .2px)) saturate(calc(1 + var(--glass-level, .5) * .04)); mask-image: linear-gradient(90deg, transparent, #000 28%), linear-gradient(180deg, transparent, #000 20px); mask-composite: intersect; }
+  .hero-art:has(img[src])::before, .preview-art:has(img[src])::before, .left-illustration:has(img[src])::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: var(--glass-level, .5); background: radial-gradient(ellipse at var(--art-light-x, 92%) 18%, #ffffff4d, #ffffff05 38%, transparent 65%); mask-image: linear-gradient(180deg, transparent, #000 20px); }
+  .hero-art:has(img[src])::after, .left-illustration:has(img[src])::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: var(--glass-level, .5); background: linear-gradient(var(--art-glint-angle, 118deg), transparent 0% 80%, #ffffff40 80.3%, #ffffff08 87%, transparent 87.3%), linear-gradient(180deg, #ffffff14, transparent 22% 82%, #d5e9f518); backdrop-filter: blur(calc(var(--glass-level, .5) * .2px)) saturate(calc(1 + var(--glass-level, .5) * .04)); -webkit-backdrop-filter: blur(calc(var(--glass-level, .5) * .2px)) saturate(calc(1 + var(--glass-level, .5) * .04)); mask-image: linear-gradient(var(--art-glint-direction, 90deg), transparent, #000 28%), linear-gradient(180deg, transparent, #000 20px); mask-composite: intersect; }
   .hero-wash, .preview-wash { pointer-events: none; position: absolute; inset: 0;
     background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(90deg, rgb(var(--art-mask)) 0%,
       rgba(var(--art-mask), var(--art-mask-strength)) 36%, rgba(var(--art-mask), calc(var(--art-mask-strength) * .36)) 72%, rgba(var(--art-mask), .06) 100%);
@@ -337,9 +337,10 @@
   .study-shell .hd { overflow: hidden; }
   .art-float-plane { --art-start: 26%; position: absolute; inset: 0 0 0 var(--art-start); z-index: 0; isolation: isolate; pointer-events: none; filter: drop-shadow(0 8px 12px var(--art-depth-shadow, #233a4924)); }
   .art-float-plane:not(:has(img[src])) { display: none; }
-  .left-illustration { position: absolute; inset: 0 42% 0 0; z-index: 0; overflow: hidden; pointer-events: none; mask-image: linear-gradient(90deg, #000 58%, transparent); }
+  .left-illustration { --art-light-x: 8%; --art-glint-angle: 62deg; --art-glint-direction: 270deg; position: absolute; inset: 0 42% 0 0; z-index: 0; isolation: isolate; overflow: hidden; pointer-events: none; mask-image: linear-gradient(90deg, #000 58%, transparent); filter: drop-shadow(0 8px 12px var(--art-depth-shadow, #233a4924)); }
   .left-illustration:not(:has(img[src])) { display: none; }
   .left-illustration img { object-fit: cover; object-position: var(--left-art-x, 50%) var(--left-art-y, 50%); opacity: var(--left-art-opacity, .65); transform: scale(var(--left-art-scale, 1)); transform-origin: var(--left-art-x, 50%) var(--left-art-y, 50%); }
+  .left-illustration .hero-wash { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(270deg, rgb(var(--art-mask)) 0%, rgba(var(--art-mask), var(--art-mask-strength)) 36%, rgba(var(--art-mask), calc(var(--art-mask-strength) * .36)) 72%, rgba(var(--art-mask), .06) 100%); }
   /* 双图使用互不相交的画布，缩放也限制在各自区域内。 */
   :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) { --art-split: 45%; }
   :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .left-illustration { right: auto; width: var(--art-split); mask-image: linear-gradient(90deg, #000 75%, transparent); }
@@ -474,7 +475,8 @@
   }
 
   :root[data-art-fit="contain"] .art-canvas .hero-art img { position: absolute; top: 0; right: 0; width: auto; max-width: 100%; object-position: 100% var(--art-y); transform-origin: 100% var(--art-y); mask-image: linear-gradient(90deg, transparent, #000 24%); }
-  :root[data-left-art="true"] .art-canvas .hero-readability { background: linear-gradient(90deg, #f8fcffa6 0%, #f7fbffb3 30%, #f5faff94 45%, #f2f8fd3b 65%, transparent 82%); }
+  :root[data-left-art="true"] .art-canvas .hero-readability { background: linear-gradient(90deg, #f8fcff24 0%, #f7fbff38 25%, #f5faff1a 45%, #f2f8fd12 65%, transparent 82%); }
+  :root[data-left-art="true"] .hd-main::before, :root[data-left-art="true"] .preview-label::before { content: ""; position: absolute; inset: -60px 8% -60px -60px; z-index: -1; pointer-events: none; background: radial-gradient(ellipse at 0% 48%, #f8fcffb8, #f8fcff70 48%, transparent 76%); }
 
   :root[data-study-theme="night"] {
     color-scheme: dark; --ink: #f0f6fb; --muted: #d3e0eb; --line: #afc6d833; --line-2: #7893aa;
@@ -494,12 +496,14 @@
   :root[data-study-theme="night"] :is(.hero-eyebrow, .hero-note, .nav-group-label, .study-room-caption, .side-footnote, .toolbar-path, .timeline-time, .timeline-detail, .timeline-empty, .progress-copy p, .study-stat .stat-key, .orbit-label span, #study-feedback) { color: var(--muted); }
   :root[data-study-theme="night"] :is(.side-footnote, th, td) { border-color: var(--line); }
   :root[data-study-theme="night"] .study-shell .hd { background: linear-gradient(112deg, #3a5369, #4d687f 62%, #526e84); }
-  :root[data-study-theme="night"] .art-float-plane { --art-depth-shadow: #08152345; }
+  :root[data-study-theme="night"] .art-float-plane, :root[data-study-theme="night"] .left-illustration { --art-depth-shadow: #08152345; }
   :root[data-study-theme="night"] { --art-edge-tone: 58, 83, 105; }
   :root[data-study-theme="night"] .art-canvas .hero-readability { background: linear-gradient(90deg, #3a5369 0%, #3a5369f7 34%, #405c7399 53%, #4d687f33 74%, transparent 91%); }
-  :root[data-study-theme="night"][data-left-art="true"] .art-canvas .hero-readability { background: linear-gradient(90deg, #3a5369d9 0%, #3a5369e0 30%, #405c73b8 47%, #4d687f33 74%, transparent 91%); }
+  :root[data-study-theme="night"][data-left-art="true"] .art-canvas .hero-readability { background: linear-gradient(90deg, #3a536938 0%, #3a53694d 25%, #405c7324 47%, #4d687f12 74%, transparent 91%); }
+  :root[data-study-theme="night"][data-left-art="true"] .hd-main::before, :root[data-study-theme="night"][data-left-art="true"] .preview-label::before { background: radial-gradient(ellipse at 0% 48%, #3a5369e6, #3a5369b3 48%, transparent 78%); }
   :root[data-study-theme="night"] :is(.hero-wash, .preview-wash) { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(90deg, #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
-  :root[data-study-theme="night"] :is(.hero-art, .preview-art)::before, :root[data-study-theme="night"] :is(.hero-art, .preview-art)::after { opacity: calc(var(--glass-level, .5) * .45); }
+  :root[data-study-theme="night"] .left-illustration .hero-wash { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(270deg, #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
+  :root[data-study-theme="night"] :is(.hero-art, .preview-art, .left-illustration)::before, :root[data-study-theme="night"] :is(.hero-art, .preview-art, .left-illustration)::after { opacity: calc(var(--glass-level, .5) * .45); }
   :root[data-study-theme="night"] :is(.hero-tag, .stat-icon, .tag, .check, .md blockquote, code, th) { background: #46627bb3; border-color: #9db6ca66; color: #e0ebf3; }
   :root[data-study-theme="night"] .hero-tag::before { background: #95bdda; }
   :root[data-study-theme="night"] .stat-icon { color: #a9c7dd; }
@@ -599,7 +603,7 @@
       </div>
     </div>
     <header class="hd art-canvas" id="top">
-      <div class="left-illustration" aria-hidden="true"><img id="hero-left-illustration" alt="" decoding="async" /></div>
+      <div class="left-illustration" aria-hidden="true"><img id="hero-left-illustration" alt="" decoding="async" /><div class="hero-wash"></div></div>
       <div class="art-float-plane" aria-hidden="true"><div class="hero-art"><img id="hero-illustration" alt="" decoding="async" /><div class="hero-wash"></div></div></div><div class="hero-readability" aria-hidden="true"></div>
       <div class="hd-main"><div class="hero-eyebrow">A QUIET CORNER · BILIBILI JOURNAL</div><h1><span id="study-greeting">欢迎回来，</span><br/><strong data-room-name>一隅书房</strong></h1><p class="hero-note">今日也留一点闲时，看看世界的有趣。<br/>让喜欢的内容，在这里慢慢留下来。</p><div class="hero-tags"><span class="hero-tag">B站观影手记</span><span class="hero-tag" id="study-style-tag">人设相伴</span></div></div>
     </header>
@@ -1154,7 +1158,7 @@
   <div class="appearance-content">
     <div class="appearance-preview-col">
       <div class="art-preview art-canvas" aria-label="插画效果预览">
-        <div class="left-illustration" aria-hidden="true"><img id="preview-left-illustration" alt="" /></div>
+        <div class="left-illustration" aria-hidden="true"><img id="preview-left-illustration" alt="" /><div class="hero-wash preview-wash"></div></div>
         <div class="art-float-plane" aria-hidden="true"><div class="hero-art preview-art"><img id="preview-illustration" alt="" /><div class="hero-wash preview-wash"></div></div></div><div class="hero-readability" aria-hidden="true"></div>
         <div class="preview-label"><strong>刷 B站</strong><span>留一点闲时，遇见有趣。</span></div>
       </div>
