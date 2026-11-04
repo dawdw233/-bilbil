@@ -465,6 +465,8 @@
     .study-shell .top-row { grid-template-columns: 1fr; }
   }
 
+  :root[data-art-fit="contain"] .art-canvas .hero-art img { position: absolute; top: 0; right: 0; width: auto; max-width: 100%; object-position: 100% var(--art-y); transform-origin: 100% var(--art-y); mask-image: linear-gradient(90deg, transparent, #000 24%); }
+
   :root[data-study-theme="night"] {
     color-scheme: dark; --ink: #f0f6fb; --muted: #d3e0eb; --line: #afc6d833; --line-2: #7893aa;
     --surface: linear-gradient(135deg, #4c657beb, #415b72eb 55%, #3b556beb); --surface-2: #4a647c; --panel-bg: #425c72; --accent: #bbdcf2; --accent-fill: #9dc6e2; --blue-soft: #486b88;
@@ -1499,6 +1501,7 @@ function artStatus(text, error = false) {
 }
 function renderAppearance(settings, illustration) {
   const root = document.documentElement.style;
+  document.documentElement.dataset.artFit = settings.fit;
   root.setProperty("--art-x", settings.x + "%");
   root.setProperty("--art-y", settings.y + "%");
   root.setProperty("--art-scale", String(settings.zoom / 100));
@@ -1533,6 +1536,10 @@ function syncAppearanceControls() {
   }
   const imageControls = ["x", "y", "zoom", "opacity", "fit", "sharpness"];
   for (const key of imageControls) artEl("art-" + key).disabled = !draftIllustration || artBusy;
+  if (draftAppearance.fit === "contain") {
+    artEl("art-x").disabled = true;
+    artEl("art-x-value").textContent = "自动靠右";
+  }
   artEl("art-glass_enabled").disabled = !draftIllustration || artBusy;
   artEl("art-glass").disabled = !draftIllustration || !draftAppearance.glass_enabled || artBusy;
   for (const key of ["mask", "strength"]) artEl("art-" + key).disabled = artBusy;
@@ -1542,7 +1549,9 @@ function syncAppearanceControls() {
   artEl("art-save").disabled = artBusy;
   artEl("art-reset").disabled = artBusy;
   artEl("art-upload-label").textContent = draftIllustration ? "替换插画" : "上传插画";
-  artEl("art-empty-note").textContent = draftIllustration ? "调整后可在预览和页首查看效果。" : "尚未设置插画，当前使用柔和渐变背景。";
+  artEl("art-empty-note").textContent = draftIllustration
+    ? (draftAppearance.fit === "contain" ? "完整显示时插画自动靠右，留白放在文字侧；切回铺满后恢复原水平位置。" : "调整后可在预览和页首查看效果。")
+    : "尚未设置插画，当前使用柔和渐变背景。";
   renderAppearance(draftAppearance, draftIllustration);
 }
 async function refreshSavedAppearance() {
