@@ -2007,9 +2007,9 @@ async function loadSummary() {
   const s = await api("summary");
   const cfg = s.config || {};
   const last = s.last_run;
-  // 口味留空时用的是后端内置那一套，拿它当 placeholder，省得人猜「留空是什么」
+  // 空白输入框显示后端内置的内容偏好示例。
   if (s.comment_taste_default) {
-    $("f-comment_taste").placeholder = "留空 = 用内置口味：\n" + s.comment_taste_default;
+    $("f-comment_taste").placeholder = s.comment_taste_default;
   }
   if (s.speaking_style_default) {
     $("f-speaking_style").placeholder = "留空 = 用内置风格：\n" + s.speaking_style_default;
@@ -2367,7 +2367,7 @@ async function loadComments(fillInputs = true) {
       $("f-comment_interval_seconds").value = s.interval ?? 8;
       $("f-comment_at").value = s.at || "";
       $("f-comment_taste").value = s.taste || "";
-      $("f-comment_taste").placeholder = "留空 = 用内置口味：\n" + (s.taste_default || "");
+      $("f-comment_taste").placeholder = s.taste_default || "";
       $("f-speaking_style").value = s.speaking_style || "";
       $("f-speaking_style_bind_persona").checked = s.speaking_style_bind_persona !== false;
       $("f-speaking_style").placeholder = "留空 = 用内置风格：\n" + (s.speaking_style_default || "");
