@@ -336,6 +336,13 @@
   .study-shell h1 > span { font-size: .77em; letter-spacing: .04em; }
   .study-shell h1 > strong { font-weight: 400; }
   .study-shell .hero-art { inset: 0 0 0 28%; }
+  .study-shell .hd:has(.hero-art img[src]) { overflow: visible; }
+  .art-float-plane { --art-lift: 10px; --art-edge: 10px; --art-start: 28%; position: absolute; inset: calc(var(--art-lift) * -1) var(--art-edge) var(--art-edge) var(--art-start); z-index: 0; isolation: isolate; pointer-events: none; filter: drop-shadow(0 4px 3px #233a4924) drop-shadow(0 13px 13px #233a4929); }
+  .art-float-plane:not(:has(img[src])) { display: none; }
+  .study-shell .art-float-plane > .hero-art { inset: 0; z-index: 0; border-radius: calc(var(--hero-radius) - 7px); mask-image: linear-gradient(90deg, transparent, #000 42%); }
+  .study-shell .hero-readability { z-index: 0; border-radius: inherit; }
+  @media (max-width: 760px) { .art-float-plane { --art-lift: 5px; --art-edge: 5px; --art-start: 15%; filter: drop-shadow(0 3px 2px #233a4920) drop-shadow(0 8px 8px #233a4924); } }
+  @media (max-width: 480px) { .art-float-plane { --art-start: 11%; } }
   .study-shell .hero-readability { background: linear-gradient(90deg, #f8fcfff9 0%, #f7fbfff0 28%, #f5faffb8 45%, #f2f8fd3b 62%, transparent 78%); }
   .study-shell .hero-eyebrow { font-size: 9px; letter-spacing: .19em; color: #69849a; }
   .study-shell .hero-note { margin: 0; max-width: 290px; font: 12px/1.9 "Segoe UI", "Microsoft YaHei", sans-serif; letter-spacing: .01em; color: #4d697f; }
@@ -582,7 +589,7 @@
       </div>
     </div>
     <header class="hd" id="top">
-      <div class="hero-art" aria-hidden="true"><img id="hero-illustration" alt="" decoding="async" /><div class="hero-wash"></div></div><div class="hero-readability" aria-hidden="true"></div>
+      <div class="art-float-plane" aria-hidden="true"><div class="hero-art"><img id="hero-illustration" alt="" decoding="async" /><div class="hero-wash"></div></div></div><div class="hero-readability" aria-hidden="true"></div>
       <div class="hd-main"><div class="hero-eyebrow">A QUIET CORNER · BILIBILI JOURNAL</div><h1><span id="study-greeting">欢迎回来，</span><br/><strong data-room-name>一隅书房</strong></h1><p class="hero-note">今日也留一点闲时，看看世界的有趣。<br/>让喜欢的内容，在这里慢慢留下来。</p><div class="hero-tags"><span class="hero-tag">B站观影手记</span><span class="hero-tag" id="study-style-tag">人设相伴</span></div></div>
     </header>
     <div id="run-hint" class="sub" role="status" aria-live="polite"></div>
