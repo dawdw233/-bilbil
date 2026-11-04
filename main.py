@@ -86,6 +86,7 @@ CONFIG_KEYS = (
     "auto_comment",
     "auto_comment_per_day",
     "comment_interval_seconds",
+    "comment_taste_enabled",
     "comment_taste",
     "speaking_style",
     "speaking_style_bind_persona",
@@ -235,6 +236,7 @@ class BiliScrollPlugin(Star):
 
     def _config_values(self) -> dict:
         values = {key: self.cfg.get(key) for key in CONFIG_KEYS}
+        values["comment_taste_enabled"] = self._uses_comment_taste()
         values["speaking_style_bind_persona"] = self.cfg.get("speaking_style_bind_persona", True) is not False
         return values
 
@@ -779,6 +781,13 @@ class BiliScrollPlugin(Star):
             else:
                 patch["comment_taste"] = value
 
+        if "comment_taste_enabled" in payload:
+            value = payload["comment_taste_enabled"]
+            if not isinstance(value, bool):
+                errors.append("评论口味开关必须是勾选或取消勾选")
+            else:
+                patch["comment_taste_enabled"] = value
+
         if "speaking_style_bind_persona" in payload:
             value = payload["speaking_style_bind_persona"]
             if not isinstance(value, bool):
@@ -1207,6 +1216,7 @@ class BiliScrollPlugin(Star):
                 "interval": self._cfg_int("comment_interval_seconds", 8, 5, 300),
                 "at": str(self.cfg.get("comment_at") or ""),
                 "taste": str(self.cfg.get("comment_taste") or ""),
+                "taste_enabled": self._uses_comment_taste(),
                 "taste_default": DEFAULT_COMMENT_TASTE,
                 "speaking_style": str(self.cfg.get("speaking_style") or ""),
                 "speaking_style_default": DEFAULT_SPEAKING_STYLE,
@@ -1586,7 +1596,7 @@ class BiliScrollPlugin(Star):
         """让模型决定「这条要不要回、回什么」。返回模型原文（JSON）。"""
         prompt_file = Path(__file__).parent / "prompts" / "reply.md"
         system_prompt = prompt_file.read_text(encoding="utf-8")
-        taste = str(self.cfg.get("comment_taste") or "").strip() or DEFAULT_COMMENT_TASTE
+        taste = self._comment_taste_prompt()
         system_prompt = system_prompt.replace("{{TASTE}}", taste)
         style = await self._speaking_style_prompt()
         system_prompt = system_prompt.replace("{{SPEAKING_STYLE}}", style)
@@ -1994,21 +2004,29 @@ class BiliScrollPlugin(Star):
         value = str(self.cfg.get("comment_eagerness") or "").strip()
         return value if value in EAGERNESS_CHOICES else DEFAULT_EAGERNESS
 
+    def _uses_comment_taste(self) -> bool:
+        """旧配置默认保持口味筛选；关闭时不读取已保存的口味文字。"""
+        return self.cfg.get("comment_taste_enabled", True) is not False
+
+    def _comment_taste_prompt(self) -> str:
+        if not self._uses_comment_taste():
+            return "不使用个人内容偏好筛选，按当前互动内容和回复规则判断。"
+        return str(self.cfg.get("comment_taste") or "").strip() or DEFAULT_COMMENT_TASTE
+
     async def _write_comment(self, subtitle: str, title: str) -> str:
-        """让模型先判断「这条我想不想评」，想评才写一句。
+        """按口味选择是否开口，或关闭口味后逐条生成评论。
 
         返回模型原文（JSON），解析和闸门都在 duty.py：
         那边能单测，也保证「解析不出来就不发」这条规则不会被绕过。
         """
-        prompt_file = Path(__file__).parent / "prompts" / "comment.md"
+        use_taste = self._uses_comment_taste()
+        prompt_file = Path(__file__).parent / "prompts" / ("comment.md" if use_taste else "comment_all.md")
         system_prompt = prompt_file.read_text(encoding="utf-8")
-        taste = str(self.cfg.get("comment_taste") or "").strip() or DEFAULT_COMMENT_TASTE
-        system_prompt = system_prompt.replace("{{TASTE}}", taste)
+        if use_taste:
+            system_prompt = system_prompt.replace("{{TASTE}}", self._comment_taste_prompt())
+            system_prompt = system_prompt.replace("{{EAGERNESS}}", EAGERNESS_RULES[self._eagerness()])
         style = await self._speaking_style_prompt()
         system_prompt = system_prompt.replace("{{SPEAKING_STYLE}}", style)
-        system_prompt = system_prompt.replace(
-            "{{EAGERNESS}}", EAGERNESS_RULES[self._eagerness()]
-        )
         resp = await self.context.llm_generate(
             chat_provider_id=self._provider_id(),
             prompt=f"标题：{title}\n\n字幕原文：\n{subtitle}",

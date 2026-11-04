@@ -71,12 +71,12 @@
   },
   "auto_comment": {
     "type": "bool",
-    "description": "刷完一轮后，让模型自己决定要不要给挑中的视频发评论（公开发言，慎开）",
+    "description": "刷完一轮后自动给选中的视频评论；启用评论口味时按偏好挑选，关闭口味时逐条生成评论",
     "default": false
   },
   "auto_comment_per_run": {
     "type": "int",
-    "description": "可选硬上限：每轮最多几条（默认 -1=不限；0=不评。正常不用改，评论多少由 comment_eagerness 决定）",
+    "description": "可选硬上限：每轮最多几条（默认 -1=不限；0=不评）。口味筛选开启时按积极性挑选，关闭时逐条生成",
     "default": -1
   },
   "auto_comment_per_day": {
@@ -88,6 +88,11 @@
     "type": "int",
     "description": "两条自动评论之间至少隔几秒（5~300，默认 8）。撞过风控会自动进入 5~30 分钟全局暂停",
     "default": 8
+  },
+  "comment_taste_enabled": {
+    "type": "bool",
+    "description": "启用评论口味筛选：勾选时按文本框偏好和开口积极性选择；关闭后为本轮选中的视频逐条生成评论，保留去重、上限与内容检查",
+    "default": true
   },
   "comment_taste": {
     "type": "string",
@@ -106,7 +111,7 @@
   },
   "comment_eagerness": {
     "type": "string",
-    "description": "开口积极性：保守 / 正常 / 积极（决定它多容易开口，取代按条数卡上限）",
+    "description": "开口积极性：保守 / 正常 / 积极，仅在启用评论口味筛选时生效",
     "default": "正常"
   },
   "comment_at": {

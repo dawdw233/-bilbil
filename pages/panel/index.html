@@ -957,7 +957,7 @@
           <div class="grid">
             <label class="check">
               <input id="f-auto_comment" type="checkbox" />
-              <span><span class="t">让机器人自己决定要不要评论</span><span class="d">开启后，对本轮挑中的视频判断是否有话可说，并用当前 B站账号发表评论；没有合适内容时不发。</span></span>
+              <span><span class="t">开启自动评论</span><span class="d">开启后用当前 B站账号参与评论；是否按内容偏好挑选，由下方「评论口味」开关决定。</span></span>
             </label>
             <label class="field"><span class="lbl">开口积极性</span>
               <select id="f-comment_eagerness">
@@ -988,10 +988,15 @@
 
     <!-- ===== 评论口味（从评论设置里独立出来） ===== -->
     <section class="sec collapsible" id="sec-comments-taste">
-      <div class="sec-head"><span class="caret">▸</span><h2>评论口味</h2><span class="sub">决定哪些内容值得开口</span></div>
+      <div class="sec-head"><span class="caret">▸</span><h2>评论口味</h2><span class="sub">按偏好挑选，或为本轮视频逐条评论</span></div>
     <div class="sec-body">
       <div class="panel">
         <div class="grid">
+          <label class="check span-all">
+            <input type="checkbox" id="f-comment_taste_enabled" checked />
+            <span><span class="t">按文本框里的口味筛选</span><span class="d">勾选时按内容偏好和开口积极性挑选；取消后，为本轮选中的视频逐条生成评论，保留已填写的口味。</span></span>
+          </label>
+          <span id="c2t-mode-status" class="tip span-all" role="status" aria-live="polite"></span>
           <label class="field span-all"><span class="lbl">内容偏好（留空 = 内置口味）</span>
             <textarea id="f-comment_taste" rows="4"></textarea>
             <span class="tip">写清喜欢和不喜欢的内容，例如「喜欢反差和生活细节，不喜欢硬煽情」。语气和措辞在下方设置。</span>
@@ -2328,6 +2333,20 @@ function c2ShowErr(msg) { $("c2-err").textContent = msg ? String(msg) : ""; }
 
 let speakingStyleState = null;
 
+function syncCommentTasteForm() {
+  const enabled = $("f-comment_taste_enabled").checked;
+  $("f-comment_taste").disabled = !enabled;
+  $("f-comment_eagerness").disabled = !enabled;
+  $("c2t-mode-status").textContent = enabled
+    ? "使用下方内容偏好；修改后点击本区块的保存按钮生效。"
+    : "不读取口味文本，也不按积极性挑选；仍遵守自动评论总开关、数量上限、去重和内容检查。保存后生效。";
+}
+
+$("f-comment_taste_enabled").onchange = () => {
+  syncCommentTasteForm();
+  $("c2t-save-hint").textContent = "尚未保存";
+};
+
 function syncSpeakingStyleForm() {
   const bound = $("f-speaking_style_bind_persona").checked;
   $("f-speaking_style").disabled = bound;
@@ -2355,7 +2374,7 @@ async function loadComments(fillInputs = true) {
     speakingStyleState = s;
     const cap = s.per_day === -1 ? "不限" : `${s.today_auto ?? 0}/${s.per_day}`;
     $("c2-cards").innerHTML = [
-      card("自动评论", s.auto_comment ? `开 · ${s.eagerness}` : "关", s.auto_comment ? "warn" : ""),
+      card("自动评论", s.auto_comment ? (s.taste_enabled === false ? "开 · 逐条评论" : `开 · ${s.eagerness}`) : "关", s.auto_comment ? "warn" : ""),
       card("今天已评", cap),
       card("评论时 @", s.at || "不 @"),
       card("两条间隔", `${s.interval ?? 8} 秒`),
@@ -2367,11 +2386,13 @@ async function loadComments(fillInputs = true) {
       $("f-comment_interval_seconds").value = s.interval ?? 8;
       $("f-comment_at").value = s.at || "";
       $("f-comment_taste").value = s.taste || "";
+      $("f-comment_taste_enabled").checked = s.taste_enabled !== false;
       $("f-comment_taste").placeholder = s.taste_default || "";
       $("f-speaking_style").value = s.speaking_style || "";
       $("f-speaking_style_bind_persona").checked = s.speaking_style_bind_persona !== false;
       $("f-speaking_style").placeholder = "留空 = 用内置风格：\n" + (s.speaking_style_default || "");
     }
+    syncCommentTasteForm();
     syncSpeakingStyleForm();
 
     const rows = s.items || [];
@@ -2401,6 +2422,7 @@ async function saveComments(btnId, hintId) {
     speaking_style: $("f-speaking_style").value.trim(),
     speaking_style_bind_persona: $("f-speaking_style_bind_persona").checked,
   } : btnId === "c2t-btn-save" ? {
+    comment_taste_enabled: $("f-comment_taste_enabled").checked,
     comment_taste: $("f-comment_taste").value.trim(),
   } : {
     auto_comment: $("f-auto_comment").checked,
