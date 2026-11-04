@@ -23,7 +23,7 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 test("外观参数保留有效的 0、限制范围并拒绝无效颜色", () => {
   const { normalizeAppearance } = load();
   const settings = plain(normalizeAppearance({ x: -5, y: 110, zoom: 999, opacity: 0, strength: 0, fit: "contain", mask: "#ABCDEF" }));
-  assert.deepEqual(settings, { x: 0, y: 100, zoom: 250, opacity: 0, strength: 0, glass_enabled: true, glass: 50, sharpness: 0, fit: "contain", mask: "#abcdef" });
+  assert.deepEqual(settings, { x: 0, y: 100, zoom: 250, opacity: 0, strength: 0, glass_enabled: true, glass: 50, sharpness: 0, fit: "contain", side: "right", mask: "#abcdef" });
   const fallback = plain(normalizeAppearance({ zoom: "bad", opacity: "", mask: "url(https://example.invalid)", fit: "invalid" }));
   assert.equal(fallback.zoom, 100);
   assert.equal(fallback.opacity, 85);
@@ -34,6 +34,8 @@ test("外观参数保留有效的 0、限制范围并拒绝无效颜色", () => 
   assert.equal(normalizeAppearance({glass:150}).glass,100);
   assert.equal(normalizeAppearance({sharpness:150}).sharpness,100);
   assert.equal(normalizeAppearance({sharpness:-1}).sharpness,0);
+  assert.equal(normalizeAppearance({side:"left"}).side,"left");
+  assert.equal(normalizeAppearance({side:"invalid"}).side,"right");
 });
 
 test("流星参数支持关闭、零亮度、零数量并限制数量和速度范围", () => {

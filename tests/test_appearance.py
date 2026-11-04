@@ -57,12 +57,27 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
         for settings in ({"zoom": 99}, {"opacity": 101}, {"x": True}, {"y": float("nan")},
                          {"strength": float("inf")}, {"mask": "url(test)"}, {"fit": "invalid"},
                          {"glass": -1}, {"glass": 101}, {"glass": True}, {"glass": float("nan")},
-                         {"glass_enabled": "false"}, {"glass_enabled": 0}, {"sharpness": -1},
+                         {"glass_enabled": "false"}, {"glass_enabled": 0}, {"side": "middle"}, {"side": None}, {"side": False}, {"sharpness": -1},
                          {"sharpness": 101}, {"sharpness": True}, {"sharpness": float("nan")}):
             with self.subTest(settings=settings):
                 self.payload = {"settings": settings, "image": None}
                 self.assertIn("error", await self.instance._api_appearance_save())
         self.assertFalse((self.instance.data_dir / "appearance.json").exists())
+
+    async def test_illustration_side_persists_with_image_and_preserves_meteors(self):
+        image = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nsample").decode()
+        self.payload = {"settings": {"side": "left", "fit": "contain", "x": 76}, "image": image}
+        await self.instance._api_appearance_save()
+        state = await self.instance._api_appearance_state()
+        self.assertEqual(state["settings"]["side"], "left")
+        self.assertEqual(state["image"], image)
+        self.assertEqual(state["settings"]["x"], 76)
+        self.assertEqual(self.instance._load_meteors(), plugin.METEOR_DEFAULTS)
+        self.payload = {"settings": {**state["settings"], "side": "right"}, "image": image}
+        await self.instance._api_appearance_save()
+        self.assertEqual(self.instance._load_appearance()["settings"]["side"], "right")
+        legacy = self.instance._normalize_appearance({"fit": "contain", "x": 76})
+        self.assertEqual(legacy["side"], "right")
 
     async def test_invalid_images_are_rejected(self):
         for image in ["data:image/svg+xml;base64,PHN2Zz4=", "data:image/png;base64,!!!!",

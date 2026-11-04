@@ -59,7 +59,7 @@ DEFAULT_SPEAKING_STYLE = "像普通网友随手回的，不端着，不堆网络
 
 APPEARANCE_DEFAULTS = {
     "x": 75, "y": 50, "zoom": 100, "opacity": 85,
-    "fit": "cover", "mask": "#edf6fc", "strength": 85,
+    "fit": "cover", "side": "right", "mask": "#edf6fc", "strength": 85,
     "glass_enabled": True, "glass": 50, "sharpness": 0,
 }
 METEOR_DEFAULTS = {
@@ -258,6 +258,9 @@ class BiliScrollPlugin(Star):
         if settings.get("fit", "cover") not in ("cover", "contain"):
             raise ValueError("请选择铺满裁剪或完整显示")
         result["fit"] = settings.get("fit", "cover")
+        if settings.get("side", "right") not in ("left", "right"):
+            raise ValueError("请选择左侧或右侧插画")
+        result["side"] = settings.get("side", "right")
         color = settings.get("mask", result["mask"])
         if not isinstance(color, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
             raise ValueError("遮罩颜色格式不正确")

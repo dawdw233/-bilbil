@@ -79,10 +79,10 @@
     filter: contrast(calc(1.035 + var(--glass-level, .5) * .14)) saturate(calc(1.02 + var(--glass-level, .5) * .12)) brightness(calc(1 - var(--glass-level, .5) * .015)) var(--art-detail-filter, blur(0px)) var(--night-art-filter, brightness(1));
   }
   .hero-art img:not([src]), .preview-art img:not([src]) { display: none; }
-  .hero-art:has(img[src])::before, .preview-art:has(img[src])::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: var(--glass-level, .5); background: radial-gradient(ellipse at 92% 18%, #ffffff4d, #ffffff05 38%, transparent 65%); mask-image: linear-gradient(180deg, transparent, #000 20px); }
+  .hero-art:has(img[src])::before, .preview-art:has(img[src])::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: var(--glass-level, .5); background: radial-gradient(ellipse at var(--art-light-x, 92%) 18%, #ffffff4d, #ffffff05 38%, transparent 65%); mask-image: linear-gradient(180deg, transparent, #000 20px); }
   .hero-art:has(img[src])::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: var(--glass-level, .5); background: linear-gradient(118deg, transparent 0% 80%, #ffffff40 80.3%, #ffffff08 87%, transparent 87.3%), linear-gradient(180deg, #ffffff14, transparent 22% 82%, #d5e9f518); backdrop-filter: blur(calc(var(--glass-level, .5) * .2px)) saturate(calc(1 + var(--glass-level, .5) * .04)); -webkit-backdrop-filter: blur(calc(var(--glass-level, .5) * .2px)) saturate(calc(1 + var(--glass-level, .5) * .04)); mask-image: linear-gradient(90deg, transparent, #000 28%), linear-gradient(180deg, transparent, #000 20px); mask-composite: intersect; }
   .hero-wash, .preview-wash { pointer-events: none; position: absolute; inset: 0;
-    background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(90deg, rgb(var(--art-mask)) 0%,
+    background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(var(--art-direction, 90deg), rgb(var(--art-mask)) 0%,
       rgba(var(--art-mask), var(--art-mask-strength)) 36%, rgba(var(--art-mask), calc(var(--art-mask-strength) * .36)) 72%, rgba(var(--art-mask), .06) 100%);
   }
   .hero-wash::after, .preview-wash::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, #55758d12, transparent 18px), linear-gradient(0deg, rgba(var(--art-edge-tone, var(--art-mask)), .32), transparent 30px); }
@@ -337,11 +337,11 @@
   .study-shell .hd { overflow: hidden; }
   .art-float-plane { --art-start: 26%; position: absolute; inset: 0 0 0 var(--art-start); z-index: 0; isolation: isolate; pointer-events: none; filter: drop-shadow(0 8px 12px var(--art-depth-shadow, #233a4924)); }
   .art-float-plane:not(:has(img[src])) { display: none; }
-  .art-float-plane > .hero-art { inset: 0; z-index: 0; border-radius: 0; mask-image: linear-gradient(90deg, transparent, #000 36%); }
+  .art-float-plane > .hero-art { inset: 0; z-index: 0; border-radius: 0; mask-image: linear-gradient(var(--art-direction, 90deg), transparent, #000 36%); }
   .art-canvas .hero-readability { z-index: 0; border-radius: inherit; }
   @media (max-width: 760px) { .art-float-plane { --art-start: 15%; filter: drop-shadow(0 5px 8px var(--art-depth-shadow, #233a491f)); } }
   @media (max-width: 480px) { .art-float-plane { --art-start: 24%; } }
-  .art-canvas .hero-readability { background: linear-gradient(90deg, #f8fcfff9 0%, #f7fbfff0 28%, #f5faffb8 45%, #f2f8fd3b 62%, transparent 78%); }
+  .art-canvas .hero-readability { background: linear-gradient(var(--art-direction, 90deg), #f8fcfff9 0%, #f7fbfff0 28%, #f5faffb8 45%, #f2f8fd3b 62%, transparent 78%); }
   .study-shell .hero-eyebrow { font-size: 10px; letter-spacing: .14em; color: #4f6b81; }
   .study-shell .hero-note { margin: 0; max-width: 290px; font: 12px/1.9 "Segoe UI", "Microsoft YaHei", sans-serif; letter-spacing: .01em; color: #4d697f; }
   .hero-tags { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 18px; }
@@ -423,7 +423,7 @@
     .toolbar-path { font-size: 10px; } .toolbar-actions { margin-left: auto; }
     .study-shell .hd { min-height: 270px; padding: 27px; flex-direction: row; align-items: center; margin-bottom: 20px; }
     .study-shell .hd-main { width: 64%; max-width: 380px; }
-    .art-canvas .hero-readability { background: linear-gradient(90deg, #f8fcff 0%, #f7fbfffa 34%, #f5faffcf 53%, #f2f8fd4d 74%, transparent 91%); }
+    .art-canvas .hero-readability { background: linear-gradient(var(--art-direction, 90deg), #f8fcff 0%, #f7fbfffa 34%, #f5faffcf 53%, #f2f8fd4d 74%, transparent 91%); }
     .study-shell h1 { font-size: 34px; line-height: 1.5; }
     .study-shell .hero-note { font-size: 13px; line-height: 1.85; }
     .hero-tag { font-size: 11px; padding: 3px 8px; }
@@ -465,7 +465,12 @@
     .study-shell .top-row { grid-template-columns: 1fr; }
   }
 
-  :root[data-art-fit="contain"] .art-canvas .hero-art img { position: absolute; top: 0; right: 0; width: auto; max-width: 100%; object-position: 100% var(--art-y); transform-origin: 100% var(--art-y); mask-image: linear-gradient(90deg, transparent, #000 24%); }
+  :root[data-art-fit="contain"] .art-canvas .hero-art img { position: absolute; top: 0; right: 0; width: auto; max-width: 100%; object-position: 100% var(--art-y); transform-origin: 100% var(--art-y); mask-image: linear-gradient(var(--art-direction, 90deg), transparent, #000 24%); }
+  :root[data-art-side="left"] { --art-direction: 270deg; --art-light-x: 8%; }
+  :root[data-art-side="left"] .art-float-plane { inset: 0 var(--art-start) 0 0; }
+  :root[data-art-side="left"] .study-shell .hd-main { margin-left: auto; }
+  :root[data-art-side="left"] .preview-label { left: auto; right: 24px; }
+  :root[data-art-side="left"][data-art-fit="contain"] .art-canvas .hero-art img { left: 0; right: auto; object-position: 0% var(--art-y); transform-origin: 0% var(--art-y); }
 
   :root[data-study-theme="night"] {
     color-scheme: dark; --ink: #f0f6fb; --muted: #d3e0eb; --line: #afc6d833; --line-2: #7893aa;
@@ -487,8 +492,8 @@
   :root[data-study-theme="night"] .study-shell .hd { background: linear-gradient(112deg, #3a5369, #4d687f 62%, #526e84); }
   :root[data-study-theme="night"] .art-float-plane { --art-depth-shadow: #08152345; }
   :root[data-study-theme="night"] { --art-edge-tone: 58, 83, 105; }
-  :root[data-study-theme="night"] .art-canvas .hero-readability { background: linear-gradient(90deg, #3a5369 0%, #3a5369f7 34%, #405c7399 53%, #4d687f33 74%, transparent 91%); }
-  :root[data-study-theme="night"] :is(.hero-wash, .preview-wash) { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(90deg, #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
+  :root[data-study-theme="night"] .art-canvas .hero-readability { background: linear-gradient(var(--art-direction, 90deg), #3a5369 0%, #3a5369f7 34%, #405c7399 53%, #4d687f33 74%, transparent 91%); }
+  :root[data-study-theme="night"] :is(.hero-wash, .preview-wash) { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(var(--art-direction, 90deg), #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
   :root[data-study-theme="night"] :is(.hero-art, .preview-art)::before, :root[data-study-theme="night"] :is(.hero-art, .preview-art)::after { opacity: calc(var(--glass-level, .5) * .45); }
   :root[data-study-theme="night"] :is(.hero-tag, .stat-icon, .tag, .check, .md blockquote, code, th) { background: #46627bb3; border-color: #9db6ca66; color: #e0ebf3; }
   :root[data-study-theme="night"] .hero-tag::before { background: #95bdda; }
@@ -1162,6 +1167,7 @@
       </div>
     </div>
     <div class="art-controls">
+      <label class="field span-all" for="art-side"><span class="lbl">插画摆放</span><select id="art-side"><option value="right">右侧插画 · 文字在左</option><option value="left">左侧插画 · 文字在右</option></select></label>
       <label class="field span-all" for="art-fit"><span class="lbl">裁剪方式</span><select id="art-fit"><option value="cover">铺满画面 · 超出部分裁剪</option><option value="contain">完整显示 · 保留整张图片</option></select></label>
       <label class="range-field" for="art-x"><span class="range-label">水平位置<output id="art-x-value" for="art-x">50%</output></span><input id="art-x" type="range" min="0" max="100" step="1" value="50" /></label>
       <label class="range-field" for="art-y"><span class="range-label">垂直位置<output id="art-y-value" for="art-y">50%</output></span><input id="art-y" type="range" min="0" max="100" step="1" value="50" /></label>
@@ -1419,7 +1425,7 @@ meteorDialog.addEventListener("close", () => { renderMeteors(savedMeteors); });
 </script>
 <script type="module" id="appearance-script">
 // 通过插件 bridge 保存外观，兼容 AstrBot 的隔离面板。
-const ART_DEFAULTS = Object.freeze({ x: 75, y: 50, zoom: 100, opacity: 85, fit: "cover", mask: "#edf6fc", strength: 85, glass_enabled: true, glass: 50, sharpness: 0 });
+const ART_DEFAULTS = Object.freeze({ x: 75, y: 50, zoom: 100, opacity: 85, fit: "cover", side: "right", mask: "#edf6fc", strength: 85, glass_enabled: true, glass: 50, sharpness: 0 });
 function normalizeAppearance(raw = {}) {
   const clamp = (key, min, max) => {
     const value = Number(raw[key]);
@@ -1432,6 +1438,7 @@ function normalizeAppearance(raw = {}) {
     glass_enabled: raw.glass_enabled !== false, glass: clamp("glass", 0, 100),
     sharpness: clamp("sharpness", 0, 100),
     fit: raw.fit === "contain" ? "contain" : "cover",
+    side: raw.side === "left" ? "left" : "right",
     mask: /^#[0-9a-f]{6}$/i.test(raw.mask || "") ? raw.mask.toLowerCase() : ART_DEFAULTS.mask,
   };
 }
@@ -1502,6 +1509,7 @@ function artStatus(text, error = false) {
 function renderAppearance(settings, illustration) {
   const root = document.documentElement.style;
   document.documentElement.dataset.artFit = settings.fit;
+  document.documentElement.dataset.artSide = settings.side;
   root.setProperty("--art-x", settings.x + "%");
   root.setProperty("--art-y", settings.y + "%");
   root.setProperty("--art-scale", String(settings.zoom / 100));
@@ -1534,11 +1542,11 @@ function syncAppearanceControls() {
     artEl("art-" + key + "-value").textContent = draftAppearance[key] + "%";
     slider.style.setProperty("--range-progress", ((draftAppearance[key] - Number(slider.min)) / (Number(slider.max) - Number(slider.min)) * 100) + "%");
   }
-  const imageControls = ["x", "y", "zoom", "opacity", "fit", "sharpness"];
+  const imageControls = ["x", "y", "zoom", "opacity", "fit", "side", "sharpness"];
   for (const key of imageControls) artEl("art-" + key).disabled = !draftIllustration || artBusy;
   if (draftAppearance.fit === "contain") {
     artEl("art-x").disabled = true;
-    artEl("art-x-value").textContent = "自动靠右";
+    artEl("art-x-value").textContent = draftAppearance.side === "left" ? "自动靠左" : "自动靠右";
   }
   artEl("art-glass_enabled").disabled = !draftIllustration || artBusy;
   artEl("art-glass").disabled = !draftIllustration || !draftAppearance.glass_enabled || artBusy;
@@ -1550,7 +1558,7 @@ function syncAppearanceControls() {
   artEl("art-reset").disabled = artBusy;
   artEl("art-upload-label").textContent = draftIllustration ? "替换插画" : "上传插画";
   artEl("art-empty-note").textContent = draftIllustration
-    ? (draftAppearance.fit === "contain" ? "完整显示时插画自动靠右，留白放在文字侧；切回铺满后恢复原水平位置。" : "调整后可在预览和页首查看效果。")
+    ? (draftAppearance.fit === "contain" ? `完整显示时插画自动靠${draftAppearance.side === "left" ? "左" : "右"}，留白放在文字侧；切回铺满后恢复原水平位置。` : "调整后可在预览和页首查看效果。")
     : "尚未设置插画，当前使用柔和渐变背景。";
   renderAppearance(draftAppearance, draftIllustration);
 }
