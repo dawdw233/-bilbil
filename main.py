@@ -59,8 +59,9 @@ DEFAULT_SPEAKING_STYLE = "像普通网友随手回的，不端着，不堆网络
 
 APPEARANCE_DEFAULTS = {
     "x": 75, "y": 50, "zoom": 100, "opacity": 85,
-    "fit": "cover", "side": "right", "mask": "#edf6fc", "strength": 85,
+    "fit": "cover", "mask": "#edf6fc", "strength": 85,
     "glass_enabled": True, "glass": 50, "sharpness": 0,
+    "left_x": 50, "left_y": 50, "left_zoom": 100, "left_opacity": 65,
 }
 METEOR_DEFAULTS = {
     "meteor_enabled": True, "meteor_count": 128, "meteor_brightness": 72, "meteor_speed": 100,
@@ -246,7 +247,8 @@ class BiliScrollPlugin(Star):
             raise ValueError("外观参数格式不正确")
         result = dict(APPEARANCE_DEFAULTS)
         for key, lo, hi in (("x", 0, 100), ("y", 0, 100), ("zoom", 100, 250),
-                            ("opacity", 0, 100), ("strength", 0, 100), ("glass", 0, 100), ("sharpness", 0, 100)):
+                            ("opacity", 0, 100), ("strength", 0, 100), ("glass", 0, 100), ("sharpness", 0, 100),
+                            ("left_x", 0, 100), ("left_y", 0, 100), ("left_zoom", 100, 250), ("left_opacity", 0, 100)):
             value = settings.get(key, result[key])
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not lo <= value <= hi:
                 raise ValueError(f"{key} 必须在 {lo}~{hi} 之间")
@@ -258,9 +260,6 @@ class BiliScrollPlugin(Star):
         if settings.get("fit", "cover") not in ("cover", "contain"):
             raise ValueError("请选择铺满裁剪或完整显示")
         result["fit"] = settings.get("fit", "cover")
-        if settings.get("side", "right") not in ("left", "right"):
-            raise ValueError("请选择左侧或右侧插画")
-        result["side"] = settings.get("side", "right")
         color = settings.get("mask", result["mask"])
         if not isinstance(color, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
             raise ValueError("遮罩颜色格式不正确")
@@ -274,7 +273,7 @@ class BiliScrollPlugin(Star):
             image = "data:image/png;base64," + base64.b64encode(raw).decode("ascii")
         except OSError:
             pass
-        return {"settings": dict(APPEARANCE_DEFAULTS), "image": image}
+        return {"settings": dict(APPEARANCE_DEFAULTS), "image": image, "left_image": None}
 
     def _load_appearance(self) -> dict:
         try:
@@ -283,7 +282,8 @@ class BiliScrollPlugin(Star):
             # 老版空白封面升级为新默认插画；新版主动移除插画后保留渐变背景。
             if image is None and data.get("version", 1) < 2:
                 image = self._default_appearance()["image"]
-            return {"settings": self._normalize_appearance(data.get("settings", {})), "image": image}
+            return {"settings": self._normalize_appearance(data.get("settings", {})), "image": image,
+                    "left_image": data.get("left_image")}
         except (OSError, ValueError, TypeError, AttributeError):
             return self._default_appearance()
 
@@ -489,6 +489,13 @@ class BiliScrollPlugin(Star):
             settings = self._normalize_appearance(payload.get("settings", {}))
             image = payload.get("image")
             self._validate_panel_image(image)
+            stored = self._load_appearance()
+            left_image = payload.get("left_image", stored.get("left_image"))
+            self._validate_panel_image(left_image, "左侧插画")
+            # 旧面板保存右侧外观时，不覆盖新版独立添加的左图及其位置。
+            for key in ("left_x", "left_y", "left_zoom", "left_opacity"):
+                if key not in payload.get("settings", {}):
+                    settings[key] = stored["settings"][key]
         except (ValueError, binascii.Error) as exc:
             return error_response(str(exc))
         target = self.data_dir / "appearance.json"
@@ -500,7 +507,7 @@ class BiliScrollPlugin(Star):
             pass
         temporary = target.with_name(f"appearance.{uuid.uuid4().hex}.tmp")
         try:
-            temporary.write_text(json.dumps({"version": 2, "settings": settings, "image": image}, ensure_ascii=False), encoding="utf-8")
+            temporary.write_text(json.dumps({"version": 3, "settings": settings, "image": image, "left_image": left_image}, ensure_ascii=False), encoding="utf-8")
             temporary.replace(target)
         except OSError:
             logger.exception("[bili-scroll] 保存面板外观失败")

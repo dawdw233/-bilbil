@@ -72,17 +72,17 @@
   .hd-act { position: relative; z-index: 1; align-self: flex-end; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; max-width: 46%; }
   .row-btns { display: flex; flex-wrap: wrap; gap: 9px; justify-content: flex-end; }
   .hero-art { position: absolute; inset: 0 0 0 40%; z-index: -1; overflow: hidden; pointer-events: none; }
-  .hero-art img, .preview-art img {
+  .hero-art img, .preview-art img, .left-illustration img {
     display: block; width: 100%; height: 100%; object-fit: var(--art-fit);
     object-position: var(--art-x) var(--art-y); opacity: var(--art-opacity);
     transform: scale(var(--art-scale)); transform-origin: var(--art-x) var(--art-y);
     filter: contrast(calc(1.035 + var(--glass-level, .5) * .14)) saturate(calc(1.02 + var(--glass-level, .5) * .12)) brightness(calc(1 - var(--glass-level, .5) * .015)) var(--art-detail-filter, blur(0px)) var(--night-art-filter, brightness(1));
   }
   .hero-art img:not([src]), .preview-art img:not([src]) { display: none; }
-  .hero-art:has(img[src])::before, .preview-art:has(img[src])::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: var(--glass-level, .5); background: radial-gradient(ellipse at var(--art-light-x, 92%) 18%, #ffffff4d, #ffffff05 38%, transparent 65%); mask-image: linear-gradient(180deg, transparent, #000 20px); }
+  .hero-art:has(img[src])::before, .preview-art:has(img[src])::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: var(--glass-level, .5); background: radial-gradient(ellipse at 92% 18%, #ffffff4d, #ffffff05 38%, transparent 65%); mask-image: linear-gradient(180deg, transparent, #000 20px); }
   .hero-art:has(img[src])::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: var(--glass-level, .5); background: linear-gradient(118deg, transparent 0% 80%, #ffffff40 80.3%, #ffffff08 87%, transparent 87.3%), linear-gradient(180deg, #ffffff14, transparent 22% 82%, #d5e9f518); backdrop-filter: blur(calc(var(--glass-level, .5) * .2px)) saturate(calc(1 + var(--glass-level, .5) * .04)); -webkit-backdrop-filter: blur(calc(var(--glass-level, .5) * .2px)) saturate(calc(1 + var(--glass-level, .5) * .04)); mask-image: linear-gradient(90deg, transparent, #000 28%), linear-gradient(180deg, transparent, #000 20px); mask-composite: intersect; }
   .hero-wash, .preview-wash { pointer-events: none; position: absolute; inset: 0;
-    background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(var(--art-direction, 90deg), rgb(var(--art-mask)) 0%,
+    background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(90deg, rgb(var(--art-mask)) 0%,
       rgba(var(--art-mask), var(--art-mask-strength)) 36%, rgba(var(--art-mask), calc(var(--art-mask-strength) * .36)) 72%, rgba(var(--art-mask), .06) 100%);
   }
   .hero-wash::after, .preview-wash::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, #55758d12, transparent 18px), linear-gradient(0deg, rgba(var(--art-edge-tone, var(--art-mask)), .32), transparent 30px); }
@@ -337,11 +337,14 @@
   .study-shell .hd { overflow: hidden; }
   .art-float-plane { --art-start: 26%; position: absolute; inset: 0 0 0 var(--art-start); z-index: 0; isolation: isolate; pointer-events: none; filter: drop-shadow(0 8px 12px var(--art-depth-shadow, #233a4924)); }
   .art-float-plane:not(:has(img[src])) { display: none; }
-  .art-float-plane > .hero-art { inset: 0; z-index: 0; border-radius: 0; mask-image: linear-gradient(var(--art-direction, 90deg), transparent, #000 36%); }
+  .left-illustration { position: absolute; inset: 0 42% 0 0; z-index: 0; overflow: hidden; pointer-events: none; mask-image: linear-gradient(90deg, #000 58%, transparent); }
+  .left-illustration:not(:has(img[src])) { display: none; }
+  .left-illustration img { object-fit: cover; object-position: var(--left-art-x, 50%) var(--left-art-y, 50%); opacity: var(--left-art-opacity, .65); transform: scale(var(--left-art-scale, 1)); transform-origin: var(--left-art-x, 50%) var(--left-art-y, 50%); }
+  .art-float-plane > .hero-art { inset: 0; z-index: 0; border-radius: 0; mask-image: linear-gradient(90deg, transparent, #000 36%); }
   .art-canvas .hero-readability { z-index: 0; border-radius: inherit; }
   @media (max-width: 760px) { .art-float-plane { --art-start: 15%; filter: drop-shadow(0 5px 8px var(--art-depth-shadow, #233a491f)); } }
   @media (max-width: 480px) { .art-float-plane { --art-start: 24%; } }
-  .art-canvas .hero-readability { background: linear-gradient(var(--art-direction, 90deg), #f8fcfff9 0%, #f7fbfff0 28%, #f5faffb8 45%, #f2f8fd3b 62%, transparent 78%); }
+  .art-canvas .hero-readability { background: linear-gradient(90deg, #f8fcfff9 0%, #f7fbfff0 28%, #f5faffb8 45%, #f2f8fd3b 62%, transparent 78%); }
   .study-shell .hero-eyebrow { font-size: 10px; letter-spacing: .14em; color: #4f6b81; }
   .study-shell .hero-note { margin: 0; max-width: 290px; font: 12px/1.9 "Segoe UI", "Microsoft YaHei", sans-serif; letter-spacing: .01em; color: #4d697f; }
   .hero-tags { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 18px; }
@@ -423,7 +426,7 @@
     .toolbar-path { font-size: 10px; } .toolbar-actions { margin-left: auto; }
     .study-shell .hd { min-height: 270px; padding: 27px; flex-direction: row; align-items: center; margin-bottom: 20px; }
     .study-shell .hd-main { width: 64%; max-width: 380px; }
-    .art-canvas .hero-readability { background: linear-gradient(var(--art-direction, 90deg), #f8fcff 0%, #f7fbfffa 34%, #f5faffcf 53%, #f2f8fd4d 74%, transparent 91%); }
+    .art-canvas .hero-readability { background: linear-gradient(90deg, #f8fcff 0%, #f7fbfffa 34%, #f5faffcf 53%, #f2f8fd4d 74%, transparent 91%); }
     .study-shell h1 { font-size: 34px; line-height: 1.5; }
     .study-shell .hero-note { font-size: 13px; line-height: 1.85; }
     .hero-tag { font-size: 11px; padding: 3px 8px; }
@@ -465,12 +468,8 @@
     .study-shell .top-row { grid-template-columns: 1fr; }
   }
 
-  :root[data-art-fit="contain"] .art-canvas .hero-art img { position: absolute; top: 0; right: 0; width: auto; max-width: 100%; object-position: 100% var(--art-y); transform-origin: 100% var(--art-y); mask-image: linear-gradient(var(--art-direction, 90deg), transparent, #000 24%); }
-  :root[data-art-side="left"] { --art-direction: 270deg; --art-light-x: 8%; }
-  :root[data-art-side="left"] .art-float-plane { inset: 0 var(--art-start) 0 0; }
-  :root[data-art-side="left"] .study-shell .hd-main { margin-left: auto; }
-  :root[data-art-side="left"] .preview-label { left: auto; right: 24px; }
-  :root[data-art-side="left"][data-art-fit="contain"] .art-canvas .hero-art img { left: 0; right: auto; object-position: 0% var(--art-y); transform-origin: 0% var(--art-y); }
+  :root[data-art-fit="contain"] .art-canvas .hero-art img { position: absolute; top: 0; right: 0; width: auto; max-width: 100%; object-position: 100% var(--art-y); transform-origin: 100% var(--art-y); mask-image: linear-gradient(90deg, transparent, #000 24%); }
+  :root[data-left-art="true"] .art-canvas .hero-readability { background: linear-gradient(90deg, #f8fcffa6 0%, #f7fbffb3 30%, #f5faff94 45%, #f2f8fd3b 65%, transparent 82%); }
 
   :root[data-study-theme="night"] {
     color-scheme: dark; --ink: #f0f6fb; --muted: #d3e0eb; --line: #afc6d833; --line-2: #7893aa;
@@ -492,8 +491,9 @@
   :root[data-study-theme="night"] .study-shell .hd { background: linear-gradient(112deg, #3a5369, #4d687f 62%, #526e84); }
   :root[data-study-theme="night"] .art-float-plane { --art-depth-shadow: #08152345; }
   :root[data-study-theme="night"] { --art-edge-tone: 58, 83, 105; }
-  :root[data-study-theme="night"] .art-canvas .hero-readability { background: linear-gradient(var(--art-direction, 90deg), #3a5369 0%, #3a5369f7 34%, #405c7399 53%, #4d687f33 74%, transparent 91%); }
-  :root[data-study-theme="night"] :is(.hero-wash, .preview-wash) { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(var(--art-direction, 90deg), #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
+  :root[data-study-theme="night"] .art-canvas .hero-readability { background: linear-gradient(90deg, #3a5369 0%, #3a5369f7 34%, #405c7399 53%, #4d687f33 74%, transparent 91%); }
+  :root[data-study-theme="night"][data-left-art="true"] .art-canvas .hero-readability { background: linear-gradient(90deg, #3a5369d9 0%, #3a5369e0 30%, #405c73b8 47%, #4d687f33 74%, transparent 91%); }
+  :root[data-study-theme="night"] :is(.hero-wash, .preview-wash) { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(90deg, #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
   :root[data-study-theme="night"] :is(.hero-art, .preview-art)::before, :root[data-study-theme="night"] :is(.hero-art, .preview-art)::after { opacity: calc(var(--glass-level, .5) * .45); }
   :root[data-study-theme="night"] :is(.hero-tag, .stat-icon, .tag, .check, .md blockquote, code, th) { background: #46627bb3; border-color: #9db6ca66; color: #e0ebf3; }
   :root[data-study-theme="night"] .hero-tag::before { background: #95bdda; }
@@ -594,6 +594,7 @@
       </div>
     </div>
     <header class="hd art-canvas" id="top">
+      <div class="left-illustration" aria-hidden="true"><img id="hero-left-illustration" alt="" decoding="async" /></div>
       <div class="art-float-plane" aria-hidden="true"><div class="hero-art"><img id="hero-illustration" alt="" decoding="async" /><div class="hero-wash"></div></div></div><div class="hero-readability" aria-hidden="true"></div>
       <div class="hd-main"><div class="hero-eyebrow">A QUIET CORNER · BILIBILI JOURNAL</div><h1><span id="study-greeting">欢迎回来，</span><br/><strong data-room-name>一隅书房</strong></h1><p class="hero-note">今日也留一点闲时，看看世界的有趣。<br/>让喜欢的内容，在这里慢慢留下来。</p><div class="hero-tags"><span class="hero-tag">B站观影手记</span><span class="hero-tag" id="study-style-tag">人设相伴</span></div></div>
     </header>
@@ -1148,18 +1149,32 @@
   <div class="appearance-content">
     <div class="appearance-preview-col">
       <div class="art-preview art-canvas" aria-label="插画效果预览">
+        <div class="left-illustration" aria-hidden="true"><img id="preview-left-illustration" alt="" /></div>
         <div class="art-float-plane" aria-hidden="true"><div class="hero-art preview-art"><img id="preview-illustration" alt="" /><div class="hero-wash preview-wash"></div></div></div><div class="hero-readability" aria-hidden="true"></div>
         <div class="preview-label"><strong>刷 B站</strong><span>留一点闲时，遇见有趣。</span></div>
       </div>
       <div class="art-file-actions">
         <button type="button" id="art-upload"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4M4 16v4h16v-4"/></svg><span id="art-upload-label">上传插画</span></button>
-        <button type="button" id="art-remove">移除插画</button>
-        <button type="button" id="art-recenter">重置位置</button>
+        <button type="button" id="art-remove">移除右侧插画</button>
+        <button type="button" id="art-recenter">重置右图位置</button>
       </div>
-      <input type="file" id="art-file" class="sr-only" tabindex="-1" aria-label="选择插画文件" accept="image/png,image/jpeg,image/webp" />
+      <input type="file" id="art-file" class="sr-only" tabindex="-1" aria-label="选择右侧插画文件" accept="image/png,image/jpeg,image/webp" />
       <div class="tip">支持 PNG、JPG、WebP，最大 20 MB。</div>
       <div class="tip" id="art-empty-note">尚未设置插画，当前使用柔和渐变背景。</div>
       <div id="art-status" role="status" aria-live="polite"></div>
+      <div class="glass-controls" role="group" aria-labelledby="left-art-title">
+        <h3 id="left-art-title">左侧插画</h3>
+        <div class="tip">另外选一张图片放在文字后方，与右侧插画同时显示；两张图片可分别替换或移除。</div>
+        <div class="art-file-actions">
+          <button type="button" id="art-left-upload"><span id="art-left-upload-label">上传左侧插画</span></button>
+          <button type="button" id="art-left-remove">移除左侧插画</button>
+        </div>
+        <input type="file" id="art-left-file" class="sr-only" tabindex="-1" aria-label="选择左侧插画文件" accept="image/png,image/jpeg,image/webp" />
+        <label class="range-field" for="art-left_x"><span class="range-label">左图水平位置<output id="art-left_x-value" for="art-left_x">50%</output></span><input id="art-left_x" type="range" min="0" max="100" step="1" value="50" /></label>
+        <label class="range-field" for="art-left_y"><span class="range-label">左图垂直位置<output id="art-left_y-value" for="art-left_y">50%</output></span><input id="art-left_y" type="range" min="0" max="100" step="1" value="50" /></label>
+        <label class="range-field" for="art-left_zoom"><span class="range-label">左图缩放<output id="art-left_zoom-value" for="art-left_zoom">100%</output></span><input id="art-left_zoom" type="range" min="100" max="250" step="1" value="100" /></label>
+        <label class="range-field" for="art-left_opacity"><span class="range-label">左图不透明度<output id="art-left_opacity-value" for="art-left_opacity">65%</output></span><input id="art-left_opacity" type="range" min="0" max="100" step="1" value="65" /></label>
+      </div>
       <div class="glass-controls">
         <label class="check" for="art-glass_enabled"><input id="art-glass_enabled" type="checkbox" aria-label="开启玻璃质感" checked /><span><strong>开启玻璃质感</strong><span class="tip">为插画叠加轻透反光和柔光，可随时关闭。</span></span></label>
         <label class="range-field" for="art-glass"><span class="range-label">玻璃质感强度<output id="art-glass-value" for="art-glass">50%</output></span><input id="art-glass" type="range" min="0" max="100" step="1" value="50" aria-label="玻璃质感强度" /><span class="tip">0% 无玻璃效果；数值越高，反光和柔光越明显。</span></label>
@@ -1167,8 +1182,7 @@
       </div>
     </div>
     <div class="art-controls">
-      <label class="field span-all" for="art-side"><span class="lbl">插画摆放</span><select id="art-side"><option value="right">右侧插画 · 文字在左</option><option value="left">左侧插画 · 文字在右</option></select></label>
-      <label class="field span-all" for="art-fit"><span class="lbl">裁剪方式</span><select id="art-fit"><option value="cover">铺满画面 · 超出部分裁剪</option><option value="contain">完整显示 · 保留整张图片</option></select></label>
+      <label class="field span-all" for="art-fit"><span class="lbl">右侧插画裁剪方式</span><select id="art-fit"><option value="cover">铺满画面 · 超出部分裁剪</option><option value="contain">完整显示 · 保留整张图片</option></select></label>
       <label class="range-field" for="art-x"><span class="range-label">水平位置<output id="art-x-value" for="art-x">50%</output></span><input id="art-x" type="range" min="0" max="100" step="1" value="50" /></label>
       <label class="range-field" for="art-y"><span class="range-label">垂直位置<output id="art-y-value" for="art-y">50%</output></span><input id="art-y" type="range" min="0" max="100" step="1" value="50" /></label>
       <label class="range-field" for="art-zoom"><span class="range-label">图片缩放<output id="art-zoom-value" for="art-zoom">100%</output></span><input id="art-zoom" type="range" min="100" max="250" step="1" value="100" /></label>
@@ -1425,7 +1439,7 @@ meteorDialog.addEventListener("close", () => { renderMeteors(savedMeteors); });
 </script>
 <script type="module" id="appearance-script">
 // 通过插件 bridge 保存外观，兼容 AstrBot 的隔离面板。
-const ART_DEFAULTS = Object.freeze({ x: 75, y: 50, zoom: 100, opacity: 85, fit: "cover", side: "right", mask: "#edf6fc", strength: 85, glass_enabled: true, glass: 50, sharpness: 0 });
+const ART_DEFAULTS = Object.freeze({ x: 75, y: 50, zoom: 100, opacity: 85, fit: "cover", mask: "#edf6fc", strength: 85, glass_enabled: true, glass: 50, sharpness: 0, left_x: 50, left_y: 50, left_zoom: 100, left_opacity: 65 });
 function normalizeAppearance(raw = {}) {
   const clamp = (key, min, max) => {
     const value = Number(raw[key]);
@@ -1437,8 +1451,9 @@ function normalizeAppearance(raw = {}) {
     opacity: clamp("opacity", 0, 100), strength: clamp("strength", 0, 100),
     glass_enabled: raw.glass_enabled !== false, glass: clamp("glass", 0, 100),
     sharpness: clamp("sharpness", 0, 100),
+    left_x: clamp("left_x", 0, 100), left_y: clamp("left_y", 0, 100),
+    left_zoom: clamp("left_zoom", 100, 250), left_opacity: clamp("left_opacity", 0, 100),
     fit: raw.fit === "contain" ? "contain" : "cover",
-    side: raw.side === "left" ? "left" : "right",
     mask: /^#[0-9a-f]{6}$/i.test(raw.mask || "") ? raw.mask.toLowerCase() : ART_DEFAULTS.mask,
   };
 }
@@ -1496,6 +1511,9 @@ let draftAppearance = { ...ART_DEFAULTS };
 let savedIllustration = null;
 let draftIllustration = null;
 let displayedIllustration = null;
+let savedLeftIllustration = null;
+let draftLeftIllustration = null;
+let displayedLeftIllustration = null;
 let artRevision = 0;
 let artBusy = false;
 let artToastTimer;
@@ -1506,10 +1524,14 @@ function artStatus(text, error = false) {
   artEl("art-status").textContent = text;
   artEl("art-status").classList.toggle("bad", error);
 }
-function renderAppearance(settings, illustration) {
+function renderAppearance(settings, illustration, leftIllustration = null) {
   const root = document.documentElement.style;
   document.documentElement.dataset.artFit = settings.fit;
-  document.documentElement.dataset.artSide = settings.side;
+  document.documentElement.dataset.leftArt = leftIllustration ? "true" : "false";
+  root.setProperty("--left-art-x", settings.left_x + "%");
+  root.setProperty("--left-art-y", settings.left_y + "%");
+  root.setProperty("--left-art-scale", String(settings.left_zoom / 100));
+  root.setProperty("--left-art-opacity", String(settings.left_opacity / 100));
   root.setProperty("--art-x", settings.x + "%");
   root.setProperty("--art-y", settings.y + "%");
   root.setProperty("--art-scale", String(settings.zoom / 100));
@@ -1527,6 +1549,13 @@ function renderAppearance(settings, illustration) {
     }
     displayedIllustration = illustration;
   }
+  if (leftIllustration !== displayedLeftIllustration) {
+    for (const id of ["hero-left-illustration", "preview-left-illustration"]) {
+      if (leftIllustration) artEl(id).src = leftIllustration;
+      else artEl(id).removeAttribute("src");
+    }
+    displayedLeftIllustration = leftIllustration;
+  }
   renderStudyAvatar();
 }
 function fillAppearanceControls() {
@@ -1537,30 +1566,36 @@ function fillAppearanceControls() {
   syncAppearanceControls();
 }
 function syncAppearanceControls() {
-  for (const key of ["x", "y", "zoom", "opacity", "strength", "glass", "sharpness"]) {
+  for (const key of ["x", "y", "zoom", "opacity", "strength", "glass", "sharpness", "left_x", "left_y", "left_zoom", "left_opacity"]) {
     const slider = artEl("art-" + key);
     artEl("art-" + key + "-value").textContent = draftAppearance[key] + "%";
     slider.style.setProperty("--range-progress", ((draftAppearance[key] - Number(slider.min)) / (Number(slider.max) - Number(slider.min)) * 100) + "%");
   }
-  const imageControls = ["x", "y", "zoom", "opacity", "fit", "side", "sharpness"];
+  const imageControls = ["x", "y", "zoom", "opacity", "fit", "sharpness"];
   for (const key of imageControls) artEl("art-" + key).disabled = !draftIllustration || artBusy;
   if (draftAppearance.fit === "contain") {
     artEl("art-x").disabled = true;
-    artEl("art-x-value").textContent = draftAppearance.side === "left" ? "自动靠左" : "自动靠右";
+    artEl("art-x-value").textContent = "自动靠右";
   }
-  artEl("art-glass_enabled").disabled = !draftIllustration || artBusy;
-  artEl("art-glass").disabled = !draftIllustration || !draftAppearance.glass_enabled || artBusy;
+  for (const key of ["left_x", "left_y", "left_zoom", "left_opacity"]) artEl("art-" + key).disabled = !draftLeftIllustration || artBusy;
+  const hasIllustration = Boolean(draftIllustration || draftLeftIllustration);
+  artEl("art-sharpness").disabled = !hasIllustration || artBusy;
+  artEl("art-glass_enabled").disabled = !hasIllustration || artBusy;
+  artEl("art-glass").disabled = !hasIllustration || !draftAppearance.glass_enabled || artBusy;
   for (const key of ["mask", "strength"]) artEl("art-" + key).disabled = artBusy;
   artEl("art-remove").disabled = !draftIllustration || artBusy;
   artEl("art-recenter").disabled = !draftIllustration || artBusy;
   artEl("art-upload").disabled = artBusy;
+  artEl("art-left-upload").disabled = artBusy;
+  artEl("art-left-remove").disabled = !draftLeftIllustration || artBusy;
+  artEl("art-left-upload-label").textContent = draftLeftIllustration ? "替换左侧插画" : "上传左侧插画";
   artEl("art-save").disabled = artBusy;
   artEl("art-reset").disabled = artBusy;
-  artEl("art-upload-label").textContent = draftIllustration ? "替换插画" : "上传插画";
+  artEl("art-upload-label").textContent = draftIllustration ? "替换右侧插画" : "上传右侧插画";
   artEl("art-empty-note").textContent = draftIllustration
-    ? (draftAppearance.fit === "contain" ? `完整显示时插画自动靠${draftAppearance.side === "left" ? "左" : "右"}，留白放在文字侧；切回铺满后恢复原水平位置。` : "调整后可在预览和页首查看效果。")
-    : "尚未设置插画，当前使用柔和渐变背景。";
-  renderAppearance(draftAppearance, draftIllustration);
+    ? (draftAppearance.fit === "contain" ? "完整显示时插画自动靠右，留白放在文字侧；切回铺满后恢复原水平位置。" : "调整后可在预览和页首查看效果。")
+    : (draftLeftIllustration ? "当前显示左侧插画，可继续添加右侧插画。" : "尚未设置插画，当前使用柔和渐变背景。");
+  renderAppearance(draftAppearance, draftIllustration, draftLeftIllustration);
 }
 async function refreshSavedAppearance() {
   try {
@@ -1568,10 +1603,11 @@ async function refreshSavedAppearance() {
     if (stored) {
       savedAppearance = normalizeAppearance(stored.settings);
       savedIllustration = typeof stored.image === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(stored.image) ? stored.image : null;
+      savedLeftIllustration = typeof stored.left_image === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(stored.left_image) ? stored.left_image : null;
     }
     artStorageWarning = "";
   } catch { artStorageWarning = "暂时无法读取已保存的外观，请稍后重新打开设置。"; }
-  renderAppearance(savedAppearance, savedIllustration);
+  renderAppearance(savedAppearance, savedIllustration, savedLeftIllustration);
 }
 const appearanceReady = refreshSavedAppearance();
 artEl("appearance-open").onclick = async () => {
@@ -1580,6 +1616,7 @@ artEl("appearance-open").onclick = async () => {
   await refreshSavedAppearance();
   draftAppearance = { ...savedAppearance };
   draftIllustration = savedIllustration;
+  draftLeftIllustration = savedLeftIllustration;
   fillAppearanceControls();
   artStatus(artStorageWarning);
   artDialog.showModal();
@@ -1593,8 +1630,10 @@ for (const key of Object.keys(ART_DEFAULTS)) {
   });
 }
 artEl("art-upload").onclick = () => artEl("art-file").click();
-artEl("art-file").onchange = async () => {
-  const file = artEl("art-file").files?.[0];
+artEl("art-left-upload").onclick = () => artEl("art-left-file").click();
+async function uploadIllustration(side) {
+  const input = artEl(side === "left" ? "art-left-file" : "art-file");
+  const file = input.files?.[0];
   if (!file) return;
   const revision = ++artRevision;
   artBusy = true;
@@ -1603,8 +1642,13 @@ artEl("art-file").onchange = async () => {
   try {
     const image = await prepareIllustration(file);
     if (revision !== artRevision || !artDialog.open) return;
-    draftIllustration = image;
-    draftAppearance = { ...draftAppearance, x: 50, y: 50, zoom: 100 };
+    if (side === "left") {
+      draftLeftIllustration = image;
+      draftAppearance = { ...draftAppearance, left_x: 50, left_y: 50, left_zoom: 100 };
+    } else {
+      draftIllustration = image;
+      draftAppearance = { ...draftAppearance, x: 50, y: 50, zoom: 100 };
+    }
     fillAppearanceControls();
     artStatus("插画已载入，可以调整位置和遮罩。");
   } catch (error) {
@@ -1612,15 +1656,22 @@ artEl("art-file").onchange = async () => {
   } finally {
     if (revision === artRevision) {
       artBusy = false;
-      artEl("art-file").value = "";
+      input.value = "";
       syncAppearanceControls();
     }
   }
+}
+artEl("art-file").onchange = () => uploadIllustration("right");
+artEl("art-left-file").onchange = () => uploadIllustration("left");
+artEl("art-left-remove").onclick = () => {
+  draftLeftIllustration = null;
+  syncAppearanceControls();
+  artStatus("左侧插画已移除，右侧插画保持不变，保存后生效。");
 };
 artEl("art-remove").onclick = () => {
   draftIllustration = null;
   syncAppearanceControls();
-  artStatus("插画已移除，保存后使用渐变背景。");
+  artStatus("右侧插画已移除，左侧插画保持不变，保存后生效。");
 };
 artEl("art-recenter").onclick = () => {
   draftAppearance = { ...draftAppearance, x: 50, y: 50, zoom: 100, fit: "cover" };
@@ -1631,7 +1682,7 @@ artEl("art-reset").onclick = () => {
   if (artBusy) return;
   draftAppearance = { ...ART_DEFAULTS };
   fillAppearanceControls();
-  artStatus("已恢复默认外观参数，当前插画保持不变，保存后生效。");
+  artStatus("已恢复默认外观参数，左右两张插画保持不变，保存后生效。");
 };
 artEl("art-save").onclick = async () => {
   if (artBusy) return;
@@ -1645,9 +1696,11 @@ artEl("art-save").onclick = async () => {
   try {
     const settings = normalizeAppearance(draftAppearance);
     const image = draftIllustration;
-    await appearanceStorage("readwrite", { settings, image });
+    const left_image = draftLeftIllustration;
+    await appearanceStorage("readwrite", { settings, image, left_image });
     savedAppearance = settings;
     savedIllustration = image;
+    savedLeftIllustration = left_image;
     artStorageWarning = "";
     artDialog.close();
     artEl("appearance-toast").textContent = "外观已保存";
@@ -1668,8 +1721,9 @@ artDialog.addEventListener("cancel", (event) => { if (artBusy && artEl("art-clos
 artDialog.addEventListener("close", () => {
   ++artRevision;
   artBusy = false;
-  renderAppearance(savedAppearance, savedIllustration);
+  renderAppearance(savedAppearance, savedIllustration, savedLeftIllustration);
   artEl("art-file").value = "";
+  artEl("art-left-file").value = "";
 });
 
 const avatarDialog = artEl("avatar-dialog");

@@ -57,27 +57,50 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
         for settings in ({"zoom": 99}, {"opacity": 101}, {"x": True}, {"y": float("nan")},
                          {"strength": float("inf")}, {"mask": "url(test)"}, {"fit": "invalid"},
                          {"glass": -1}, {"glass": 101}, {"glass": True}, {"glass": float("nan")},
-                         {"glass_enabled": "false"}, {"glass_enabled": 0}, {"side": "middle"}, {"side": None}, {"side": False}, {"sharpness": -1},
-                         {"sharpness": 101}, {"sharpness": True}, {"sharpness": float("nan")}):
+                         {"glass_enabled": "false"}, {"glass_enabled": 0}, {"sharpness": -1},
+                         {"sharpness": 101}, {"sharpness": True}, {"sharpness": float("nan")},
+                         {"left_x": -1}, {"left_y": 101}, {"left_zoom": 99}, {"left_opacity": True}):
             with self.subTest(settings=settings):
                 self.payload = {"settings": settings, "image": None}
                 self.assertIn("error", await self.instance._api_appearance_save())
         self.assertFalse((self.instance.data_dir / "appearance.json").exists())
 
-    async def test_illustration_side_persists_with_image_and_preserves_meteors(self):
-        image = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nsample").decode()
-        self.payload = {"settings": {"side": "left", "fit": "contain", "x": 76}, "image": image}
+    async def test_dual_images_save_and_remove_independently(self):
+        right = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nright").decode()
+        left = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nleft").decode()
+        for image, left_image in ((right, left), (right, None), (None, left)):
+            self.payload = {"settings": {"left_x": 20, "left_opacity": 0}, "image": image, "left_image": left_image}
+            self.assertEqual(await self.instance._api_appearance_save(), {"saved": True})
+            state = await self.instance._api_appearance_state()
+            self.assertEqual(state["image"], image)
+            self.assertEqual(state["left_image"], left_image)
+            self.assertEqual(state["settings"]["left_opacity"], 0)
+
+    async def test_legacy_save_preserves_left_image_and_position(self):
+        left = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nleft").decode()
+        self.payload = {"settings": {"left_x": 18, "left_zoom": 150}, "image": None, "left_image": left}
+        await self.instance._api_appearance_save()
+        self.payload = {"settings": {"zoom": 130}, "image": None}
         await self.instance._api_appearance_save()
         state = await self.instance._api_appearance_state()
-        self.assertEqual(state["settings"]["side"], "left")
-        self.assertEqual(state["image"], image)
-        self.assertEqual(state["settings"]["x"], 76)
-        self.assertEqual(self.instance._load_meteors(), plugin.METEOR_DEFAULTS)
-        self.payload = {"settings": {**state["settings"], "side": "right"}, "image": image}
+        self.assertEqual(state["left_image"], left)
+        self.assertEqual(state["settings"]["left_x"], 18)
+        self.assertEqual(state["settings"]["left_zoom"], 150)
+
+    async def test_invalid_left_image_and_storage_failure_preserve_both_images(self):
+        image = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nimage").decode()
+        self.payload = {"settings": {}, "image": image, "left_image": image}
         await self.instance._api_appearance_save()
-        self.assertEqual(self.instance._load_appearance()["settings"]["side"], "right")
-        legacy = self.instance._normalize_appearance({"fit": "contain", "x": 76})
-        self.assertEqual(legacy["side"], "right")
+        path = self.instance.data_dir / "appearance.json"
+        original = path.read_bytes()
+        self.payload["left_image"] = "data:image/png;base64,!!!!"
+        self.assertIn("error", await self.instance._api_appearance_save())
+        self.assertEqual(path.read_bytes(), original)
+        self.payload["left_image"] = None
+        with patch.object(Path, "replace", side_effect=OSError("disk full")), patch.object(plugin.logger, "exception"):
+            self.assertIn("error", await self.instance._api_appearance_save())
+        self.assertEqual(path.read_bytes(), original)
+        self.assertFalse(list(self.instance.data_dir.glob("*.tmp")))
 
     async def test_invalid_images_are_rejected(self):
         for image in ["data:image/svg+xml;base64,PHN2Zz4=", "data:image/png;base64,!!!!",

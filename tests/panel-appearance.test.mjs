@@ -23,7 +23,7 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 test("外观参数保留有效的 0、限制范围并拒绝无效颜色", () => {
   const { normalizeAppearance } = load();
   const settings = plain(normalizeAppearance({ x: -5, y: 110, zoom: 999, opacity: 0, strength: 0, fit: "contain", mask: "#ABCDEF" }));
-  assert.deepEqual(settings, { x: 0, y: 100, zoom: 250, opacity: 0, strength: 0, glass_enabled: true, glass: 50, sharpness: 0, fit: "contain", side: "right", mask: "#abcdef" });
+  assert.deepEqual(settings, { x: 0, y: 100, zoom: 250, opacity: 0, strength: 0, glass_enabled: true, glass: 50, sharpness: 0, fit: "contain", mask: "#abcdef", left_x:50,left_y:50,left_zoom:100,left_opacity:65 });
   const fallback = plain(normalizeAppearance({ zoom: "bad", opacity: "", mask: "url(https://example.invalid)", fit: "invalid" }));
   assert.equal(fallback.zoom, 100);
   assert.equal(fallback.opacity, 85);
@@ -34,8 +34,6 @@ test("外观参数保留有效的 0、限制范围并拒绝无效颜色", () => 
   assert.equal(normalizeAppearance({glass:150}).glass,100);
   assert.equal(normalizeAppearance({sharpness:150}).sharpness,100);
   assert.equal(normalizeAppearance({sharpness:-1}).sharpness,0);
-  assert.equal(normalizeAppearance({side:"left"}).side,"left");
-  assert.equal(normalizeAppearance({side:"invalid"}).side,"right");
 });
 
 test("流星参数支持关闭、零亮度、零数量并限制数量和速度范围", () => {
@@ -131,7 +129,7 @@ function storageFixture() {
 }
 test("通过插件接口保存图片与参数，收到确认后才报告成功", async () => {
   const {api,state,finish}=storageFixture();
-  const record={settings:{x:0},image:"data:image/png;base64,test"};
+  const record={settings:{x:0},image:"data:image/png;base64,test",left_image:"data:image/png;base64,left"};
   let resolved=false;
   const pending=api.appearanceStorage("readwrite",record).then(value=>{resolved=true;return value;});
   await new Promise(setImmediate);
@@ -172,13 +170,45 @@ test("恢复默认仅重置参数，保留当前图片或无插画状态，忙�
   const handler = script.slice(script.indexOf('artEl("art-reset").onclick ='), script.indexOf('artEl("art-save").onclick ='));
   for (const image of ["data:image/png;base64,current-custom-image", null]) {
     const button = {};
-    const context = { artEl: () => button, artBusy: false, draftAppearance: {zoom:180,glass:0}, draftIllustration:image, fillAppearanceControls(){}, artStatus(){} };
+    const context = { artEl: () => button, artBusy: false, draftAppearance: {zoom:180,glass:0}, draftIllustration:image, draftLeftIllustration:"left-custom", fillAppearanceControls(){}, artStatus(){} };
     vm.runInNewContext(helpers + handler + '; artEl("art-reset").onclick();', context);
     assert.equal(context.draftIllustration,image);
+    assert.equal(context.draftLeftIllustration,"left-custom");
     assert.deepEqual(plain(context.draftAppearance),plain(load().normalizeAppearance()));
     context.artBusy=true;
     context.draftAppearance={zoom:180};
     button.onclick();
     assert.deepEqual(plain(context.draftAppearance),{zoom:180});
   }
+});
+
+test("左右插画分别移除，不覆盖另一张图片", () => {
+  const handlers = script.slice(script.indexOf('artEl("art-left-remove").onclick ='), script.indexOf('artEl("art-recenter").onclick ='));
+  const buttons = {};
+  const context = {artEl:id=>buttons[id] ||= {}, draftIllustration:"right",draftLeftIllustration:"left",syncAppearanceControls(){},artStatus(){}};
+  vm.runInNewContext(handlers,context);
+  buttons['art-left-remove'].onclick();
+  assert.equal(context.draftLeftIllustration,null);
+  assert.equal(context.draftIllustration,"right");
+  context.draftLeftIllustration="left";
+  buttons['art-remove'].onclick();
+  assert.equal(context.draftLeftIllustration,"left");
+  assert.equal(context.draftIllustration,null);
+});
+
+test("左图参数独立限制范围，取消预览同时还原两张已保存图片", () => {
+  const settings=load().normalizeAppearance({left_x:-20,left_y:200,left_zoom:999,left_opacity:0,zoom:140});
+  assert.equal(settings.left_x,0);
+  assert.equal(settings.left_y,100);
+  assert.equal(settings.left_zoom,250);
+  assert.equal(settings.left_opacity,0);
+  assert.equal(settings.zoom,140);
+  const closeHandler=script.slice(script.indexOf('artDialog.addEventListener("close",'),script.indexOf('const avatarDialog ='));
+  const inputs={};
+  let rendered;
+  const context={artRevision:1,artBusy:false,savedAppearance:settings,savedIllustration:"saved-right",savedLeftIllustration:"saved-left",
+    artEl:id=>inputs[id] ||= {value:"pending-file"},renderAppearance:(...args)=>{rendered=args;},artDialog:{addEventListener:(event,handler)=>handler()}};
+  vm.runInNewContext(closeHandler,context);
+  assert.deepEqual(rendered,[settings,"saved-right","saved-left"]);
+  assert.equal(inputs['art-left-file'].value,"");
 });
