@@ -279,20 +279,20 @@
     box-shadow: 10px 16px 36px -18px #4e65813d, -5px -5px 18px #ffffffbf, inset 0 1px 0 #fff;
   }
   .study-profile { display: flex; align-items: center; gap: 12px; padding: 19px 9px 25px; }
-  .study-avatar, .avatar-preview { --avatar-inset: 3px; --avatar-color: var(--avatar-border-color, #74bfa7); --avatar-shade: color-mix(in srgb, var(--avatar-color) 65%, #182e29); --avatar-frame: linear-gradient(140deg, color-mix(in srgb, var(--avatar-color) 85%, #194e3d) 3%, color-mix(in srgb, var(--avatar-color) 30%, white) 30%, color-mix(in srgb, var(--avatar-color) 70%, white) 54%, var(--avatar-shade) 78%, color-mix(in srgb, var(--avatar-color) 35%, white) 100%); border: 1px solid color-mix(in srgb, var(--avatar-color) 80%, white); background: var(--avatar-frame); box-shadow: 0 6px 10px color-mix(in srgb, var(--avatar-shade) 26%, transparent), -2px -2px 7px #ffffffd9, inset 1px 1px 2px #ffffffc4, inset -2px -2px 3px color-mix(in srgb, var(--avatar-shade) 35%, transparent); }
+  .study-avatar, .avatar-preview { --avatar-inset: 3px; --avatar-depth: 1px; --avatar-color: var(--avatar-border-color, #74bfa7); --avatar-shade: color-mix(in srgb, var(--avatar-color) 60%, #163d36); --avatar-frame: linear-gradient(135deg, var(--avatar-shade) 0%, var(--avatar-color) 22%, color-mix(in srgb, var(--avatar-color) 48%, white) 43%, color-mix(in srgb, var(--avatar-color) 63%, white) 58%, var(--avatar-color) 76%, var(--avatar-shade) 100%); --avatar-shadow: 0 calc(var(--avatar-depth) * 2) calc(var(--avatar-depth) * 2) #213a3938, 0 calc(var(--avatar-depth) * 7) calc(var(--avatar-depth) * 8) calc(var(--avatar-depth) * -3) #243b4859, 0 calc(var(--avatar-depth) * 13) calc(var(--avatar-depth) * 15) calc(var(--avatar-depth) * -8) #263e4c52, inset 0 1px 1px #ffffff80; border: 1px solid color-mix(in srgb, var(--avatar-color) 82%, white); background: var(--avatar-frame); box-shadow: var(--avatar-shadow); }
   .study-avatar { position: relative; flex: 0 0 49px; width: 49px; height: 49px; display: grid; place-items: center; overflow: hidden; border-radius: 50%; font: 22px var(--serif); color: #406c60; }
   .study-avatar img, .avatar-preview img { position: absolute; inset: var(--avatar-inset); width: calc(100% - var(--avatar-inset) * 2); height: calc(100% - var(--avatar-inset) * 2); border-radius: 50%; object-fit: cover; }
   .study-avatar img { object-position: 84% 34%; }
-  .study-avatar::before, .avatar-preview::before { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; pointer-events: none; background: radial-gradient(ellipse at 39% 3%, #ffffff80 0%, #ffffff17 31%, transparent 56%), linear-gradient(145deg, transparent 57%, color-mix(in srgb, var(--avatar-shade) 12%, transparent)); box-shadow: inset 1px 1px 1px #ffffffa6, inset -1px -2px 3px color-mix(in srgb, var(--avatar-shade) 25%, transparent); }
+  .study-avatar::before, .avatar-preview::before { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; pointer-events: none; background: radial-gradient(ellipse at 65% 8%, #ffffff52, #ffffff0a 36%, transparent 60%), linear-gradient(145deg, transparent 58%, color-mix(in srgb, var(--avatar-shade) 16%, transparent)); box-shadow: inset calc(var(--avatar-depth) * 2) 0 calc(var(--avatar-depth) * 3) color-mix(in srgb, var(--avatar-shade) 38%, transparent), inset 0 calc(var(--avatar-depth) * -3) calc(var(--avatar-depth) * 4) color-mix(in srgb, var(--avatar-shade) 30%, transparent), inset 0 1px 1px #ffffff80; }
   .study-avatar img:not([src]) { display: none; }
   button.study-avatar { padding: 0; cursor: pointer; }
-  button.study-avatar:hover:not(:disabled) { background: var(--avatar-frame); border-color: var(--avatar-color); box-shadow: 0 8px 14px color-mix(in srgb, var(--avatar-shade) 30%, transparent), -2px -2px 8px #fff, inset 1px 1px 2px #ffffffc4; }
+  button.study-avatar:hover:not(:disabled) { background: var(--avatar-frame); border-color: var(--avatar-color); box-shadow: var(--avatar-shadow); filter: brightness(1.04); }
   button.study-avatar:active:not(:disabled) { transform: translateY(1px) scale(.985); box-shadow: 0 2px 5px color-mix(in srgb, var(--avatar-shade) 20%, transparent), inset 1px 1px 2px #ffffffc4; }
   button.study-avatar::after { content: "换图"; position: absolute; z-index: 2; inset: auto 0 0; background: #30475bbd; color: #fff; font: 9px/1.6 "Microsoft YaHei", sans-serif; opacity: 0; transition: opacity 200ms ease; }
   button.study-avatar:hover::after, button.study-avatar:focus-visible::after { opacity: 1; }
   .avatar-dialog { width: min(420px, calc(100% - 24px)); }
   .avatar-content { padding: 25px 28px; text-align: center; }
-  .avatar-preview { --avatar-inset: 6px; position: relative; display: grid; place-items: center; overflow: hidden; width: 120px; height: 120px; margin: 0 auto 22px; border-radius: 50%; font: 40px var(--serif); color: #406c60; }
+  .avatar-preview { --avatar-inset: 6px; --avatar-depth: 2px; position: relative; display: grid; place-items: center; overflow: hidden; width: 120px; height: 120px; margin: 0 auto 22px; border-radius: 50%; font: 40px var(--serif); color: #406c60; }
   .avatar-preview img:not([src]) { display: none; }
   .avatar-content .row { justify-content: center; }
   #avatar-status { margin-top: 12px; font-size: 12px; min-height: 22px; }
@@ -502,7 +502,7 @@
   :root[data-study-theme="night"] .study-shell .tab.active { background: linear-gradient(110deg, #527b9a, #426681); border-color: #83a8c4; color: #f0f8ff; }
   :root[data-study-theme="night"] .tab .badge { background: #436783; color: #d6eaff; }
   :root[data-study-theme="night"] #appearance-open { background: linear-gradient(135deg, #506c83e6, #405c74e6); }
-  :root[data-study-theme="night"] button.study-avatar { background: var(--avatar-frame); border-color: var(--avatar-color); box-shadow: 0 6px 10px #07132166, inset 1px 1px 2px #ffffff66; }
+  :root[data-study-theme="night"] button.study-avatar { background: var(--avatar-frame); border-color: var(--avatar-color); box-shadow: var(--avatar-shadow); }
   :root[data-study-theme="night"] .avatar-palette button { background: var(--swatch); border-color: #263b4e; }
   :root[data-study-theme="night"] :is(input, select, textarea) { background: #344f66; border-color: #7893aa; color: var(--ink); }
   :root[data-study-theme="night"] :is(input, select, textarea):focus-visible { background: #3d5a72; border-color: #aacfe9; box-shadow: 0 0 0 4px #aacfe924; }
