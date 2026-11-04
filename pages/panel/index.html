@@ -191,7 +191,7 @@
   .icon-button { width: 36px; height: 36px; min-height: 36px; padding: 0; flex-shrink: 0; }
   .appearance-content { padding: 24px 28px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 26px; }
   .appearance-preview-col { min-width: 0; }
-  .art-preview { isolation: isolate; position: relative; height: 220px; overflow: hidden; border-radius: 20px; border: 0; background: linear-gradient(112deg, #f9fcfe 0%, #edf5fb 52%, #dfeaf3 100%); }
+  .art-preview { isolation: isolate; position: relative; height: 220px; overflow: hidden; border-radius: 20px 20px 34px 27px / 20px 20px 29px 25px; border: 0; background: linear-gradient(112deg, #f9fcfe 0%, #edf5fb 52%, #dfeaf3 100%); }
   .preview-label { position: absolute; z-index: 1; left: 24px; bottom: 26px; max-width: 62%; }
   .preview-label strong { font: 400 28px/1.5 var(--serif); letter-spacing: .12em; }
   .preview-label span { display: block; font-size: 11px; color: var(--muted); }
@@ -328,8 +328,10 @@
   .toolbar-actions button { min-height: 35px; padding: 7px 13px; font-size: 11px; }
   .toolbar-actions #appearance-open { margin: 0; font-size: 11px; padding: 7px 12px; }
   .toolbar-actions #theme-mode { width: auto; max-width: 130px; min-height: 35px; padding: 6px 10px; border-radius: 999px; font-size: 11px; }
-  .study-shell .hd { --hero-radius: 26px; min-height: 282px; padding: 33px 36px; border: 0; border-radius: var(--hero-radius); margin-bottom: 28px; display: flex; align-items: center; box-shadow: var(--shadow-hero); }
-  .study-shell .hd::before, .study-shell .hd::after { display: none; }
+  .study-shell .hd { --hero-radius: 26px 26px 42px 32px / 26px 26px 34px 30px; min-height: 282px; padding: 33px 36px; border: 0; border-radius: var(--hero-radius); margin-bottom: 28px; display: flex; align-items: center; box-shadow: var(--shadow-hero); }
+  .study-shell .hd::before { display: none; }
+  .art-canvas { --corner-shade: #28496024; --corner-light: #ffffff52; }
+  .art-canvas::after { content: ""; display: block; position: absolute; inset: 0; width: auto; height: auto; z-index: 2; border-radius: inherit; pointer-events: none; background: radial-gradient(ellipse 78px 46px at calc(100% - 22px) calc(100% - 16px), var(--corner-light), transparent 76%), radial-gradient(ellipse 98px 68px at 100% 100%, var(--corner-shade), transparent 76%), radial-gradient(ellipse 80px 60px at 0% 100%, var(--corner-shade), transparent 74%); }
   .study-shell .hd-main { width: 56%; max-width: 500px; }
   .study-shell h1 { font-size: clamp(31px, 3.2vw, 42px); line-height: 1.5; margin: 13px 0 11px; letter-spacing: .07em; }
   .study-shell h1 > span { font-size: .77em; letter-spacing: .04em; }
@@ -440,7 +442,7 @@
     .toolbar-path { width: 100%; padding: 4px; }
     .toolbar-actions { margin-left: 0; width: 100%; justify-content: flex-start; }
     .toolbar-actions button, .toolbar-actions #appearance-open { font-size: 10px; padding: 7px 10px; min-height: 33px; }
-    .study-shell .hd { --hero-radius: 23px; min-height: 306px; padding: 25px 23px; }
+    .study-shell .hd { --hero-radius: 23px 23px 34px 28px / 23px 23px 29px 26px; min-height: 306px; padding: 25px 23px; }
     .study-shell h1 { font-size: 29px; letter-spacing: .04em; margin: 12px 0 10px; }
     .study-shell .hd-main { width: 82%; }
     .study-shell .hero-eyebrow { font-size: 10px; letter-spacing: .06em; }
@@ -484,6 +486,7 @@
   :root[data-study-theme="night"] :is(.side-footnote, th, td) { border-color: var(--line); }
   :root[data-study-theme="night"] .study-shell .hd { background: linear-gradient(112deg, #3a5369, #4d687f 62%, #526e84); }
   :root[data-study-theme="night"] .art-float-plane { --art-depth-shadow: #08152345; }
+  :root[data-study-theme="night"] .art-canvas { --corner-shade: #10243642; --corner-light: #d4e8f21c; }
   :root[data-study-theme="night"] { --art-edge-tone: 58, 83, 105; }
   :root[data-study-theme="night"] .art-canvas .hero-readability { background: linear-gradient(90deg, #3a5369 0%, #3a5369f7 34%, #405c7399 53%, #4d687f33 74%, transparent 91%); }
   :root[data-study-theme="night"] :is(.hero-wash, .preview-wash) { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(90deg, #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
