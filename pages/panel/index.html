@@ -475,8 +475,10 @@
   }
 
   :root[data-art-fit="contain"] .art-canvas .hero-art img { position: absolute; top: 0; right: 0; width: auto; max-width: 100%; object-position: 100% var(--art-y); transform-origin: 100% var(--art-y); mask-image: linear-gradient(90deg, transparent, #000 24%); }
-  :root[data-left-art="true"] .art-canvas .hero-readability { background: linear-gradient(90deg, #f8fcff24 0%, #f7fbff38 25%, #f5faff1a 45%, #f2f8fd12 65%, transparent 82%); }
-  :root[data-left-art="true"] .hd-main::before, :root[data-left-art="true"] .preview-label::before { content: ""; position: absolute; inset: -60px 8% -60px -60px; z-index: -1; pointer-events: none; background: radial-gradient(ellipse at 0% 48%, #f8fcffb8, #f8fcff70 48%, transparent 76%); }
+  :root[data-left-art="true"] .art-canvas .hero-readability { background: transparent; }
+  :root[data-left-art="true"] .hd-main::before, :root[data-left-art="true"] .preview-label::before { content: ""; position: absolute; inset: -60px 8% -60px -60px; z-index: -1; pointer-events: none; background: radial-gradient(ellipse at 0% 48%, #f8fcff52, #f8fcff1a 35%, transparent 62%); }
+  :root[data-left-art="true"] :is(.hero-note, .hero-eyebrow, .preview-label span) { color: #29475e; -webkit-text-stroke: .8px #f8fcffcc; paint-order: stroke fill; }
+  :root[data-left-art="true"]:not([data-study-theme="night"]) :is(.hd-main h1, .preview-label strong) { -webkit-text-stroke: 1.25px #f8fcffd9; paint-order: stroke fill; }
 
   :root[data-study-theme="night"] {
     color-scheme: dark; --ink: #f0f6fb; --muted: #d3e0eb; --line: #afc6d833; --line-2: #7893aa;
@@ -501,6 +503,7 @@
   :root[data-study-theme="night"] .art-canvas .hero-readability { background: linear-gradient(90deg, #3a5369 0%, #3a5369f7 34%, #405c7399 53%, #4d687f33 74%, transparent 91%); }
   :root[data-study-theme="night"][data-left-art="true"] .art-canvas .hero-readability { background: linear-gradient(90deg, #3a536938 0%, #3a53694d 25%, #405c7324 47%, #4d687f12 74%, transparent 91%); }
   :root[data-study-theme="night"][data-left-art="true"] .hd-main::before, :root[data-study-theme="night"][data-left-art="true"] .preview-label::before { background: radial-gradient(ellipse at 0% 48%, #3a5369e6, #3a5369b3 48%, transparent 78%); }
+  :root[data-study-theme="night"][data-left-art="true"] :is(.hero-note, .hero-eyebrow, .preview-label span) { color: var(--muted); -webkit-text-stroke-color: #3a5369; }
   :root[data-study-theme="night"] :is(.hero-wash, .preview-wash) { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(90deg, #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
   :root[data-study-theme="night"] .left-illustration .hero-wash { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(270deg, #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
   :root[data-study-theme="night"] :is(.hero-art, .preview-art, .left-illustration)::before, :root[data-study-theme="night"] :is(.hero-art, .preview-art, .left-illustration)::after { opacity: calc(var(--glass-level, .5) * .45); }
