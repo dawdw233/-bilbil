@@ -15,7 +15,7 @@
     --ok: #417a71; --bad: #ac5866; --warn: #8b6e3e;
     --shadow: 0 14px 30px -16px #4e65814d, 0 4px 10px #71849b12, -4px -4px 16px #ffffffa6, inset 0 1px 0 #fff;
     --shadow-up: 0 18px 34px -14px #4e658159, 0 6px 14px #71849b1a, -4px -4px 18px #ffffffbf, inset 0 1px 0 #fff;
-    --shadow-hero: 8px 20px 34px -16px #465c7940, 0 4px 12px #627b9414;
+    --shadow-hero: 0 24px 40px -14px #465c7952, 0 5px 14px #627b941a;
     --r: 22px; --ease: 200ms ease;
     --serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", Georgia, serif;
     --art-x: 50%; --art-y: 50%; --art-scale: 1; --art-opacity: .85;
@@ -191,7 +191,7 @@
   .icon-button { width: 36px; height: 36px; min-height: 36px; padding: 0; flex-shrink: 0; }
   .appearance-content { padding: 24px 28px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 26px; }
   .appearance-preview-col { min-width: 0; }
-  .art-preview { isolation: isolate; position: relative; height: 220px; overflow: hidden; border-radius: 20px 20px 46px 28px / 20px 20px 38px 26px; border: 0; background: linear-gradient(112deg, #f9fcfe 0%, #edf5fb 52%, #dfeaf3 100%); }
+  .art-preview { isolation: isolate; position: relative; height: 220px; overflow: hidden; border-radius: 20px; border: 0; background: linear-gradient(112deg, #f9fcfe 0%, #edf5fb 52%, #dfeaf3 100%); }
   .preview-label { position: absolute; z-index: 1; left: 24px; bottom: 26px; max-width: 62%; }
   .preview-label strong { font: 400 28px/1.5 var(--serif); letter-spacing: .12em; }
   .preview-label span { display: block; font-size: 11px; color: var(--muted); }
@@ -328,7 +328,7 @@
   .toolbar-actions button { min-height: 35px; padding: 7px 13px; font-size: 11px; }
   .toolbar-actions #appearance-open { margin: 0; font-size: 11px; padding: 7px 12px; }
   .toolbar-actions #theme-mode { width: auto; max-width: 130px; min-height: 35px; padding: 6px 10px; border-radius: 999px; font-size: 11px; }
-  .study-shell .hd { --hero-radius: 26px 26px 72px 40px / 26px 26px 56px 34px; min-height: 282px; padding: 33px 36px; border: 0; border-radius: var(--hero-radius); margin-bottom: 28px; display: flex; align-items: center; box-shadow: var(--shadow-hero); }
+  .study-shell .hd { --hero-radius: 26px; min-height: 282px; padding: 33px 36px; border: 0; border-radius: var(--hero-radius); margin-bottom: 28px; display: flex; align-items: center; box-shadow: var(--shadow-hero); }
   .study-shell .hd::before, .study-shell .hd::after { display: none; }
   .study-shell .hd-main { width: 56%; max-width: 500px; }
   .study-shell h1 { font-size: clamp(31px, 3.2vw, 42px); line-height: 1.5; margin: 13px 0 11px; letter-spacing: .07em; }
@@ -440,7 +440,7 @@
     .toolbar-path { width: 100%; padding: 4px; }
     .toolbar-actions { margin-left: 0; width: 100%; justify-content: flex-start; }
     .toolbar-actions button, .toolbar-actions #appearance-open { font-size: 10px; padding: 7px 10px; min-height: 33px; }
-    .study-shell .hd { --hero-radius: 23px 23px 52px 32px / 23px 23px 42px 28px; min-height: 306px; padding: 25px 23px; }
+    .study-shell .hd { --hero-radius: 23px; min-height: 306px; padding: 25px 23px; }
     .study-shell h1 { font-size: 29px; letter-spacing: .04em; margin: 12px 0 10px; }
     .study-shell .hd-main { width: 82%; }
     .study-shell .hero-eyebrow { font-size: 10px; letter-spacing: .06em; }
@@ -471,7 +471,7 @@
     --gold: #cdbb94; --gold-ink: #263647; --ok: #b3dfcd; --bad: #f0bfca; --warn: #ead4a7;
     --shadow: 0 14px 30px -16px #10213266, 0 4px 10px #10213224, inset 0 1px 0 #d5e4ef1a;
     --shadow-up: 0 18px 34px -14px #10213280, 0 6px 14px #10213233, inset 0 1px 0 #d5e4ef24;
-    --shadow-hero: 8px 20px 34px -16px #10213266, 0 4px 12px #10213224;
+    --shadow-hero: 0 24px 40px -14px #10213280, 0 5px 14px #10213233;
     --night-art-filter: brightness(.92) saturate(.98); --art-ambient: #3a53691a;
   }
   body, .hero-art, .preview-art { transition: background 200ms ease, color 200ms ease; }
