@@ -77,8 +77,19 @@
     object-position: calc(var(--art-x) + var(--art-pan-factor, 0) * var(--art-pan-extra, 0px) / var(--art-scale)) var(--art-y);
     opacity: var(--art-opacity);
     transform: scale(var(--art-scale)); transform-origin: var(--art-x) var(--art-y);
+  }
+  :is(.hero-art, .left-illustration) > :is(img, .art-edge-fill) {
     filter: contrast(calc(1.035 + var(--glass-level, .5) * .14)) saturate(calc(1.02 + var(--glass-level, .5) * .12)) brightness(calc(1 - var(--glass-level, .5) * .015)) var(--art-detail-filter, blur(0px)) var(--night-art-filter, brightness(1));
   }
+  .art-edge-fill {
+    position: absolute;
+    inset-block: 0;
+    pointer-events: none;
+    background-repeat: no-repeat;
+    opacity: var(--art-opacity);
+    transform: scaleX(-1);
+  }
+  .left-illustration > .art-edge-fill { opacity: var(--left-art-opacity, .65); }
   .hero-art img:not([src]), .preview-art img:not([src]) { display: none; }
   .hero-art:has(img[src])::before, .preview-art:has(img[src])::before, .left-illustration:has(img[src])::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: var(--glass-level, .5); background: radial-gradient(ellipse at var(--art-light-x, 92%) 18%, #ffffff4d, #ffffff05 38%, transparent 65%); mask-image: linear-gradient(180deg, transparent, #000 20px); }
   .hero-art:has(img[src])::after, .left-illustration:has(img[src])::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: var(--glass-level, .5); background: linear-gradient(var(--art-glint-angle, 118deg), transparent 0% 80%, #ffffff40 80.3%, #ffffff08 87%, transparent 87.3%), linear-gradient(180deg, #ffffff14, transparent 22% 82%, #d5e9f518); backdrop-filter: blur(calc(var(--glass-level, .5) * .2px)) saturate(calc(1 + var(--glass-level, .5) * .04)); -webkit-backdrop-filter: blur(calc(var(--glass-level, .5) * .2px)) saturate(calc(1 + var(--glass-level, .5) * .04)); mask-image: linear-gradient(var(--art-glint-direction, 90deg), transparent, #000 28%), linear-gradient(180deg, transparent, #000 20px); mask-composite: intersect; }
@@ -649,8 +660,8 @@
       </div>
     </div>
     <header class="hd art-canvas" id="top">
-      <div class="left-illustration" aria-hidden="true"><img id="hero-left-illustration" alt="" decoding="async" /><div class="hero-wash"></div></div>
-      <div class="art-float-plane" aria-hidden="true"><div class="hero-art"><img id="hero-illustration" alt="" decoding="async" /><div class="hero-wash"></div></div></div><div class="hero-readability" aria-hidden="true"></div>
+      <div class="left-illustration" aria-hidden="true"><div class="art-edge-fill" hidden></div><img id="hero-left-illustration" alt="" decoding="async" /><div class="hero-wash"></div></div>
+      <div class="art-float-plane" aria-hidden="true"><div class="hero-art"><div class="art-edge-fill" hidden></div><img id="hero-illustration" alt="" decoding="async" /><div class="hero-wash"></div></div></div><div class="hero-readability" aria-hidden="true"></div>
       <div class="hd-main"><div class="hero-eyebrow">A QUIET CORNER · BILIBILI JOURNAL</div><h1><span id="study-greeting">欢迎回来，</span><br/><strong data-room-name>一隅书房</strong></h1><p class="hero-note">今日也留一点闲时，看看世界的有趣。<br/>让喜欢的内容，在这里慢慢留下来。</p><div class="hero-tags"><span class="hero-tag">B站观影手记</span><span class="hero-tag" id="study-style-tag">人设相伴</span></div></div>
     </header>
     <div id="run-hint" class="sub" role="status" aria-live="polite"></div>
@@ -1204,8 +1215,8 @@
   <div class="appearance-content">
     <div class="appearance-preview-col">
       <div class="art-preview art-canvas" aria-label="插画效果预览">
-        <div class="left-illustration" aria-hidden="true"><img id="preview-left-illustration" alt="" /><div class="hero-wash preview-wash"></div></div>
-        <div class="art-float-plane" aria-hidden="true"><div class="hero-art preview-art"><img id="preview-illustration" alt="" /><div class="hero-wash preview-wash"></div></div></div><div class="hero-readability" aria-hidden="true"></div>
+        <div class="left-illustration" aria-hidden="true"><div class="art-edge-fill" hidden></div><img id="preview-left-illustration" alt="" /><div class="hero-wash preview-wash"></div></div>
+        <div class="art-float-plane" aria-hidden="true"><div class="hero-art preview-art"><div class="art-edge-fill" hidden></div><img id="preview-illustration" alt="" /><div class="hero-wash preview-wash"></div></div></div><div class="hero-readability" aria-hidden="true"></div>
         <div class="preview-label"><strong>刷 B站</strong><span>留一点闲时，遇见有趣。</span></div>
       </div>
       <div class="appearance-preview-meta">
@@ -1581,20 +1592,52 @@ new ResizeObserver(() => {
   const { width, height } = heroCard.getBoundingClientRect();
   if (width && height) previewCard.style.setProperty("--preview-ratio", String(width / height));
 }).observe(heroCard);
-function updateHorizontalTravel(image) {
-  if (!image.naturalHeight || !image.clientWidth) return;
-  const fittedWidth = image.clientHeight * image.naturalWidth / image.naturalHeight;
-  const cropTravel = Math.max(0, fittedWidth - image.clientWidth);
-  const extraTravel = Math.max(0, image.clientWidth * .12 - cropTravel);
+const rightIllustrations = [artEl("hero-illustration"), artEl("preview-illustration")];
+const leftIllustrations = [artEl("hero-left-illustration"), artEl("preview-left-illustration")];
+const illustrationImages = [...rightIllustrations, ...leftIllustrations];
+let displayedAppearance = ART_DEFAULTS;
+function updateIllustrationEdges(image) {
+  const fill = image.previousElementSibling;
+  const left = leftIllustrations.includes(image);
+  const { width, height } = image.parentElement.getBoundingClientRect();
+  if (!image.hasAttribute("src") || !image.naturalHeight || !width || !height || (!left && displayedAppearance.fit === "contain")) {
+    fill.hidden = true;
+    return;
+  }
+  const ratio = image.naturalWidth / image.naturalHeight;
+  const fittedWidth = Math.max(width, height * ratio);
+  const fittedHeight = Math.max(height, width / ratio);
+  const extraTravel = Math.max(0, width * .12 - (fittedWidth - width));
   image.style.setProperty("--art-pan-extra", `${extraTravel}px`);
+
+  const x = (left ? displayedAppearance.left_x : displayedAppearance.x) / 100;
+  const y = (left ? displayedAppearance.left_y : displayedAppearance.y) / 100;
+  const scale = (left ? displayedAppearance.left_zoom : displayedAppearance.zoom) / 100;
+  const drawnWidth = fittedWidth * scale;
+  const drawnHeight = fittedHeight * scale;
+  const imageLeft = (width - drawnWidth) * x + (.5 - x) * extraTravel;
+  const imageTop = (height - drawnHeight) * y;
+  const leftGap = Math.max(0, imageLeft);
+  const rightGap = Math.max(0, width - imageLeft - drawnWidth);
+  const gap = Math.max(leftGap, rightGap);
+  fill.hidden = gap < .25;
+  if (fill.hidden) return;
+  fill.style.width = `${gap}px`;
+  fill.style.left = `${leftGap > 0 ? 0 : width - gap}px`;
+  fill.style.backgroundSize = `${drawnWidth}px ${drawnHeight}px`;
+  fill.style.backgroundPosition = `${leftGap > 0 ? "left" : "right"} ${imageTop}px`;
+}
+function setIllustrationSource(image, source) {
+  if (source) image.src = source;
+  else image.removeAttribute("src");
+  image.previousElementSibling.style.backgroundImage = source ? `url(${JSON.stringify(source)})` : "";
 }
 const artTravelObserver = new ResizeObserver((entries) => {
-  for (const { target } of entries) updateHorizontalTravel(target);
+  for (const { target } of entries) updateIllustrationEdges(target);
 });
-for (const id of ["hero-illustration", "hero-left-illustration", "preview-illustration", "preview-left-illustration"]) {
-  const image = artEl(id);
+for (const image of illustrationImages) {
   artTravelObserver.observe(image);
-  image.addEventListener("load", () => updateHorizontalTravel(image));
+  image.addEventListener("load", () => updateIllustrationEdges(image));
 }
 let savedAppearance = { ...ART_DEFAULTS };
 let draftAppearance = { ...ART_DEFAULTS };
@@ -1615,6 +1658,7 @@ function artStatus(text, error = false) {
   artEl("art-status").classList.toggle("bad", error);
 }
 function renderAppearance(settings, illustration, leftIllustration = null) {
+  displayedAppearance = settings;
   const root = document.documentElement.style;
   document.documentElement.dataset.artFit = settings.fit;
   document.documentElement.dataset.leftArt = leftIllustration ? "true" : "false";
@@ -1635,19 +1679,14 @@ function renderAppearance(settings, illustration, leftIllustration = null) {
   root.setProperty("--art-mask-strength", String(settings.strength / 100));
   root.setProperty("--art-mask", [1, 3, 5].map((offset) => parseInt(settings.mask.slice(offset, offset + 2), 16)).join(", "));
   if (illustration !== displayedIllustration) {
-    for (const id of ["hero-illustration", "preview-illustration"]) {
-      if (illustration) artEl(id).src = illustration;
-      else artEl(id).removeAttribute("src");
-    }
+    for (const image of rightIllustrations) setIllustrationSource(image, illustration);
     displayedIllustration = illustration;
   }
   if (leftIllustration !== displayedLeftIllustration) {
-    for (const id of ["hero-left-illustration", "preview-left-illustration"]) {
-      if (leftIllustration) artEl(id).src = leftIllustration;
-      else artEl(id).removeAttribute("src");
-    }
+    for (const image of leftIllustrations) setIllustrationSource(image, leftIllustration);
     displayedLeftIllustration = leftIllustration;
   }
+  for (const image of illustrationImages) updateIllustrationEdges(image);
   renderStudyAvatar();
 }
 function fillAppearanceControls() {
@@ -1686,7 +1725,7 @@ function syncAppearanceControls() {
   artEl("art-upload-label").textContent = draftIllustration ? "替换右侧插画" : "上传右侧插画";
   artEl("art-empty-note").textContent = draftIllustration && draftAppearance.fit === "contain"
     ? "右图完整显示时自动靠右，切回铺满后恢复原水平位置。"
-    : (hasIllustration ? "水平位置可单独调节，移到图片边缘时会露出渐变背景。" : "尚未设置插画，当前使用柔和渐变背景。");
+    : (hasIllustration ? "水平位置可单独调节，超出图片的窄边会沿插画边缘补齐。" : "尚未设置插画，当前使用柔和渐变背景。");
   renderAppearance(draftAppearance, draftIllustration, draftLeftIllustration);
 }
 async function refreshSavedAppearance() {
