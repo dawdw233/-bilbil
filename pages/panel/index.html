@@ -89,6 +89,13 @@
     opacity: var(--art-opacity);
     transform: scaleX(-1);
   }
+  .art-edge-fill::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    backdrop-filter: blur(8px);
+    mask-image: linear-gradient(var(--edge-fade-direction, to left), transparent, #000 85%);
+  }
   .left-illustration > .art-edge-fill { opacity: var(--left-art-opacity, .65); }
   .hero-art img:not([src]), .preview-art img:not([src]) { display: none; }
   .hero-art:has(img[src])::before, .preview-art:has(img[src])::before, .left-illustration:has(img[src])::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: var(--glass-level, .5); background: radial-gradient(ellipse at var(--art-light-x, 92%) 18%, #ffffff4d, #ffffff05 38%, transparent 65%); mask-image: linear-gradient(180deg, transparent, #000 20px); }
@@ -382,6 +389,7 @@
   .study-shell h1 > span { font-size: .77em; letter-spacing: .04em; }
   .study-shell h1 > strong { font-weight: 400; }
   .study-shell .hd { overflow: hidden; }
+  .art-canvas { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
   .art-float-plane { --art-start: 26%; position: absolute; inset: 0 0 0 var(--art-start); z-index: 0; isolation: isolate; pointer-events: none; filter: drop-shadow(0 8px 12px var(--art-depth-shadow, #233a4924)); }
   .art-float-plane:not(:has(img[src])) { display: none; }
   .left-illustration { --art-light-x: 8%; --art-glint-angle: 62deg; --art-glint-direction: 270deg; position: absolute; inset: 0 42% 0 0; z-index: 0; isolation: isolate; overflow: hidden; pointer-events: none; mask-image: linear-gradient(90deg, #000 58%, transparent); filter: drop-shadow(0 8px 12px var(--art-depth-shadow, #233a4924)); }
@@ -412,7 +420,7 @@
   @media (max-width: 480px) { .art-float-plane { --art-start: 24%; } }
   .art-canvas .hero-readability { background: linear-gradient(90deg, #f8fcfff9 0%, #f7fbfff0 28%, #f5faffb8 45%, #f2f8fd3b 62%, transparent 78%); }
   .study-shell .hero-eyebrow { font-size: 10px; letter-spacing: .14em; color: #4f6b81; }
-  .study-shell .hero-note { margin: 0; max-width: 290px; font: 12px/1.9 "Segoe UI", "Microsoft YaHei", sans-serif; letter-spacing: .01em; color: #4d697f; }
+  .study-shell .hero-note { margin: 0; max-width: 330px; font: 14px/1.7 "Segoe UI", "Microsoft YaHei", sans-serif; letter-spacing: .01em; color: #2f4b62; }
   .hero-tags { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 18px; }
   .hero-tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border: 1px solid #cedfeb; border-radius: 99px; color: #496983; background: #fafdffb0; font-size: 11px; }
   .hero-tag::before { content: ""; width: 4px; height: 4px; border-radius: 50%; background: #8dafca; }
@@ -494,7 +502,6 @@
     .study-shell .hd-main { width: 64%; max-width: 380px; }
     .art-canvas .hero-readability { background: linear-gradient(90deg, #f8fcff 0%, #f7fbfffa 34%, #f5faffcf 53%, #f2f8fd4d 74%, transparent 91%); }
     .study-shell h1 { font-size: 34px; line-height: 1.5; }
-    .study-shell .hero-note { font-size: 13px; line-height: 1.85; }
     .hero-tag { font-size: 11px; padding: 3px 8px; }
     .study-lower-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
     .study-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
@@ -513,8 +520,6 @@
     .study-shell h1 { font-size: 29px; letter-spacing: .04em; margin: 12px 0 10px; }
     .study-shell .hd-main { width: 82%; }
     .study-shell .hero-eyebrow { font-size: 10px; letter-spacing: .06em; }
-    .study-shell .hero-note { max-width: 225px; font-size: 12px; }
-    .study-shell .hero-note br { display: none; }
     .hero-tags { margin-top: 14px; gap: 5px; }
     .study-section-head h2 { font-size: 18px; }
     .study-section-head .sub { font-size: 9px; }
@@ -535,7 +540,32 @@
 
   :root[data-art-fit="contain"] .art-canvas .hero-art img { position: absolute; top: 0; right: 0; width: auto; max-width: 100%; object-position: 100% var(--art-y); transform-origin: 100% var(--art-y); mask-image: linear-gradient(90deg, transparent, #000 24%); }
   :root[data-left-art="true"] .art-canvas .hero-readability { background: transparent; }
-  :root[data-left-art="true"] .hd-main::before, :root[data-left-art="true"] .preview-label::before { content: ""; position: absolute; inset: -60px 8% -60px -60px; z-index: -1; pointer-events: none; background: radial-gradient(ellipse at 0% 48%, #f8fcff52, #f8fcff1a 35%, transparent 62%); }
+  :root[data-left-art="true"] :is(.hd-main, .preview-label)::before {
+    content: "";
+    position: absolute;
+    inset: -38px auto -34px -44px;
+    width: min(460px, calc(100% + 90px));
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(ellipse at 0% 54%, rgb(var(--hero-text-scrim, 248 252 255) / .88), rgb(var(--hero-text-scrim, 248 252 255) / .64) 35%, transparent 78%);
+  }
+  @media (max-width: 480px) {
+    .study-shell .hd:has(.art-canvas img[src]), .art-preview:has(.art-canvas img[src]) {
+      display: block;
+      min-height: 0;
+      padding: 0;
+      background: var(--hero-mobile-paper, #f4f8fc);
+    }
+    .art-preview:has(.art-canvas img[src]) { width: 100%; max-width: 380px; aspect-ratio: auto; }
+    .art-canvas:has(img[src]) { position: relative; aspect-ratio: 2.55; overflow: hidden; border-radius: 0; }
+    .art-canvas:has(img[src]) .hero-readability { display: none; }
+    .art-canvas:not(:has(.left-illustration img[src])) > .art-float-plane { --art-start: 0%; }
+    .art-canvas:not(:has(.left-illustration img[src])) > .art-float-plane > .hero-art { mask-image: none; }
+    .art-canvas:not(:has(.hero-art img[src])) > .left-illustration { right: 0; mask-image: none; }
+    .study-shell .hd:has(.art-canvas img[src]) .hd-main { width: 100%; max-width: none; padding: 17px 23px 22px; }
+    .art-preview:has(.art-canvas img[src]) .preview-label { position: relative; inset: auto; max-width: none; padding: 12px 16px 15px; }
+    :root[data-left-art="true"] :has(> .art-canvas img[src]) > :is(.hd-main, .preview-label)::before { display: none; }
+  }
 
   :root[data-study-theme="night"] {
     color-scheme: dark; --ink: #f0f6fb; --muted: #d3e0eb; --line: #afc6d833; --line-2: #7893aa;
@@ -545,6 +575,7 @@
     --shadow-up: 0 18px 34px -14px #10213280, 0 6px 14px #10213233, inset 0 1px 0 #d5e4ef24;
     --shadow-hero: 0 24px 40px -14px #10213280, 0 5px 14px #10213233;
     --night-art-filter: brightness(.99) saturate(1.06); --art-ambient: #304a610a;
+    --hero-text-scrim: 28 47 64; --hero-mobile-paper: #293e51;
   }
   body, .hero-art, .preview-art { transition: background 200ms ease, color 200ms ease; }
   :root[data-study-theme="night"] body { background: radial-gradient(ellipse at 82% 0, #7896b42e, transparent 60%), radial-gradient(ellipse at 12% 95%, #4b67852b, transparent 65%), linear-gradient(135deg, #283c50, #202f40 60%, #1c2938); }
@@ -559,7 +590,6 @@
   :root[data-study-theme="night"] { --art-edge-tone: 58, 83, 105; }
   :root[data-study-theme="night"] .art-canvas .hero-readability { background: linear-gradient(90deg, #3a5369 0%, #3a5369f7 34%, #405c7399 53%, #4d687f33 74%, transparent 91%); }
   :root[data-study-theme="night"][data-left-art="true"] .art-canvas .hero-readability { background: linear-gradient(90deg, #2c465f1f 0%, #304a611f 23%, #38566f0f 46%, transparent 72%); }
-  :root[data-study-theme="night"][data-left-art="true"] .hd-main::before, :root[data-study-theme="night"][data-left-art="true"] .preview-label::before { background: radial-gradient(ellipse at 0% 45%, #243d55cc, #29445c70 30%, transparent 65%); }
   :root[data-study-theme="night"] :is(.hero-wash, .preview-wash) { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(90deg, #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
   :root[data-study-theme="night"] .left-illustration .hero-wash { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(270deg, #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
   :root[data-study-theme="night"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .left-illustration { --night-wash-direction: to left; }
@@ -666,9 +696,12 @@
         <button id="btn-run" class="primary"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 10 7-10 7z"/></svg>立刻刷一轮</button>
       </div>
     </div>
-    <header class="hd art-canvas" id="top">
-      <div class="left-illustration" aria-hidden="true"><div class="art-edge-fill" hidden></div><img id="hero-left-illustration" alt="" decoding="async" /><div class="hero-wash"></div></div>
-      <div class="art-float-plane" aria-hidden="true"><div class="hero-art"><div class="art-edge-fill" hidden></div><img id="hero-illustration" alt="" decoding="async" /><div class="hero-wash"></div></div></div><div class="hero-readability" aria-hidden="true"></div>
+    <header class="hd" id="top">
+      <div class="art-canvas" aria-hidden="true">
+        <div class="left-illustration"><div class="art-edge-fill" hidden></div><img id="hero-left-illustration" alt="" decoding="async" /><div class="hero-wash"></div></div>
+        <div class="art-float-plane"><div class="hero-art"><div class="art-edge-fill" hidden></div><img id="hero-illustration" alt="" decoding="async" /><div class="hero-wash"></div></div></div>
+        <div class="hero-readability"></div>
+      </div>
       <div class="hd-main"><div class="hero-eyebrow">A QUIET CORNER · BILIBILI JOURNAL</div><h1><span id="study-greeting">欢迎回来，</span><br/><strong data-room-name>一隅书房</strong></h1><p class="hero-note">今日也留一点闲时，看看世界的有趣。<br/>让喜欢的内容，在这里慢慢留下来。</p><div class="hero-tags"><span class="hero-tag">B站观影手记</span><span class="hero-tag" id="study-style-tag">人设相伴</span></div></div>
     </header>
     <div id="run-hint" class="sub" role="status" aria-live="polite"></div>
@@ -1221,9 +1254,12 @@
   </div>
   <div class="appearance-content">
     <div class="appearance-preview-col">
-      <div class="art-preview art-canvas" aria-label="插画效果预览">
-        <div class="left-illustration" aria-hidden="true"><div class="art-edge-fill" hidden></div><img id="preview-left-illustration" alt="" /><div class="hero-wash preview-wash"></div></div>
-        <div class="art-float-plane" aria-hidden="true"><div class="hero-art preview-art"><div class="art-edge-fill" hidden></div><img id="preview-illustration" alt="" /><div class="hero-wash preview-wash"></div></div></div><div class="hero-readability" aria-hidden="true"></div>
+      <div class="art-preview" aria-label="插画效果预览">
+        <div class="art-canvas" aria-hidden="true">
+          <div class="left-illustration"><div class="art-edge-fill" hidden></div><img id="preview-left-illustration" alt="" /><div class="hero-wash preview-wash"></div></div>
+          <div class="art-float-plane"><div class="hero-art preview-art"><div class="art-edge-fill" hidden></div><img id="preview-illustration" alt="" /><div class="hero-wash preview-wash"></div></div></div>
+          <div class="hero-readability"></div>
+        </div>
         <div class="preview-label"><strong>刷 B站</strong><span>留一点闲时，遇见有趣。</span></div>
       </div>
       <div class="appearance-preview-meta">
@@ -1631,7 +1667,10 @@ function updateIllustrationEdges(image) {
   if (fill.hidden) return;
   fill.style.width = `${gap}px`;
   fill.style.left = `${leftGap > 0 ? 0 : width - gap}px`;
-  fill.style.backgroundSize = `${drawnWidth}px ${drawnHeight}px`;
+  fill.style.setProperty("--edge-fade-direction", leftGap > 0 ? "to right" : "to left");
+  // Stretch only a few pixels from the seam so larger gaps don't repeat image details.
+  const edgeStretch = gap / Math.min(gap, 4);
+  fill.style.backgroundSize = `${drawnWidth * edgeStretch}px ${drawnHeight}px`;
   fill.style.backgroundPosition = `${leftGap > 0 ? "left" : "right"} ${imageTop}px`;
 }
 function setIllustrationSource(image, source) {
