@@ -529,18 +529,25 @@
   :root[data-art-fit="contain"] .art-canvas :is(.hero-art, .left-illustration) img { position: absolute; top: 0; width: auto; max-width: 100%; }
   :root[data-art-fit="contain"] .art-canvas .hero-art img { right: 0; object-position: 100% var(--art-y); transform-origin: 100% var(--art-y); mask-image: linear-gradient(90deg, transparent, #000 24%); }
   :root[data-art-fit="contain"] .art-canvas .left-illustration img { left: 0; object-position: 0% var(--left-art-y); transform-origin: 0% var(--left-art-y); mask-image: linear-gradient(270deg, transparent, #000 24%); }
-  /* Meet at the inner edges and fade only the upper layer across the overlap. */
+  /* Ease the upper image into the lower one across the shared strip. */
   :root[data-art-fit="contain"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) {
-    --art-pair-overlap: 18px;
+    --art-pair-overlap: 56px;
     --art-split: calc((100% + var(--art-pair-overlap)) * var(--art-left-share, .5));
     --art-seam: calc(var(--art-split) - var(--art-pair-overlap));
   }
-  :root[data-art-fit="contain"][data-left-art="true"] .art-preview .art-canvas:has(.hero-art img[src]),
-  :root[data-art-fit="contain"][data-left-art="true"][data-compact-hero] .art-canvas:has(.hero-art img[src]) { --art-pair-overlap: 10px; }
+  :root[data-art-fit="contain"][data-left-art="true"] .art-preview .art-canvas:has(.hero-art img[src]) { --art-pair-overlap: 34px; }
+  :root[data-art-fit="contain"][data-left-art="true"][data-compact-hero] .art-canvas:has(.hero-art img[src]) { --art-pair-overlap: 22px; }
   :root[data-art-fit="contain"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) > :is(.left-illustration, .art-float-plane) { filter: none; }
   :root[data-art-fit="contain"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .left-illustration { mask-image: none; }
   :root[data-art-fit="contain"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .art-float-plane { right: 0; width: auto; }
-  :root[data-art-fit="contain"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .art-float-plane > .hero-art { mask-image: linear-gradient(90deg, transparent, #000 var(--art-pair-overlap)); }
+  :root[data-art-fit="contain"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .art-float-plane > .hero-art {
+    mask-image: linear-gradient(90deg, transparent,
+      rgb(0 0 0 / .08) calc(var(--art-pair-overlap) * .18),
+      rgb(0 0 0 / .30) calc(var(--art-pair-overlap) * .36),
+      rgb(0 0 0 / .68) calc(var(--art-pair-overlap) * .64),
+      rgb(0 0 0 / .92) calc(var(--art-pair-overlap) * .82),
+      #000 var(--art-pair-overlap));
+  }
   :root[data-art-fit="contain"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) .left-illustration img { left: auto; right: 0; object-position: 100% var(--left-art-y); transform-origin: 100% var(--left-art-y); mask-image: none; }
   :root[data-art-fit="contain"][data-left-art="true"] .art-canvas .hero-art img { right: auto; left: 0; object-position: 0% var(--art-y); transform-origin: 0% var(--art-y); mask-image: none; }
   :root[data-left-art="true"] .art-canvas .hero-readability { background: transparent; }
@@ -1629,6 +1636,7 @@ async function prepareIllustration(file, maxDimension = 1600) {
 const artEl = (id) => document.getElementById(id);
 const artDialog = artEl("appearance-dialog");
 const heroCard = artEl("top");
+const heroArtCanvas = heroCard.querySelector(".art-canvas");
 const previewCard = artDialog.querySelector(".art-preview");
 const rightIllustrations = [artEl("hero-illustration"), artEl("preview-illustration")];
 const leftIllustrations = [artEl("hero-left-illustration"), artEl("preview-left-illustration")];
@@ -1647,9 +1655,10 @@ function updateContainedPair(width) {
   const rightRatio = right.naturalWidth / right.naturalHeight;
   const pairRatio = leftRatio + rightRatio;
   const frameWidth = width ?? heroCard.getBoundingClientRect().width;
+  const overlap = parseFloat(getComputedStyle(heroArtCanvas).getPropertyValue("--art-pair-overlap"));
   root.setProperty("--art-left-share", String(Math.min(.65, Math.max(.35, leftRatio / pairRatio))));
   // Allow the pair to use the available width without cropping or making a tall card for portrait art.
-  heroCard.style.setProperty("--art-pair-height", Math.min(420, (frameWidth + 18) / pairRatio) + "px");
+  heroCard.style.setProperty("--art-pair-height", Math.min(420, (frameWidth + overlap) / pairRatio) + "px");
 }
 new ResizeObserver(() => {
   const { width, height } = heroCard.getBoundingClientRect();
