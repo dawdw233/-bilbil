@@ -678,35 +678,55 @@
   }
   @media (max-width: 600px) { .night-meteor:nth-child(even) { display: none; } }
   @media (prefers-reduced-motion: reduce) { .night-meteors { display: none !important; } .meteor-preview .night-meteor { display: none !important; } }
-  .light-tyndall { display: none; position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
-    background: conic-gradient(from 0deg at 6vw -16vh, transparent 0deg 100deg, #d3e1ec66 110deg, #d3e1ec80 132deg, #d3e1ec5c 152deg, transparent 166deg, transparent 360deg);
+  .light-tyndall, .light-tyndall-rays { display: none; position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
+  .light-tyndall { z-index: 0;
+    background: conic-gradient(from 0deg at 6vw -16vh, transparent 0deg 100deg, #c7d8e680 110deg, #c7d8e699 132deg, #c7d8e673 152deg, transparent 166deg, transparent 360deg);
     mask-image: radial-gradient(circle at 6vw -16vh, #000 0, #000000b3 45vmax, transparent 120vmax); -webkit-mask-image: radial-gradient(circle at 6vw -16vh, #000 0, #000000b3 45vmax, transparent 120vmax); }
-  :root:not([data-study-theme="night"]) .light-tyndall { display: block; }
-  .light-tyndall::before, .light-tyndall::after { content: ""; position: absolute; left: 6vw; top: -16vh; width: 170vmax; height: 170vmax; transform-origin: 0 0; filter: blur(7px); mask-image: radial-gradient(circle at 0 0, #000 0, #000000b3 26%, #00000040 52%, transparent 74%); -webkit-mask-image: radial-gradient(circle at 0 0, #000 0, #000000b3 26%, #00000040 52%, transparent 74%); will-change: transform, opacity; }
-  .light-tyndall::before {
+  .light-tyndall-rays { z-index: 5;
+    mask-image: radial-gradient(circle at 6vw -16vh, #000 0, #000000c7 40vmax, #00000052 80vmax, transparent 125vmax); -webkit-mask-image: radial-gradient(circle at 6vw -16vh, #000 0, #000000c7 40vmax, #00000052 80vmax, transparent 125vmax); }
+  :root:not([data-study-theme="night"]) :is(.light-tyndall, .light-tyndall-rays) { display: block; }
+  .light-tyndall-rays::before, .light-tyndall-rays::after { content: ""; position: absolute; left: 6vw; top: -16vh; width: 170vmax; height: 170vmax; transform-origin: 0 0; filter: blur(9px); will-change: transform, opacity; }
+  .light-tyndall-rays::before {
     background: conic-gradient(from 0deg at 0 0, transparent 0deg 108deg,
-      #fff7e2a6 111deg, #fffaec61 114deg, transparent 117.5deg,
-      transparent 121deg, #fff8e673 123deg, #fff8e68c 127deg, transparent 131deg,
-      transparent 136deg, #fffaee80 138deg, transparent 140.5deg,
-      transparent 145deg, #fff8e659 148deg, #fff8e673 153deg, transparent 158deg, transparent 360deg);
+      #ffdc9361 111deg, #ffe4a840 114deg, transparent 117.5deg,
+      transparent 121deg, #ffdf9a47 123deg, #ffdc9359 127deg, transparent 131deg,
+      transparent 136deg, #ffe2a352 138deg, transparent 140.5deg,
+      transparent 145deg, #ffe0a033 148deg, #ffdc9347 153deg, transparent 158deg, transparent 360deg);
     animation: light-tyndall-sway 26s ease-in-out infinite alternate;
   }
-  .light-tyndall::after {
+  .light-tyndall-rays::after {
     background: conic-gradient(from 0deg at 0 0, transparent 0deg 115deg,
-      #ffffff70 118deg, transparent 120deg,
-      transparent 132deg, #fff9ea66 133.5deg, transparent 135.5deg,
-      transparent 141deg, #ffffff59 143deg, #fff9ea40 145deg, transparent 147deg, transparent 360deg);
+      #fff1cc5c 118deg, transparent 120deg,
+      transparent 132deg, #ffe6b052 133.5deg, transparent 135.5deg,
+      transparent 141deg, #fff1cc4d 143deg, #ffe6b033 145deg, transparent 147deg, transparent 360deg);
     animation: light-tyndall-breathe 13s ease-in-out infinite alternate, light-tyndall-sway 34s ease-in-out -9s infinite alternate-reverse;
+  }
+  .tyndall-dust { position: absolute; inset: 0;
+    mask-image: conic-gradient(from 0deg at 6vw -16vh, transparent 0deg 107deg, #000 113deg 151deg, transparent 159deg); -webkit-mask-image: conic-gradient(from 0deg at 6vw -16vh, transparent 0deg 107deg, #000 113deg 151deg, transparent 159deg); }
+  .tyndall-dust::before, .tyndall-dust::after { content: ""; position: absolute; inset: -80px; will-change: transform, opacity; }
+  .tyndall-dust::before {
+    background: radial-gradient(circle at 37% 61%, #f3c66af2 0 1.1px, #f6d48a80 1.8px, transparent 3.2px) 0 0 / 173px 151px,
+      radial-gradient(circle at 72% 18%, #efc160cc 0 .8px, #f6d48a66 1.3px, transparent 2.4px) 0 0 / 113px 229px,
+      radial-gradient(circle at 14% 83%, #f1c565b3 0 .7px, transparent 2px) 0 0 / 97px 131px;
+    animation: tyndall-dust-drift 38s linear infinite alternate;
+  }
+  .tyndall-dust::after {
+    background: radial-gradient(circle at 61% 29%, #f6cf78f2 0 1.5px, #f8dc9c80 2.5px, transparent 4.5px) 0 0 / 307px 263px,
+      radial-gradient(circle at 23% 47%, #f1c565b3 0 .9px, transparent 2.2px) 0 0 / 241px 197px;
+    animation: tyndall-dust-drift 53s linear -20s infinite alternate-reverse, light-tyndall-breathe 7s ease-in-out infinite alternate;
   }
   @keyframes light-tyndall-sway { from { transform: rotate(-1.4deg); } to { transform: rotate(1.4deg); } }
   @keyframes light-tyndall-breathe { from { opacity: .35; } to { opacity: 1; } }
-  @media (prefers-reduced-motion: reduce) { .light-tyndall::before, .light-tyndall::after { animation: none; } }
+  @keyframes tyndall-dust-drift { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(44px, -62px, 0); } }
+  @media (max-width: 600px) { .tyndall-dust::after { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .light-tyndall-rays::before, .light-tyndall-rays::after, .tyndall-dust::before, .tyndall-dust::after { animation: none; } }
 </style>
 <script src="/api/plugin/page/bridge-sdk.js"></script>
 </head>
 <body>
 <svg class="art-filter-defs" width="0" height="0" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><defs><filter id="art-sharpen-filter" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB"><feConvolveMatrix id="art-sharpen-kernel" order="3" kernelMatrix="0 0 0 0 1 0 0 0 0" divisor="1" bias="0" preserveAlpha="true" edgeMode="duplicate" /></filter></defs></svg>
 <div class="light-tyndall" aria-hidden="true"></div>
+<div class="light-tyndall-rays" aria-hidden="true"><i class="tyndall-dust"></i></div>
 <div class="night-meteors" id="night-meteors" aria-hidden="true"></div>
 <div class="wrap study-shell">
   <div class="layout">
