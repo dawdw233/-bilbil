@@ -84,11 +84,17 @@
   .hero-art img:not([src]), .preview-art img:not([src]) { display: none; }
   .hero-art:has(img[src])::before, .preview-art:has(img[src])::before, .left-illustration:has(img[src])::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: calc(var(--glass-level, .5) * var(--art-layer-opacity, 1)); background: radial-gradient(ellipse at var(--art-light-x, 92%) 18%, #ffffff4d, #ffffff05 38%, transparent 65%); mask-image: linear-gradient(180deg, transparent, #000 20px); }
   .hero-art:has(img[src])::after, .left-illustration:has(img[src])::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: calc(var(--glass-level, .5) * var(--art-layer-opacity, 1)); background: linear-gradient(var(--art-glint-angle, 118deg), transparent 0% 80%, #ffffff40 80.3%, #ffffff08 87%, transparent 87.3%), linear-gradient(180deg, #ffffff14, transparent 22% 82%, #d5e9f518); backdrop-filter: blur(calc(var(--glass-level, .5) * .2px)) saturate(calc(1 + var(--glass-level, .5) * .04)); -webkit-backdrop-filter: blur(calc(var(--glass-level, .5) * .2px)) saturate(calc(1 + var(--glass-level, .5) * .04)); mask-image: linear-gradient(var(--art-glint-direction, 90deg), transparent, #000 28%), linear-gradient(180deg, transparent, #000 20px); mask-composite: intersect; }
-  .hero-wash, .preview-wash { pointer-events: none; position: absolute; inset: 0; opacity: var(--art-layer-opacity, 1);
-    background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(90deg, rgb(var(--art-mask)) 0%,
-      rgba(var(--art-mask), var(--art-mask-strength)) 36%, rgba(var(--art-mask), calc(var(--art-mask-strength) * .36)) 72%, rgba(var(--art-mask), .06) 100%);
+  .hero-wash {
+    --art-wash-alpha: calc(var(--art-mask-strength) * var(--art-wash-peak, 1));
+    pointer-events: none; position: absolute; inset: 0; opacity: var(--art-layer-opacity, 1);
+    background: linear-gradient(var(--art-ambient), var(--art-ambient)),
+      linear-gradient(var(--art-wash-direction, to right),
+        rgba(var(--art-mask), var(--art-wash-alpha)),
+        rgba(var(--art-mask), calc(var(--art-wash-alpha) * .62)) 24%,
+        rgba(var(--art-mask), calc(var(--art-wash-alpha) * .22)) 50%,
+        rgba(var(--art-mask), 0) 78%);
   }
-  .hero-wash::after, .preview-wash::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, #55758d12, transparent 18px), linear-gradient(0deg, rgba(var(--art-edge-tone, var(--art-mask)), .32), transparent 30px); }
+  .hero-wash::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, #55758d12, transparent 18px), linear-gradient(0deg, rgba(var(--art-edge-tone, 237, 246, 252), .32), transparent 30px); }
   .hero-readability { position: absolute; z-index: -1; inset: 0; pointer-events: none; background: linear-gradient(90deg, #f8fcfff5, #f5faffdc 29%, #f2f8fd70 56%, transparent 79%); }
   #appearance-open { margin-top: 3px; font-size: 11px; padding: 5px 12px; min-height: 32px; background: #ffffffb3; }
   .layout { display: grid; grid-template-columns: 184px minmax(0, 1fr); gap: 28px; align-items: start; }
@@ -385,9 +391,9 @@
     transform: scale(var(--art-cover-scale, var(--left-art-scale, 1)));
     transform-origin: var(--left-art-x, 50%) var(--left-art-y, 50%);
   }
-  .left-illustration .hero-wash { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(270deg, rgb(var(--art-mask)) 0%, rgba(var(--art-mask), var(--art-mask-strength)) 36%, rgba(var(--art-mask), calc(var(--art-mask-strength) * .36)) 72%, rgba(var(--art-mask), .06) 100%); }
+  .left-illustration .hero-wash { --art-wash-direction: to left; }
   /* 双图：右图画布提前铺满到接缝下方，左图再压在上面缓淡退出，两张图交叠处不露出卡片底色，也不会留出整片白雾。 */
-  :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) { --art-split: 53%; --art-seam: calc(100% - var(--art-split)); }
+  :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) { --art-split: 53%; --art-seam: calc(100% - var(--art-split)); --art-wash-peak: .60; }
   /* 双图先把两张图合成一层再整体淡出，接缝处就不会因为两层叠加比两边更亮或更暗。 */
   :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) { opacity: var(--art-canvas-opacity, 1); }
   :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .left-illustration { right: auto; width: var(--art-split); mask-image: linear-gradient(90deg, #000 91%, rgba(0, 0, 0, .86) 93%, rgba(0, 0, 0, .55) 95.5%, rgba(0, 0, 0, .2) 98%, transparent); }
@@ -397,9 +403,6 @@
   :root[data-left-art="true"]:not([data-art-fit="contain"]) .art-canvas:has(.hero-art img[src]) > :is(.left-illustration, .art-float-plane) { filter: none; }
   :root[data-left-art="true"]:not([data-art-fit="contain"]) .art-canvas:has(.hero-art img[src]) > .left-illustration { mask-image: linear-gradient(90deg, #000 97%, transparent); }
   :root[data-left-art="true"]:not([data-art-fit="contain"]) .art-canvas:has(.hero-art img[src]) > .art-float-plane > .hero-art { mask-image: linear-gradient(90deg, transparent, rgb(0 0 0 / .14) 2%, rgb(0 0 0 / .5) 4.3%, rgb(0 0 0 / .86) 6.6%, #000 8.6%); }
-  /* 双图时接缝那端的渐变遮罩跟随强度设定淡出，保证 0 强度不会在中间铺出一片白。 */
-  :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .left-illustration .hero-wash { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(270deg, rgba(var(--art-mask), calc(.06 + var(--art-mask-strength) * .5)) 0%, rgba(var(--art-mask), calc(.02 + var(--art-mask-strength) * .22)) 22%, rgba(var(--art-mask), calc(var(--art-mask-strength) * .1)) 52%, rgba(var(--art-mask), .04) 100%); }
-  :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .art-float-plane .hero-wash { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(90deg, rgba(var(--art-mask), calc(.06 + var(--art-mask-strength) * .5)) 0%, rgba(var(--art-mask), calc(.02 + var(--art-mask-strength) * .22)) 14%, rgba(var(--art-mask), calc(var(--art-mask-strength) * .1)) 32%, rgba(var(--art-mask), .04) 100%); }
   .art-float-plane > .hero-art { inset: 0; z-index: 0; border-radius: 0; mask-image: linear-gradient(90deg, transparent, #000 36%); }
   .art-canvas .hero-readability { z-index: 0; border-radius: inherit; }
   @media (max-width: 760px) { .art-float-plane { --art-start: 15%; filter: drop-shadow(0 5px 8px var(--art-depth-shadow, #233a491f)); } }
@@ -578,13 +581,6 @@
     background: radial-gradient(ellipse 48% 64% at 29% 52%, rgb(var(--hero-text-scrim) / .50), rgb(var(--hero-text-scrim) / .40) 45%, transparent);
   }
   :root[data-study-theme="night"][data-left-art="true"] #top .hero-note { color: #e6eff6; }
-  :root[data-study-theme="night"] :is(.hero-wash, .preview-wash) { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(90deg, #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
-  :root[data-study-theme="night"] .left-illustration .hero-wash { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(270deg, #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
-  :root[data-study-theme="night"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .left-illustration { --night-wash-direction: to left; }
-  :root[data-study-theme="night"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) > :is(.left-illustration, .art-float-plane) .hero-wash {
-    background: linear-gradient(var(--art-ambient), var(--art-ambient)),
-      linear-gradient(var(--night-wash-direction, to right), rgba(var(--art-edge-tone), calc(.04 + var(--art-mask-strength) * .16)), rgba(var(--art-edge-tone), .04) 40%);
-  }
   :root[data-study-theme="night"] :is(.hero-art, .preview-art, .left-illustration)::before, :root[data-study-theme="night"] :is(.hero-art, .preview-art, .left-illustration)::after { opacity: calc(var(--glass-level, .5) * .55 * var(--art-layer-opacity, 1)); }
   :root[data-study-theme="night"] :is(.hero-tag, .stat-icon, .tag, .check, .md blockquote, code, th) { background: #46627bb3; border-color: #9db6ca66; color: #e0ebf3; }
   :root[data-study-theme="night"] .hero-tag::before { background: #95bdda; }
@@ -1244,8 +1240,8 @@
     <div class="appearance-preview-col">
       <div class="art-preview" aria-label="插画效果预览">
         <div class="art-canvas" aria-hidden="true">
-          <div class="left-illustration"><img id="preview-left-illustration" alt="" /><div class="hero-wash preview-wash"></div></div>
-          <div class="art-float-plane"><div class="hero-art preview-art"><img id="preview-illustration" alt="" /><div class="hero-wash preview-wash"></div></div></div>
+          <div class="left-illustration"><img id="preview-left-illustration" alt="" /><div class="hero-wash"></div></div>
+          <div class="art-float-plane"><div class="hero-art preview-art"><img id="preview-illustration" alt="" /><div class="hero-wash"></div></div></div>
           <div class="hero-readability"></div>
         </div>
         <div class="preview-label"><strong>刷 B站</strong><span>留一点闲时，遇见有趣。</span></div>
@@ -1290,7 +1286,7 @@
             <button type="button" id="art-recenter">重置右图位置</button>
           </div>
           <label class="color-field" for="art-mask">渐变遮罩颜色<input id="art-mask" type="color" value="#edf6fc" /></label>
-          <label class="range-field" for="art-strength"><span class="range-label">渐变遮罩强度<output id="art-strength-value" for="art-strength">85%</output></span><input id="art-strength" type="range" min="0" max="100" step="1" value="85" /><span class="tip">数值越高，插画与文字区域的过渡越柔和。</span></label>
+          <label class="range-field" for="art-strength"><span class="range-label">渐变遮罩强度<output id="art-strength-value" for="art-strength">85%</output></span><input id="art-strength" type="range" min="0" max="100" step="1" value="85" /><span class="tip">0% 关闭渐变遮罩。数值越高，所选颜色越明显。</span></label>
         </div>
         <div class="art-effect-group">
           <label class="check" for="art-glass_enabled"><input id="art-glass_enabled" type="checkbox" aria-label="开启玻璃质感" checked /><span><strong>开启玻璃质感</strong><span class="tip">为插画叠加轻透反光和柔光。</span></span></label>
