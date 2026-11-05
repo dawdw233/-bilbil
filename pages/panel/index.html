@@ -399,6 +399,10 @@
   :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .left-illustration { right: auto; width: var(--art-split); mask-image: linear-gradient(90deg, #000 91%, rgba(0, 0, 0, .86) 93%, rgba(0, 0, 0, .55) 95.5%, rgba(0, 0, 0, .2) 98%, transparent); }
   :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .art-float-plane { left: var(--art-seam); right: auto; width: var(--art-split); clip-path: inset(0); }
   :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .art-float-plane > .hero-art { mask-image: linear-gradient(90deg, transparent, rgba(0, 0, 0, .5) 3%, rgba(0, 0, 0, .85) 5.5%, #000 7%); }
+  /* 双图铺满时，先将右图淡入，再将左图收尾，并移除交界处的图层投影。 */
+  :root[data-left-art="true"]:not([data-art-fit="contain"]) .art-canvas:has(.hero-art img[src]) > :is(.left-illustration, .art-float-plane) { filter: none; }
+  :root[data-left-art="true"]:not([data-art-fit="contain"]) .art-canvas:has(.hero-art img[src]) > .left-illustration { mask-image: linear-gradient(90deg, #000 97%, transparent); }
+  :root[data-left-art="true"]:not([data-art-fit="contain"]) .art-canvas:has(.hero-art img[src]) > .art-float-plane > .hero-art { mask-image: linear-gradient(90deg, transparent, rgb(0 0 0 / .14) 2%, rgb(0 0 0 / .5) 4.3%, rgb(0 0 0 / .86) 6.6%, #000 8.6%); }
   /* 双图时接缝那端的渐变遮罩跟随强度设定淡出，保证 0 强度不会在中间铺出一片白。 */
   :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .left-illustration .hero-wash { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(270deg, rgba(var(--art-mask), calc(.06 + var(--art-mask-strength) * .5)) 0%, rgba(var(--art-mask), calc(.02 + var(--art-mask-strength) * .22)) 22%, rgba(var(--art-mask), calc(var(--art-mask-strength) * .1)) 52%, rgba(var(--art-mask), .04) 100%); }
   :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .art-float-plane .hero-wash { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(90deg, rgba(var(--art-mask), calc(.06 + var(--art-mask-strength) * .5)) 0%, rgba(var(--art-mask), calc(.02 + var(--art-mask-strength) * .22)) 14%, rgba(var(--art-mask), calc(var(--art-mask-strength) * .1)) 32%, rgba(var(--art-mask), .04) 100%); }
@@ -558,10 +562,6 @@
   :root[data-study-theme="night"][data-left-art="true"] .hd-main::before, :root[data-study-theme="night"][data-left-art="true"] .preview-label::before { background: radial-gradient(ellipse at 0% 45%, #243d55cc, #29445c70 30%, transparent 65%); }
   :root[data-study-theme="night"] :is(.hero-wash, .preview-wash) { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(90deg, #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
   :root[data-study-theme="night"] .left-illustration .hero-wash { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(270deg, #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
-  /* 夜色双图：先将右图淡入，再将左图收尾，避免两张图同时变透明而露出暗色底板。 */
-  :root[data-study-theme="night"][data-left-art="true"]:not([data-art-fit="contain"]) .art-canvas:has(.hero-art img[src]) > :is(.left-illustration, .art-float-plane) { filter: none; }
-  :root[data-study-theme="night"][data-left-art="true"]:not([data-art-fit="contain"]) .art-canvas:has(.hero-art img[src]) > .left-illustration { mask-image: linear-gradient(90deg, #000 97%, transparent); }
-  :root[data-study-theme="night"][data-left-art="true"]:not([data-art-fit="contain"]) .art-canvas:has(.hero-art img[src]) > .art-float-plane > .hero-art { mask-image: linear-gradient(90deg, transparent, rgb(0 0 0 / .14) 2%, rgb(0 0 0 / .5) 4.3%, rgb(0 0 0 / .86) 6.6%, #000 8.6%); }
   :root[data-study-theme="night"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .left-illustration { --night-wash-direction: to left; }
   :root[data-study-theme="night"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) > :is(.left-illustration, .art-float-plane) .hero-wash {
     background: linear-gradient(var(--art-ambient), var(--art-ambient)),
