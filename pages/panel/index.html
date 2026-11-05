@@ -74,7 +74,8 @@
   .hero-art { position: absolute; inset: 0 0 0 40%; z-index: -1; overflow: hidden; pointer-events: none; }
   .hero-art img, .preview-art img, .left-illustration img {
     display: block; width: 100%; height: 100%; object-fit: var(--art-fit);
-    object-position: var(--art-x) var(--art-y); opacity: var(--art-opacity);
+    object-position: calc(var(--art-x) + var(--art-pan-factor, 0) * var(--art-pan-extra, 0px) / var(--art-scale)) var(--art-y);
+    opacity: var(--art-opacity);
     transform: scale(var(--art-scale)); transform-origin: var(--art-x) var(--art-y);
     filter: contrast(calc(1.035 + var(--glass-level, .5) * .14)) saturate(calc(1.02 + var(--glass-level, .5) * .12)) brightness(calc(1 - var(--glass-level, .5) * .015)) var(--art-detail-filter, blur(0px)) var(--night-art-filter, brightness(1));
   }
@@ -374,7 +375,13 @@
   .art-float-plane:not(:has(img[src])) { display: none; }
   .left-illustration { --art-light-x: 8%; --art-glint-angle: 62deg; --art-glint-direction: 270deg; position: absolute; inset: 0 42% 0 0; z-index: 0; isolation: isolate; overflow: hidden; pointer-events: none; mask-image: linear-gradient(90deg, #000 58%, transparent); filter: drop-shadow(0 8px 12px var(--art-depth-shadow, #233a4924)); }
   .left-illustration:not(:has(img[src])) { display: none; }
-  .left-illustration img { object-fit: cover; object-position: var(--left-art-x, 50%) var(--left-art-y, 50%); opacity: var(--left-art-opacity, .65); transform: scale(var(--left-art-scale, 1)); transform-origin: var(--left-art-x, 50%) var(--left-art-y, 50%); }
+  .left-illustration img {
+    object-fit: cover;
+    object-position: calc(var(--left-art-x, 50%) + var(--left-art-pan-factor, 0) * var(--art-pan-extra, 0px) / var(--left-art-scale, 1)) var(--left-art-y, 50%);
+    opacity: var(--left-art-opacity, .65);
+    transform: scale(var(--left-art-scale, 1));
+    transform-origin: var(--left-art-x, 50%) var(--left-art-y, 50%);
+  }
   .left-illustration .hero-wash { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(270deg, rgb(var(--art-mask)) 0%, rgba(var(--art-mask), var(--art-mask-strength)) 36%, rgba(var(--art-mask), calc(var(--art-mask-strength) * .36)) 72%, rgba(var(--art-mask), .06) 100%); }
   /* 双图：右图画布提前铺满到接缝下方，左图再压在上面缓淡退出，两张图交叠处不露出卡片底色，也不会留出整片白雾。 */
   :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) { --art-split: 53%; --art-seam: calc(100% - var(--art-split)); }
@@ -493,7 +500,6 @@
     .study-shell .hero-eyebrow { font-size: 10px; letter-spacing: .06em; }
     .study-shell .hero-note { max-width: 225px; font-size: 12px; }
     .study-shell .hero-note br { display: none; }
-    .art-canvas .hero-art img { object-position: clamp(0%, calc(var(--art-x) - 20%), 100%) var(--art-y); }
     .hero-tags { margin-top: 14px; gap: 5px; }
     .study-section-head h2 { font-size: 18px; }
     .study-section-head .sub { font-size: 9px; }
@@ -1575,6 +1581,21 @@ new ResizeObserver(() => {
   const { width, height } = heroCard.getBoundingClientRect();
   if (width && height) previewCard.style.setProperty("--preview-ratio", String(width / height));
 }).observe(heroCard);
+function updateHorizontalTravel(image) {
+  if (!image.naturalHeight || !image.clientWidth) return;
+  const fittedWidth = image.clientHeight * image.naturalWidth / image.naturalHeight;
+  const cropTravel = Math.max(0, fittedWidth - image.clientWidth);
+  const extraTravel = Math.max(0, image.clientWidth * .12 - cropTravel);
+  image.style.setProperty("--art-pan-extra", `${extraTravel}px`);
+}
+const artTravelObserver = new ResizeObserver((entries) => {
+  for (const { target } of entries) updateHorizontalTravel(target);
+});
+for (const id of ["hero-illustration", "hero-left-illustration", "preview-illustration", "preview-left-illustration"]) {
+  const image = artEl(id);
+  artTravelObserver.observe(image);
+  image.addEventListener("load", () => updateHorizontalTravel(image));
+}
 let savedAppearance = { ...ART_DEFAULTS };
 let draftAppearance = { ...ART_DEFAULTS };
 let savedIllustration = null;
@@ -1598,10 +1619,12 @@ function renderAppearance(settings, illustration, leftIllustration = null) {
   document.documentElement.dataset.artFit = settings.fit;
   document.documentElement.dataset.leftArt = leftIllustration ? "true" : "false";
   root.setProperty("--left-art-x", settings.left_x + "%");
+  root.setProperty("--left-art-pan-factor", String((50 - settings.left_x) / 100));
   root.setProperty("--left-art-y", settings.left_y + "%");
   root.setProperty("--left-art-scale", String(settings.left_zoom / 100));
   root.setProperty("--left-art-opacity", String(settings.left_opacity / 100));
   root.setProperty("--art-x", settings.x + "%");
+  root.setProperty("--art-pan-factor", String((50 - settings.x) / 100));
   root.setProperty("--art-y", settings.y + "%");
   root.setProperty("--art-scale", String(settings.zoom / 100));
   root.setProperty("--art-opacity", String(settings.opacity / 100));
@@ -1663,7 +1686,7 @@ function syncAppearanceControls() {
   artEl("art-upload-label").textContent = draftIllustration ? "替换右侧插画" : "上传右侧插画";
   artEl("art-empty-note").textContent = draftIllustration && draftAppearance.fit === "contain"
     ? "右图完整显示时自动靠右，切回铺满后恢复原水平位置。"
-    : (hasIllustration ? "横向没有裁剪余量时，先放大图片再调水平位置。" : "尚未设置插画，当前使用柔和渐变背景。");
+    : (hasIllustration ? "水平位置可单独调节，移到图片边缘时会露出渐变背景。" : "尚未设置插画，当前使用柔和渐变背景。");
   renderAppearance(draftAppearance, draftIllustration, draftLeftIllustration);
 }
 async function refreshSavedAppearance() {
