@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-study-theme-loading>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -23,6 +23,8 @@
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; scroll-padding-top: 28px; }
+  :root[data-study-theme-loading] { color-scheme: normal; }
+  :root[data-study-theme-loading] body { display: none; }
   body {
     margin: 0; padding: 30px 30px 64px; color: var(--ink);
     font: 14px/1.7 "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -1387,6 +1389,7 @@ async function themeBridge() {
 const themeModeControl = document.getElementById("theme-mode");
 let savedThemeMode = "auto";
 let currentThemeMode = "auto";
+let themeModeLoaded = false;
 let themeFeedbackTimer;
 function applyStudyTheme() {
   const theme = studyThemeFor(currentThemeMode);
@@ -1403,16 +1406,25 @@ function themeFeedback(message) {
   clearTimeout(themeFeedbackTimer);
   themeFeedbackTimer = setTimeout(() => element.classList.add("hide"), 3000);
 }
-applyStudyTheme();
 async function loadThemeMode() {
+  themeModeControl.disabled = true;
+  let timeout;
   try {
-    const bridge = await themeBridge();
-    const stored = await bridge.apiGet("theme/state");
+    const readMode = themeBridge().then(bridge => bridge.apiGet("theme/state"));
+    const deadline = new Promise((_, reject) => {
+      timeout = setTimeout(() => reject(new Error("读取页面模式超时，请重试")), 5000);
+    });
+    const stored = await Promise.race([readMode, deadline]);
     if (!["auto", "light", "night"].includes(stored?.mode)) throw new Error("页面模式暂时无法读取，请重试");
     savedThemeMode = currentThemeMode = stored.mode;
-    applyStudyTheme();
+    themeModeLoaded = true;
   } catch (error) { themeFeedback(error.message || "页面模式暂时无法读取，请重试"); }
-  finally { themeModeControl.disabled = false; }
+  finally {
+    clearTimeout(timeout);
+    applyStudyTheme();
+    document.documentElement.removeAttribute("data-study-theme-loading");
+    themeModeControl.disabled = false;
+  }
 }
 themeModeControl.onchange = async () => {
   currentThemeMode = themeModeControl.value;
@@ -1423,6 +1435,7 @@ themeModeControl.onchange = async () => {
     const result = await bridge.apiPost("theme/save", {mode:currentThemeMode});
     if (!result?.saved) throw new Error("未收到保存确认，请重试");
     savedThemeMode = currentThemeMode;
+    themeModeLoaded = true;
     themeFeedback(currentThemeMode === "auto" ? "已设为随时间切换 · 北京时间 19:00—次日 07:00 为夜晚" : currentThemeMode === "night" ? "已切换夜晚模式" : "已切换浅色模式");
   } catch (error) {
     currentThemeMode = savedThemeMode;
@@ -1431,9 +1444,16 @@ themeModeControl.onchange = async () => {
   } finally { themeModeControl.disabled = false; }
 };
 loadThemeMode();
-setInterval(() => { if (!document.hidden && currentThemeMode === "auto") applyStudyTheme(); }, 30000);
-document.addEventListener("visibilitychange", () => { if (!document.hidden) applyStudyTheme(); });
-window.addEventListener("focus", applyStudyTheme);
+setInterval(() => {
+  if (!document.hidden && currentThemeMode === "auto" && !themeModeControl.disabled) applyStudyTheme();
+}, 30000);
+function refreshStudyTheme() {
+  if (document.hidden || themeModeControl.disabled) return;
+  if (themeModeLoaded) applyStudyTheme();
+  else loadThemeMode();
+}
+document.addEventListener("visibilitychange", refreshStudyTheme);
+window.addEventListener("focus", refreshStudyTheme);
 </script>
 <script type="module" id="meteor-script">
 const METEOR_DEFAULTS = Object.freeze({meteor_enabled:true, meteor_count:128, meteor_brightness:72, meteor_speed:100});
