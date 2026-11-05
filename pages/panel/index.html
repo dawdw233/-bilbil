@@ -71,7 +71,7 @@
   .hd-main > .sub { max-width: 370px; font-size: 12px; }
   .hd-act { position: relative; z-index: 1; align-self: flex-end; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; max-width: 46%; }
   .row-btns { display: flex; flex-wrap: wrap; gap: 9px; justify-content: flex-end; }
-  .hero-art { position: absolute; inset: 0 0 0 40%; z-index: -1; overflow: hidden; pointer-events: none; }
+  .hero-art { --art-layer-opacity: var(--art-opacity, 1); position: absolute; inset: 0 0 0 40%; z-index: -1; overflow: hidden; pointer-events: none; }
   .hero-art img, .preview-art img, .left-illustration img {
     display: block; width: 100%; height: 100%; object-fit: var(--art-fit);
     object-position: calc(var(--art-x) + var(--art-pan-offset, 0px)) var(--art-y);
@@ -82,9 +82,9 @@
     filter: contrast(calc(1.035 + var(--glass-level, .5) * .14)) saturate(calc(1.02 + var(--glass-level, .5) * .12)) brightness(calc(1 - var(--glass-level, .5) * .015)) var(--art-detail-filter, blur(0px)) var(--night-art-filter, brightness(1));
   }
   .hero-art img:not([src]), .preview-art img:not([src]) { display: none; }
-  .hero-art:has(img[src])::before, .preview-art:has(img[src])::before, .left-illustration:has(img[src])::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: var(--glass-level, .5); background: radial-gradient(ellipse at var(--art-light-x, 92%) 18%, #ffffff4d, #ffffff05 38%, transparent 65%); mask-image: linear-gradient(180deg, transparent, #000 20px); }
-  .hero-art:has(img[src])::after, .left-illustration:has(img[src])::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: var(--glass-level, .5); background: linear-gradient(var(--art-glint-angle, 118deg), transparent 0% 80%, #ffffff40 80.3%, #ffffff08 87%, transparent 87.3%), linear-gradient(180deg, #ffffff14, transparent 22% 82%, #d5e9f518); backdrop-filter: blur(calc(var(--glass-level, .5) * .2px)) saturate(calc(1 + var(--glass-level, .5) * .04)); -webkit-backdrop-filter: blur(calc(var(--glass-level, .5) * .2px)) saturate(calc(1 + var(--glass-level, .5) * .04)); mask-image: linear-gradient(var(--art-glint-direction, 90deg), transparent, #000 28%), linear-gradient(180deg, transparent, #000 20px); mask-composite: intersect; }
-  .hero-wash, .preview-wash { pointer-events: none; position: absolute; inset: 0;
+  .hero-art:has(img[src])::before, .preview-art:has(img[src])::before, .left-illustration:has(img[src])::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: calc(var(--glass-level, .5) * var(--art-layer-opacity, 1)); background: radial-gradient(ellipse at var(--art-light-x, 92%) 18%, #ffffff4d, #ffffff05 38%, transparent 65%); mask-image: linear-gradient(180deg, transparent, #000 20px); }
+  .hero-art:has(img[src])::after, .left-illustration:has(img[src])::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: calc(var(--glass-level, .5) * var(--art-layer-opacity, 1)); background: linear-gradient(var(--art-glint-angle, 118deg), transparent 0% 80%, #ffffff40 80.3%, #ffffff08 87%, transparent 87.3%), linear-gradient(180deg, #ffffff14, transparent 22% 82%, #d5e9f518); backdrop-filter: blur(calc(var(--glass-level, .5) * .2px)) saturate(calc(1 + var(--glass-level, .5) * .04)); -webkit-backdrop-filter: blur(calc(var(--glass-level, .5) * .2px)) saturate(calc(1 + var(--glass-level, .5) * .04)); mask-image: linear-gradient(var(--art-glint-direction, 90deg), transparent, #000 28%), linear-gradient(180deg, transparent, #000 20px); mask-composite: intersect; }
+  .hero-wash, .preview-wash { pointer-events: none; position: absolute; inset: 0; opacity: var(--art-layer-opacity, 1);
     background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(90deg, rgb(var(--art-mask)) 0%,
       rgba(var(--art-mask), var(--art-mask-strength)) 36%, rgba(var(--art-mask), calc(var(--art-mask-strength) * .36)) 72%, rgba(var(--art-mask), .06) 100%);
   }
@@ -376,7 +376,7 @@
   .art-canvas { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
   .art-float-plane { --art-start: 26%; position: absolute; inset: 0 0 0 var(--art-start); z-index: 0; isolation: isolate; pointer-events: none; filter: drop-shadow(0 8px 12px var(--art-depth-shadow, #233a4924)); }
   .art-float-plane:not(:has(img[src])) { display: none; }
-  .left-illustration { --art-light-x: 8%; --art-glint-angle: 62deg; --art-glint-direction: 270deg; position: absolute; inset: 0 42% 0 0; z-index: 0; isolation: isolate; overflow: hidden; pointer-events: none; mask-image: linear-gradient(90deg, #000 58%, transparent); filter: drop-shadow(0 8px 12px var(--art-depth-shadow, #233a4924)); }
+  .left-illustration { --art-light-x: 8%; --art-glint-angle: 62deg; --art-glint-direction: 270deg; --art-layer-opacity: var(--left-art-opacity, .65); position: absolute; inset: 0 42% 0 0; z-index: 0; isolation: isolate; overflow: hidden; pointer-events: none; mask-image: linear-gradient(90deg, #000 58%, transparent); filter: drop-shadow(0 8px 12px var(--art-depth-shadow, #233a4924)); }
   .left-illustration:not(:has(img[src])) { display: none; }
   .left-illustration img {
     object-fit: cover;
@@ -388,6 +388,8 @@
   .left-illustration .hero-wash { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(270deg, rgb(var(--art-mask)) 0%, rgba(var(--art-mask), var(--art-mask-strength)) 36%, rgba(var(--art-mask), calc(var(--art-mask-strength) * .36)) 72%, rgba(var(--art-mask), .06) 100%); }
   /* 双图：右图画布提前铺满到接缝下方，左图再压在上面缓淡退出，两张图交叠处不露出卡片底色，也不会留出整片白雾。 */
   :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) { --art-split: 53%; --art-seam: calc(100% - var(--art-split)); }
+  /* 双图先把两张图合成一层再整体淡出，接缝处就不会因为两层叠加比两边更亮或更暗。 */
+  :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) { opacity: var(--art-canvas-opacity, 1); }
   :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .left-illustration { right: auto; width: var(--art-split); mask-image: linear-gradient(90deg, #000 91%, rgba(0, 0, 0, .86) 93%, rgba(0, 0, 0, .55) 95.5%, rgba(0, 0, 0, .2) 98%, transparent); }
   :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .art-float-plane { left: var(--art-seam); right: auto; width: var(--art-split); clip-path: inset(0); }
   :root[data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .art-float-plane > .hero-art { mask-image: linear-gradient(90deg, transparent, rgba(0, 0, 0, .5) 3%, rgba(0, 0, 0, .85) 5.5%, #000 7%); }
@@ -585,7 +587,7 @@
     background: linear-gradient(var(--art-ambient), var(--art-ambient)),
       linear-gradient(var(--night-wash-direction, to right), rgba(var(--art-edge-tone), calc(.04 + var(--art-mask-strength) * .16)), rgba(var(--art-edge-tone), .04) 40%);
   }
-  :root[data-study-theme="night"] :is(.hero-art, .preview-art, .left-illustration)::before, :root[data-study-theme="night"] :is(.hero-art, .preview-art, .left-illustration)::after { opacity: calc(var(--glass-level, .5) * .55); }
+  :root[data-study-theme="night"] :is(.hero-art, .preview-art, .left-illustration)::before, :root[data-study-theme="night"] :is(.hero-art, .preview-art, .left-illustration)::after { opacity: calc(var(--glass-level, .5) * .55 * var(--art-layer-opacity, 1)); }
   :root[data-study-theme="night"] :is(.hero-tag, .stat-icon, .tag, .check, .md blockquote, code, th) { background: #46627bb3; border-color: #9db6ca66; color: #e0ebf3; }
   :root[data-study-theme="night"] .hero-tag::before { background: #95bdda; }
   :root[data-study-theme="night"] .stat-icon { color: #a9c7dd; }
@@ -1686,11 +1688,14 @@ function renderAppearance(settings, illustration, leftIllustration = null) {
   root.setProperty("--left-art-x", settings.left_x + "%");
   root.setProperty("--left-art-y", settings.left_y + "%");
   root.setProperty("--left-art-scale", String(settings.left_zoom / 100));
-  root.setProperty("--left-art-opacity", String(settings.left_opacity / 100));
+  const groupOpacity = illustration && leftIllustration ? Math.max(settings.opacity, settings.left_opacity) / 100 : 1;
+  const layerOpacity = (value) => (groupOpacity > 0 ? Math.min(1, value / 100 / groupOpacity) : 0);
+  root.setProperty("--art-canvas-opacity", String(groupOpacity));
+  root.setProperty("--left-art-opacity", String(layerOpacity(settings.left_opacity)));
   root.setProperty("--art-x", settings.x + "%");
   root.setProperty("--art-y", settings.y + "%");
   root.setProperty("--art-scale", String(settings.zoom / 100));
-  root.setProperty("--art-opacity", String(settings.opacity / 100));
+  root.setProperty("--art-opacity", String(layerOpacity(settings.opacity)));
   root.setProperty("--art-fit", settings.fit);
   root.setProperty("--glass-level", String(settings.glass_enabled ? settings.glass / 100 : 0));
   artEl("art-sharpen-kernel").setAttribute("kernelMatrix", sharpnessKernel(settings.sharpness));
