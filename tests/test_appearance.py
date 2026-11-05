@@ -59,7 +59,8 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
                          {"glass": -1}, {"glass": 101}, {"glass": True}, {"glass": float("nan")},
                          {"glass_enabled": "false"}, {"glass_enabled": 0}, {"sharpness": -1},
                          {"sharpness": 101}, {"sharpness": True}, {"sharpness": float("nan")},
-                         {"left_x": -1}, {"left_y": 101}, {"left_zoom": 99}, {"left_opacity": True}):
+                         {"left_x": -1}, {"left_y": 101}, {"left_zoom": 99}, {"left_opacity": True},
+                         {"left_fit": "invalid"}):
             with self.subTest(settings=settings):
                 self.payload = {"settings": settings, "image": None}
                 self.assertIn("error", await self.instance._api_appearance_save())
@@ -68,17 +69,22 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
     async def test_dual_images_save_and_remove_independently(self):
         right = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nright").decode()
         left = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nleft").decode()
-        for image, left_image in ((right, left), (right, None), (None, left)):
-            self.payload = {"settings": {"left_x": 20, "left_opacity": 0}, "image": image, "left_image": left_image}
+        for image, left_image, fit, left_fit in ((right, left, "cover", "contain"),
+                                                  (right, None, "contain", "cover"),
+                                                  (None, left, "contain", "contain")):
+            self.payload = {"settings": {"left_x": 20, "left_opacity": 0, "fit": fit, "left_fit": left_fit},
+                            "image": image, "left_image": left_image}
             self.assertEqual(await self.instance._api_appearance_save(), {"saved": True})
             state = await self.instance._api_appearance_state()
             self.assertEqual(state["image"], image)
             self.assertEqual(state["left_image"], left_image)
             self.assertEqual(state["settings"]["left_opacity"], 0)
+            self.assertEqual(state["settings"]["fit"], fit)
+            self.assertEqual(state["settings"]["left_fit"], left_fit)
 
     async def test_legacy_save_preserves_left_image_and_position(self):
         left = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nleft").decode()
-        self.payload = {"settings": {"left_x": 18, "left_zoom": 150}, "image": None, "left_image": left}
+        self.payload = {"settings": {"left_x": 18, "left_zoom": 150, "left_fit": "contain"}, "image": None, "left_image": left}
         await self.instance._api_appearance_save()
         self.payload = {"settings": {"zoom": 130}, "image": None}
         await self.instance._api_appearance_save()
@@ -86,6 +92,7 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state["left_image"], left)
         self.assertEqual(state["settings"]["left_x"], 18)
         self.assertEqual(state["settings"]["left_zoom"], 150)
+        self.assertEqual(state["settings"]["left_fit"], "contain")
 
     async def test_invalid_left_image_and_storage_failure_preserve_both_images(self):
         image = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nimage").decode()
@@ -129,6 +136,7 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(restored["settings"]["opacity"], 60)
         self.assertIsNone(restored["image"])
         self.assertEqual(restored["settings"]["sharpness"], 0)
+        self.assertEqual(restored["settings"]["left_fit"], "cover")
 
     async def test_sharpness_persists_independently_of_glass(self):
         for strength in (0, 35, 100):

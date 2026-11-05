@@ -239,7 +239,7 @@
   .art-section .range-field { gap: 3px; }
   .art-effect-group { display: grid; align-content: start; gap: 10px; min-width: 0; }
   .art-crop { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
-  .art-crop select { padding: 8px 11px; }
+  .art-effect-group select { padding: 8px 11px; }
   .art-crop button { font-size: 12px; padding-inline: 11px; }
   .art-filter-defs { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
   .art-effect-group .check .tip { display: block; margin-top: 4px; }
@@ -527,7 +527,9 @@
     .study-shell .top-row { grid-template-columns: 1fr; }
   }
 
-  :root[data-art-fit="contain"] .art-canvas .hero-art img { position: absolute; top: 0; right: 0; width: auto; max-width: 100%; object-position: 100% var(--art-y); transform-origin: 100% var(--art-y); mask-image: linear-gradient(90deg, transparent, #000 24%); }
+  :is(:root[data-art-fit="contain"] .art-canvas .hero-art img, :root[data-left-art-fit="contain"] .art-canvas .left-illustration img) { position: absolute; top: 0; width: auto; max-width: 100%; object-fit: contain; }
+  :root[data-art-fit="contain"] .art-canvas .hero-art img { right: 0; object-position: 100% var(--art-y); transform-origin: 100% var(--art-y); mask-image: linear-gradient(90deg, transparent, #000 24%); }
+  :root[data-left-art-fit="contain"] .art-canvas .left-illustration img { left: 0; object-position: 0% var(--left-art-y); transform-origin: 0% var(--left-art-y); mask-image: linear-gradient(270deg, transparent, #000 24%); }
   :root[data-left-art="true"] .art-canvas .hero-readability { background: transparent; }
   :root[data-left-art="true"] :is(.hd-main, .preview-label)::before {
     content: "";
@@ -1285,6 +1287,7 @@
             <label class="field" for="art-fit"><span class="lbl">右侧插画裁剪方式</span><select id="art-fit"><option value="cover">铺满画面 · 超出部分裁剪</option><option value="contain">完整显示 · 保留整张图片</option></select></label>
             <button type="button" id="art-recenter">重置右图位置</button>
           </div>
+          <label class="field" for="art-left_fit"><span class="lbl">左侧插画裁剪方式</span><select id="art-left_fit"><option value="cover">铺满画面 · 超出部分裁剪</option><option value="contain">完整显示 · 保留整张图片</option></select></label>
           <label class="color-field" for="art-mask">渐变遮罩颜色<input id="art-mask" type="color" value="#edf6fc" /></label>
           <label class="range-field" for="art-strength"><span class="range-label">渐变遮罩强度<output id="art-strength-value" for="art-strength">85%</output></span><input id="art-strength" type="range" min="0" max="100" step="1" value="85" /><span class="tip">0% 关闭渐变遮罩。数值越高，所选颜色越明显。</span></label>
         </div>
@@ -1546,7 +1549,7 @@ meteorDialog.addEventListener("close", () => { renderMeteors(savedMeteors); });
 </script>
 <script type="module" id="appearance-script">
 // 通过插件 bridge 保存外观，兼容 AstrBot 的隔离面板。
-const ART_DEFAULTS = Object.freeze({ x: 75, y: 50, zoom: 100, opacity: 85, fit: "cover", mask: "#edf6fc", strength: 85, glass_enabled: true, glass: 50, sharpness: 0, left_x: 50, left_y: 50, left_zoom: 100, left_opacity: 65 });
+const ART_DEFAULTS = Object.freeze({ x: 75, y: 50, zoom: 100, opacity: 85, fit: "cover", mask: "#edf6fc", strength: 85, glass_enabled: true, glass: 50, sharpness: 0, left_x: 50, left_y: 50, left_zoom: 100, left_opacity: 65, left_fit: "cover" });
 function normalizeAppearance(raw = {}) {
   const clamp = (key, min, max) => {
     const value = Number(raw[key]);
@@ -1561,6 +1564,7 @@ function normalizeAppearance(raw = {}) {
     left_x: clamp("left_x", 0, 100), left_y: clamp("left_y", 0, 100),
     left_zoom: clamp("left_zoom", 100, 250), left_opacity: clamp("left_opacity", 0, 100),
     fit: raw.fit === "contain" ? "contain" : "cover",
+    left_fit: raw.left_fit === "contain" ? "contain" : "cover",
     mask: /^#[0-9a-f]{6}$/i.test(raw.mask || "") ? raw.mask.toLowerCase() : ART_DEFAULTS.mask,
   };
 }
@@ -1628,7 +1632,8 @@ let displayedAppearance = ART_DEFAULTS;
 function updateIllustrationCrop(image) {
   const left = leftIllustrations.includes(image);
   const { width, height } = image.parentElement.getBoundingClientRect();
-  if (!image.hasAttribute("src") || !image.naturalHeight || !width || !height || (!left && displayedAppearance.fit === "contain")) {
+  const fit = left ? displayedAppearance.left_fit : displayedAppearance.fit;
+  if (!image.hasAttribute("src") || !image.naturalHeight || !width || !height || fit === "contain") {
     image.style.removeProperty("--art-cover-scale");
     image.style.removeProperty("--art-pan-offset");
     return;
@@ -1680,6 +1685,7 @@ function renderAppearance(settings, illustration, leftIllustration = null) {
   displayedAppearance = settings;
   const root = document.documentElement.style;
   document.documentElement.dataset.artFit = settings.fit;
+  document.documentElement.dataset.leftArtFit = settings.left_fit;
   document.documentElement.dataset.leftArt = leftIllustration ? "true" : "false";
   root.setProperty("--left-art-x", settings.left_x + "%");
   root.setProperty("--left-art-y", settings.left_y + "%");
@@ -1728,7 +1734,11 @@ function syncAppearanceControls() {
     artEl("art-x").disabled = true;
     artEl("art-x-value").textContent = "自动靠右";
   }
-  for (const key of ["left_x", "left_y", "left_zoom", "left_opacity"]) artEl("art-" + key).disabled = !draftLeftIllustration || artBusy;
+  for (const key of ["left_x", "left_y", "left_zoom", "left_opacity", "left_fit"]) artEl("art-" + key).disabled = !draftLeftIllustration || artBusy;
+  if (draftAppearance.left_fit === "contain") {
+    artEl("art-left_x").disabled = true;
+    artEl("art-left_x-value").textContent = "自动靠左";
+  }
   const hasIllustration = Boolean(draftIllustration || draftLeftIllustration);
   artEl("art-sharpness").disabled = !hasIllustration || artBusy;
   artEl("art-glass_enabled").disabled = !hasIllustration || artBusy;
@@ -1743,8 +1753,10 @@ function syncAppearanceControls() {
   artEl("art-save").disabled = artBusy;
   artEl("art-reset").disabled = artBusy;
   artEl("art-upload-label").textContent = draftIllustration ? "替换右侧插画" : "上传右侧插画";
-  artEl("art-empty-note").textContent = draftIllustration && draftAppearance.fit === "contain"
-    ? "右图完整显示时自动靠右，切回铺满后恢复原水平位置。"
+  const hasContainedImage = (draftIllustration && draftAppearance.fit === "contain")
+    || (draftLeftIllustration && draftAppearance.left_fit === "contain");
+  artEl("art-empty-note").textContent = hasContainedImage
+    ? "完整显示时，100% 缩放保留整张图，并自动贴齐对应侧。切回铺满后恢复原水平位置。"
     : (hasIllustration ? "水平位置可单独调节。横移空间不足时，插画会略微放大以铺满画框。" : "尚未设置插画，当前使用柔和渐变背景。");
   renderAppearance(draftAppearance, draftIllustration, draftLeftIllustration);
 }

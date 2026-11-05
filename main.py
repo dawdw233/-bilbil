@@ -61,7 +61,7 @@ APPEARANCE_DEFAULTS = {
     "x": 75, "y": 50, "zoom": 100, "opacity": 85,
     "fit": "cover", "mask": "#edf6fc", "strength": 85,
     "glass_enabled": True, "glass": 50, "sharpness": 0,
-    "left_x": 50, "left_y": 50, "left_zoom": 100, "left_opacity": 65,
+    "left_x": 50, "left_y": 50, "left_zoom": 100, "left_opacity": 65, "left_fit": "cover",
 }
 METEOR_DEFAULTS = {
     "meteor_enabled": True, "meteor_count": 128, "meteor_brightness": 72, "meteor_speed": 100,
@@ -257,9 +257,11 @@ class BiliScrollPlugin(Star):
         if not isinstance(enabled, bool):
             raise ValueError("玻璃质感开关必须为开启或关闭")
         result["glass_enabled"] = enabled
-        if settings.get("fit", "cover") not in ("cover", "contain"):
-            raise ValueError("请选择铺满裁剪或完整显示")
-        result["fit"] = settings.get("fit", "cover")
+        for key in ("fit", "left_fit"):
+            fit = settings.get(key, result[key])
+            if fit not in ("cover", "contain"):
+                raise ValueError("请选择铺满裁剪或完整显示")
+            result[key] = fit
         color = settings.get("mask", result["mask"])
         if not isinstance(color, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
             raise ValueError("遮罩颜色格式不正确")
@@ -492,8 +494,8 @@ class BiliScrollPlugin(Star):
             stored = self._load_appearance()
             left_image = payload.get("left_image", stored.get("left_image"))
             self._validate_panel_image(left_image, "左侧插画")
-            # 旧面板保存右侧外观时，不覆盖新版独立添加的左图及其位置。
-            for key in ("left_x", "left_y", "left_zoom", "left_opacity"):
+            # 旧面板保存右侧外观时，保留未提交的左图设置。
+            for key in ("left_x", "left_y", "left_zoom", "left_opacity", "left_fit"):
                 if key not in payload.get("settings", {}):
                     settings[key] = stored["settings"][key]
         except (ValueError, binascii.Error) as exc:
