@@ -603,6 +603,7 @@
   :root[data-study-theme="night"][data-left-art="true"] .art-canvas .hero-readability { background: none; }
   :root[data-study-theme="night"][data-left-art="true"] :is(.hd-main, .preview-label)::before {
     background: radial-gradient(ellipse 48% 64% at 29% 52%, rgb(var(--hero-text-scrim) / .50), rgb(var(--hero-text-scrim) / .40) 45%, transparent);
+    mask-image: linear-gradient(180deg, transparent, #000 40px);
   }
   :root[data-study-theme="night"][data-left-art="true"] #top .hero-note { color: #e6eff6; }
   :root[data-study-theme="night"] :is(.hero-art, .preview-art, .left-illustration)::before, :root[data-study-theme="night"] :is(.hero-art, .preview-art, .left-illustration)::after { opacity: calc(var(--glass-level, .5) * .55 * var(--art-layer-opacity, 1)); }
