@@ -372,7 +372,7 @@
   .toolbar-actions button { min-height: 35px; padding: 7px 13px; font-size: 11px; }
   .toolbar-actions #appearance-open { margin: 0; font-size: 11px; padding: 7px 12px; }
   .toolbar-actions #theme-mode { width: auto; max-width: 130px; min-height: 35px; padding: 6px 10px; border-radius: 999px; font-size: 11px; }
-  .study-shell .hd { --hero-radius: 26px; min-height: 282px; padding: 33px 36px; border: 0; border-radius: var(--hero-radius); margin-bottom: 28px; display: flex; align-items: center; box-shadow: var(--shadow-hero); }
+  .study-shell .hd { --hero-radius: 26px; --hero-min-height: 282px; min-height: max(var(--hero-min-height), var(--art-pair-height, 0px)); padding: 33px 36px; border: 0; border-radius: var(--hero-radius); margin-bottom: 28px; display: flex; align-items: center; box-shadow: var(--shadow-hero); }
   .study-shell .hd::before, .study-shell .hd::after { display: none; }
   .study-shell .hd-main { width: 56%; max-width: 500px; }
   .study-shell h1 { font-size: clamp(31px, 3.2vw, 42px); line-height: 1.5; margin: 13px 0 11px; letter-spacing: .07em; }
@@ -455,7 +455,7 @@
   .stat-icon svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.45; stroke-linecap: round; stroke-linejoin: round; }
   .study-shell .top-row { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); margin-top: 0; }
   #study-feedback { margin: 9px 2px 0; font-size: 10px; color: #6c8497; }
-  @media (min-width: 1500px) { .study-shell .main { margin-left: 252px; } .study-shell .side { width: 220px; } .study-shell .hd { min-height: 320px; } }
+  @media (min-width: 1500px) { .study-shell .main { margin-left: 252px; } .study-shell .side { width: 220px; } .study-shell .hd { --hero-min-height: 320px; } }
   @media (max-width: 1050px) {
     .study-shell .side { width: 175px; left: 22px; }
     .study-shell .main { margin-left: 195px; }
@@ -464,7 +464,7 @@
     .toolbar-path { font-size: 10px; gap: 6px; }
     .toolbar-actions { gap: 5px; } .toolbar-actions button { padding: 6px 9px; font-size: 10px; }
     .toolbar-actions #appearance-open { padding: 6px 9px; font-size: 10px; }
-    .study-shell .hd { padding: 27px; min-height: 270px; }
+    .study-shell .hd { padding: 27px; --hero-min-height: 270px; }
     .study-shell h1 { font-size: 34px; }
     .study-lower-grid { grid-template-columns: 1fr; }
     .study-stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -486,7 +486,7 @@
     .side-footnote { display: none; }
     .study-toolbar { position: relative; top: auto; padding: 3px 0 9px; margin-bottom: 8px; flex-wrap: wrap; background: transparent; backdrop-filter: none; }
     .toolbar-path { font-size: 10px; } .toolbar-actions { margin-left: auto; }
-    .study-shell .hd { min-height: 270px; padding: 27px; flex-direction: row; align-items: center; margin-bottom: 20px; }
+    .study-shell .hd { --hero-min-height: 270px; padding: 27px; flex-direction: row; align-items: center; margin-bottom: 20px; }
     .study-shell .hd-main { width: 64%; max-width: 380px; }
     .art-canvas .hero-readability { background: linear-gradient(90deg, #f8fcff 0%, #f7fbfffa 34%, #f5faffcf 53%, #f2f8fd4d 74%, transparent 91%); }
     .study-shell h1 { font-size: 34px; line-height: 1.5; }
@@ -504,7 +504,7 @@
     .toolbar-path { width: 100%; padding: 4px; }
     .toolbar-actions { margin-left: 0; width: 100%; justify-content: flex-start; }
     .toolbar-actions button, .toolbar-actions #appearance-open { font-size: 10px; padding: 7px 10px; min-height: 33px; }
-    .study-shell .hd { --hero-radius: 23px; min-height: 306px; padding: 25px 23px; }
+    .study-shell .hd { --hero-radius: 23px; --hero-min-height: 306px; padding: 25px 23px; }
     .study-shell h1 { font-size: 29px; letter-spacing: .04em; margin: 12px 0 10px; }
     .study-shell .hd-main { width: 82%; }
     .study-shell .hero-eyebrow { font-size: 10px; letter-spacing: .06em; }
@@ -529,6 +529,20 @@
   :root[data-art-fit="contain"] .art-canvas :is(.hero-art, .left-illustration) img { position: absolute; top: 0; width: auto; max-width: 100%; }
   :root[data-art-fit="contain"] .art-canvas .hero-art img { right: 0; object-position: 100% var(--art-y); transform-origin: 100% var(--art-y); mask-image: linear-gradient(90deg, transparent, #000 24%); }
   :root[data-art-fit="contain"] .art-canvas .left-illustration img { left: 0; object-position: 0% var(--left-art-y); transform-origin: 0% var(--left-art-y); mask-image: linear-gradient(270deg, transparent, #000 24%); }
+  /* Meet at the inner edges and fade only the upper layer across the overlap. */
+  :root[data-art-fit="contain"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) {
+    --art-pair-overlap: 18px;
+    --art-split: calc((100% + var(--art-pair-overlap)) * var(--art-left-share, .5));
+    --art-seam: calc(var(--art-split) - var(--art-pair-overlap));
+  }
+  :root[data-art-fit="contain"][data-left-art="true"] .art-preview .art-canvas:has(.hero-art img[src]),
+  :root[data-art-fit="contain"][data-left-art="true"][data-compact-hero] .art-canvas:has(.hero-art img[src]) { --art-pair-overlap: 10px; }
+  :root[data-art-fit="contain"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) > :is(.left-illustration, .art-float-plane) { filter: none; }
+  :root[data-art-fit="contain"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .left-illustration { mask-image: none; }
+  :root[data-art-fit="contain"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .art-float-plane { right: 0; width: auto; }
+  :root[data-art-fit="contain"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) > .art-float-plane > .hero-art { mask-image: linear-gradient(90deg, transparent, #000 var(--art-pair-overlap)); }
+  :root[data-art-fit="contain"][data-left-art="true"] .art-canvas:has(.hero-art img[src]) .left-illustration img { left: auto; right: 0; object-position: 100% var(--left-art-y); transform-origin: 100% var(--left-art-y); mask-image: none; }
+  :root[data-art-fit="contain"][data-left-art="true"] .art-canvas .hero-art img { right: auto; left: 0; object-position: 0% var(--art-y); transform-origin: 0% var(--art-y); mask-image: none; }
   :root[data-left-art="true"] .art-canvas .hero-readability { background: transparent; }
   :root[data-left-art="true"] :is(.hd-main, .preview-label)::before {
     content: "";
@@ -1616,16 +1630,34 @@ const artEl = (id) => document.getElementById(id);
 const artDialog = artEl("appearance-dialog");
 const heroCard = artEl("top");
 const previewCard = artDialog.querySelector(".art-preview");
+const rightIllustrations = [artEl("hero-illustration"), artEl("preview-illustration")];
+const leftIllustrations = [artEl("hero-left-illustration"), artEl("preview-left-illustration")];
+const illustrationImages = [...rightIllustrations, ...leftIllustrations];
+let displayedAppearance = ART_DEFAULTS;
+function updateContainedPair(width) {
+  const root = document.documentElement.style;
+  const left = leftIllustrations[0], right = rightIllustrations[0];
+  if (displayedAppearance.fit !== "contain" || !left.hasAttribute("src") || !right.hasAttribute("src")
+      || !left.naturalHeight || !right.naturalHeight) {
+    root.removeProperty("--art-left-share");
+    heroCard.style.removeProperty("--art-pair-height");
+    return;
+  }
+  const leftRatio = left.naturalWidth / left.naturalHeight;
+  const rightRatio = right.naturalWidth / right.naturalHeight;
+  const pairRatio = leftRatio + rightRatio;
+  const frameWidth = width ?? heroCard.getBoundingClientRect().width;
+  root.setProperty("--art-left-share", String(Math.min(.65, Math.max(.35, leftRatio / pairRatio))));
+  // Allow the pair to use the available width without cropping or making a tall card for portrait art.
+  heroCard.style.setProperty("--art-pair-height", Math.min(420, (frameWidth + 18) / pairRatio) + "px");
+}
 new ResizeObserver(() => {
   const { width, height } = heroCard.getBoundingClientRect();
   if (!width || !height) return;
   document.documentElement.toggleAttribute("data-compact-hero", width <= 560);
   previewCard.style.setProperty("--preview-ratio", String(width / height));
+  updateContainedPair(width);
 }).observe(heroCard);
-const rightIllustrations = [artEl("hero-illustration"), artEl("preview-illustration")];
-const leftIllustrations = [artEl("hero-left-illustration"), artEl("preview-left-illustration")];
-const illustrationImages = [...rightIllustrations, ...leftIllustrations];
-let displayedAppearance = ART_DEFAULTS;
 function updateIllustrationCrop(image) {
   const left = leftIllustrations.includes(image);
   const { width, height } = image.parentElement.getBoundingClientRect();
@@ -1658,6 +1690,9 @@ const artTravelObserver = new ResizeObserver((entries) => {
 for (const image of illustrationImages) {
   artTravelObserver.observe(image);
   image.addEventListener("load", () => updateIllustrationCrop(image));
+}
+for (const image of [leftIllustrations[0], rightIllustrations[0]]) {
+  image.addEventListener("load", () => updateContainedPair());
 }
 let savedAppearance = { ...ART_DEFAULTS };
 let draftAppearance = { ...ART_DEFAULTS };
@@ -1707,6 +1742,7 @@ function renderAppearance(settings, illustration, leftIllustration = null) {
     for (const image of leftIllustrations) setIllustrationSource(image, leftIllustration);
     displayedLeftIllustration = leftIllustration;
   }
+  updateContainedPair();
   for (const image of illustrationImages) updateIllustrationCrop(image);
   renderStudyAvatar();
 }
@@ -1747,7 +1783,7 @@ function syncAppearanceControls() {
   artEl("art-reset").disabled = artBusy;
   artEl("art-upload-label").textContent = draftIllustration ? "替换右侧插画" : "上传右侧插画";
   artEl("art-empty-note").textContent = hasIllustration && draftAppearance.fit === "contain"
-    ? "完整显示时，100% 缩放保留整张图，并自动贴齐对应侧。切回铺满后恢复原水平位置。"
+    ? "完整显示时，100% 缩放保留整张图，双图自动在中间衔接。切回铺满后恢复原水平位置。"
     : (hasIllustration ? "水平位置可单独调节。横移空间不足时，插画会略微放大以铺满画框。" : "尚未设置插画，当前使用柔和渐变背景。");
   renderAppearance(draftAppearance, draftIllustration, draftLeftIllustration);
 }
