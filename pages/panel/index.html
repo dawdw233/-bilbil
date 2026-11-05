@@ -189,18 +189,40 @@
   .appearance-heading { position: sticky; top: 0; z-index: 2; background: #f6fafff5; display: flex; align-items: start; justify-content: space-between; gap: 20px; padding: 26px 28px 20px; border-bottom: 1px solid var(--line); }
   .appearance-heading h2 { font-size: 23px; margin-bottom: 5px; }
   .icon-button { width: 36px; height: 36px; min-height: 36px; padding: 0; flex-shrink: 0; }
-  .appearance-content { padding: 24px 28px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 26px; }
+  #appearance-dialog[open] {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    overflow: hidden;
+  }
+  #appearance-dialog > :is(.appearance-heading, .appearance-footer) { position: static; }
+  .appearance-content {
+    display: grid;
+    gap: 16px;
+    padding: 18px 24px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-gutter: stable;
+    scroll-padding-block: 12px;
+  }
   .appearance-preview-col { min-width: 0; }
-  .art-preview { isolation: isolate; position: relative; height: 220px; overflow: hidden; border-radius: 20px; border: 0; background: linear-gradient(112deg, #f9fcfe 0%, #edf5fb 52%, #dfeaf3 100%); }
+  .appearance-preview-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 3px 16px; margin-top: 8px; }
+  .art-preview { isolation: isolate; position: relative; height: clamp(152px, 24dvh, 220px); overflow: hidden; border-radius: 20px; border: 0; background: linear-gradient(112deg, #f9fcfe 0%, #edf5fb 52%, #dfeaf3 100%); }
   .preview-label { position: absolute; z-index: 1; left: 24px; bottom: 26px; max-width: 62%; }
   .preview-label strong { font: 400 28px/1.5 var(--serif); letter-spacing: .12em; }
   .preview-label span { display: block; font-size: 11px; color: var(--muted); }
   .art-file-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 10px; }
   .art-file-actions button { font-size: 12px; padding: 8px 14px; }
-  .art-controls { display: grid; gap: 18px; align-content: start; }
-  .glass-controls { display: grid; gap: 14px; margin-top: 20px; }
+  .art-columns, .art-effects { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .art-section { display: grid; align-content: start; gap: 8px; min-width: 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+  .art-section h3 { margin: 0; font-size: 14px; }
+  .art-section .art-file-actions { margin: 2px 0 4px; }
+  .art-section .range-field { gap: 3px; }
+  .art-effect-group { display: grid; align-content: start; gap: 10px; min-width: 0; }
+  .art-crop { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
+  .art-crop select { padding: 8px 11px; }
+  .art-crop button { font-size: 12px; padding-inline: 11px; }
   .art-filter-defs { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
-  .glass-controls .check .tip { display: block; margin-top: 4px; }
+  .art-effect-group .check .tip { display: block; margin-top: 4px; }
   .range-field { display: grid; gap: 7px; min-width: 0; }
   .range-label { display: flex; justify-content: space-between; align-items: center; font-size: 12px; gap: 10px; }
   output { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -214,10 +236,10 @@
   input[type="range"]:disabled { opacity: .45; cursor: default; }
   input[type="color"] { width: 50px; height: 37px; padding: 4px; border-radius: 10px; cursor: pointer; }
   .color-field { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; }
-  .art-controls select { padding: 8px 11px; }
   .appearance-footer { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 17px 28px; background: #f6faffed; border-top: 1px solid var(--line); }
   .appearance-footer .row { justify-content: flex-end; }
-  #art-status { font-size: 12px; margin: 12px 0; min-height: 22px; }
+  #art-status { font-size: 12px; }
+  #art-status:not(:empty) { margin-bottom: 4px; }
   .appearance-toast { position: fixed; z-index: 10; bottom: 28px; left: 50%; transform: translateX(-50%); padding: 10px 22px; background: #e9f4fbed; border: 1px solid #bdd6e8; border-radius: 999px; box-shadow: var(--shadow-up); font-size: 12px; max-width: calc(100% - 32px); text-align: center; }
   @keyframes enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   @media (min-width: 1000px) { .panels { grid-template-columns: 1fr 1fr; } }
@@ -240,9 +262,8 @@
     .row-btns { justify-content: flex-start; } #appearance-open { margin-top: 0; }
     .hero-note { font-size: 13px; margin-bottom: 12px; } .hero-eyebrow { font-size: 9px; }
     .hero-art { left: 27%; } .hero-readability { background: linear-gradient(90deg, #f8fcfff5, #f5faffd4 40%, #f2f8fd77 72%, #f2f8fd1a); }
-    .appearance-content { grid-template-columns: 1fr; gap: 22px; }
-    .art-preview { height: 180px; } .art-controls { grid-template-columns: 1fr 1fr; gap: 18px; }
-    .art-controls .span-all { grid-column: 1 / -1; }
+    .art-crop { grid-template-columns: 1fr; }
+    .art-crop button { justify-self: start; }
   }
   @media (max-width: 520px) {
     body { padding: 12px 12px 32px; } .hd { padding: 25px 22px; }
@@ -258,7 +279,10 @@
     .card { padding: 15px; border-radius: 18px; } .card .v { font-size: 14px; }
     .save-bar { gap: 10px; } .appearance-dialog { width: calc(100% - 20px); max-height: calc(100dvh - 24px); border-radius: 22px; }
     .appearance-heading { padding: 22px 20px 16px; } .appearance-heading h2 { font-size: 21px; }
-    .appearance-content { padding: 20px; } .appearance-footer { padding: 15px 20px; }
+    .appearance-content { padding: 14px 16px; gap: 12px; }
+    .art-preview { height: 156px; }
+    .art-columns, .art-effects { grid-template-columns: 1fr; gap: 12px; }
+    .appearance-footer { padding: 15px 20px; }
     .appearance-footer > .sub { flex-basis: 100%; } .appearance-footer .row { width: 100%; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -1167,20 +1191,16 @@
         <div class="art-float-plane" aria-hidden="true"><div class="hero-art preview-art"><img id="preview-illustration" alt="" /><div class="hero-wash preview-wash"></div></div></div><div class="hero-readability" aria-hidden="true"></div>
         <div class="preview-label"><strong>刷 B站</strong><span>留一点闲时，遇见有趣。</span></div>
       </div>
-      <div class="art-file-actions">
-        <button type="button" id="art-upload"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4M4 16v4h16v-4"/></svg><span id="art-upload-label">上传插画</span></button>
-        <button type="button" id="art-remove">移除右侧插画</button>
-        <button type="button" id="art-recenter">重置右图位置</button>
+      <div class="appearance-preview-meta">
+        <span class="tip">支持 PNG、JPG、WebP，最大 20 MB。</span>
+        <span class="tip" id="art-empty-note">尚未设置插画，当前使用柔和渐变背景。</span>
       </div>
-      <input type="file" id="art-file" class="sr-only" tabindex="-1" aria-label="选择右侧插画文件" accept="image/png,image/jpeg,image/webp" />
-      <div class="tip">支持 PNG、JPG、WebP，最大 20 MB。</div>
-      <div class="tip" id="art-empty-note">尚未设置插画，当前使用柔和渐变背景。</div>
-      <div id="art-status" role="status" aria-live="polite"></div>
-      <div class="glass-controls" role="group" aria-labelledby="left-art-title">
+    </div>
+    <div class="art-columns">
+      <section class="art-section" aria-labelledby="left-art-title">
         <h3 id="left-art-title">左侧插画</h3>
-        <div class="tip">另外选一张图片放在文字后方，与右侧插画同时显示；两张图片可分别替换或移除。</div>
         <div class="art-file-actions">
-          <button type="button" id="art-left-upload"><span id="art-left-upload-label">上传左侧插画</span></button>
+          <button type="button" id="art-left-upload"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4M4 16v4h16v-4"/></svg><span id="art-left-upload-label">上传左侧插画</span></button>
           <button type="button" id="art-left-remove">移除左侧插画</button>
         </div>
         <input type="file" id="art-left-file" class="sr-only" tabindex="-1" aria-label="选择左侧插画文件" accept="image/png,image/jpeg,image/webp" />
@@ -1188,27 +1208,45 @@
         <label class="range-field" for="art-left_y"><span class="range-label">左图垂直位置<output id="art-left_y-value" for="art-left_y">50%</output></span><input id="art-left_y" type="range" min="0" max="100" step="1" value="50" /></label>
         <label class="range-field" for="art-left_zoom"><span class="range-label">左图缩放<output id="art-left_zoom-value" for="art-left_zoom">100%</output></span><input id="art-left_zoom" type="range" min="100" max="250" step="1" value="100" /></label>
         <label class="range-field" for="art-left_opacity"><span class="range-label">左图不透明度<output id="art-left_opacity-value" for="art-left_opacity">65%</output></span><input id="art-left_opacity" type="range" min="0" max="100" step="1" value="65" /></label>
-      </div>
-      <div class="glass-controls">
-        <label class="check" for="art-glass_enabled"><input id="art-glass_enabled" type="checkbox" aria-label="开启玻璃质感" checked /><span><strong>开启玻璃质感</strong><span class="tip">为插画叠加轻透反光和柔光，可随时关闭。</span></span></label>
-        <label class="range-field" for="art-glass"><span class="range-label">玻璃质感强度<output id="art-glass-value" for="art-glass">50%</output></span><input id="art-glass" type="range" min="0" max="100" step="1" value="50" aria-label="玻璃质感强度" /><span class="tip">0% 无玻璃效果；数值越高，反光和柔光越明显。</span></label>
-        <label class="range-field" for="art-sharpness"><span class="range-label">插画锐化<output id="art-sharpness-value" for="art-sharpness">0%</output></span><input id="art-sharpness" type="range" min="0" max="100" step="1" value="0" aria-label="插画锐化" /><span class="tip">增强轮廓与细节，0% 保持原始清晰度，可独立于玻璃效果调节。</span></label>
-      </div>
+      </section>
+      <section class="art-section" aria-labelledby="right-art-title">
+        <h3 id="right-art-title">右侧插画</h3>
+        <div class="art-file-actions">
+          <button type="button" id="art-upload"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4M4 16v4h16v-4"/></svg><span id="art-upload-label">上传右侧插画</span></button>
+          <button type="button" id="art-remove">移除右侧插画</button>
+        </div>
+        <input type="file" id="art-file" class="sr-only" tabindex="-1" aria-label="选择右侧插画文件" accept="image/png,image/jpeg,image/webp" />
+        <label class="range-field" for="art-x"><span class="range-label">右图水平位置<output id="art-x-value" for="art-x">50%</output></span><input id="art-x" type="range" min="0" max="100" step="1" value="50" /></label>
+        <label class="range-field" for="art-y"><span class="range-label">右图垂直位置<output id="art-y-value" for="art-y">50%</output></span><input id="art-y" type="range" min="0" max="100" step="1" value="50" /></label>
+        <label class="range-field" for="art-zoom"><span class="range-label">右图缩放<output id="art-zoom-value" for="art-zoom">100%</output></span><input id="art-zoom" type="range" min="100" max="250" step="1" value="100" /></label>
+        <label class="range-field" for="art-opacity"><span class="range-label">右图不透明度<output id="art-opacity-value" for="art-opacity">85%</output></span><input id="art-opacity" type="range" min="0" max="100" step="1" value="85" /></label>
+      </section>
     </div>
-    <div class="art-controls">
-      <label class="field span-all" for="art-fit"><span class="lbl">右侧插画裁剪方式</span><select id="art-fit"><option value="cover">铺满画面 · 超出部分裁剪</option><option value="contain">完整显示 · 保留整张图片</option></select></label>
-      <label class="range-field" for="art-x"><span class="range-label">水平位置<output id="art-x-value" for="art-x">50%</output></span><input id="art-x" type="range" min="0" max="100" step="1" value="50" /></label>
-      <label class="range-field" for="art-y"><span class="range-label">垂直位置<output id="art-y-value" for="art-y">50%</output></span><input id="art-y" type="range" min="0" max="100" step="1" value="50" /></label>
-      <label class="range-field" for="art-zoom"><span class="range-label">图片缩放<output id="art-zoom-value" for="art-zoom">100%</output></span><input id="art-zoom" type="range" min="100" max="250" step="1" value="100" /></label>
-      <label class="range-field" for="art-opacity"><span class="range-label">图片不透明度<output id="art-opacity-value" for="art-opacity">85%</output></span><input id="art-opacity" type="range" min="0" max="100" step="1" value="85" /></label>
-      <label class="color-field" for="art-mask">渐变遮罩颜色<input id="art-mask" type="color" value="#edf6fc" /></label>
-      <label class="range-field" for="art-strength"><span class="range-label">渐变遮罩强度<output id="art-strength-value" for="art-strength">85%</output></span><input id="art-strength" type="range" min="0" max="100" step="1" value="85" /></label>
-      <div class="tip span-all">铺满后调整位置和缩放，可裁取想保留的部分；遮罩强度越高，插画与文字区域的过渡越柔和。</div>
-    </div>
+    <section class="art-section" aria-labelledby="art-effects-title">
+      <h3 id="art-effects-title">裁剪与画面效果</h3>
+      <div class="art-effects">
+        <div class="art-effect-group">
+          <div class="art-crop">
+            <label class="field" for="art-fit"><span class="lbl">右侧插画裁剪方式</span><select id="art-fit"><option value="cover">铺满画面 · 超出部分裁剪</option><option value="contain">完整显示 · 保留整张图片</option></select></label>
+            <button type="button" id="art-recenter">重置右图位置</button>
+          </div>
+          <label class="color-field" for="art-mask">渐变遮罩颜色<input id="art-mask" type="color" value="#edf6fc" /></label>
+          <label class="range-field" for="art-strength"><span class="range-label">渐变遮罩强度<output id="art-strength-value" for="art-strength">85%</output></span><input id="art-strength" type="range" min="0" max="100" step="1" value="85" /><span class="tip">数值越高，插画与文字区域的过渡越柔和。</span></label>
+        </div>
+        <div class="art-effect-group">
+          <label class="check" for="art-glass_enabled"><input id="art-glass_enabled" type="checkbox" aria-label="开启玻璃质感" checked /><span><strong>开启玻璃质感</strong><span class="tip">为插画叠加轻透反光和柔光。</span></span></label>
+          <label class="range-field" for="art-glass"><span class="range-label">玻璃质感强度<output id="art-glass-value" for="art-glass">50%</output></span><input id="art-glass" type="range" min="0" max="100" step="1" value="50" aria-label="玻璃质感强度" /><span class="tip">0% 无玻璃效果，数值越高，反光越明显。</span></label>
+          <label class="range-field" for="art-sharpness"><span class="range-label">插画锐化<output id="art-sharpness-value" for="art-sharpness">0%</output></span><input id="art-sharpness" type="range" min="0" max="100" step="1" value="0" aria-label="插画锐化" /><span class="tip">增强轮廓与细节，0% 保持原始清晰度。</span></label>
+        </div>
+      </div>
+    </section>
   </div>
 
   <div class="appearance-footer">
-    <span class="sub">外观和插画保存在插件中，换浏览器也可读取。</span>
+    <div>
+      <div id="art-status" role="status" aria-live="polite"></div>
+      <div class="sub">外观和插画保存在插件中，换浏览器也可读取。</div>
+    </div>
     <div class="row"><button type="button" id="art-reset" title="重置外观参数，保留当前插画">恢复默认</button><button type="button" id="art-cancel">取消</button><button type="button" id="art-save" class="primary">保存外观</button></div>
   </div>
 </dialog>
@@ -1634,6 +1672,7 @@ artEl("appearance-open").onclick = async () => {
   fillAppearanceControls();
   artStatus(artStorageWarning);
   artDialog.showModal();
+  artDialog.querySelector(".appearance-content").scrollTop = 0;
 };
 for (const key of Object.keys(ART_DEFAULTS)) {
   artEl("art-" + key).addEventListener("input", () => {
