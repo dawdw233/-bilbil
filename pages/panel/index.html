@@ -559,7 +559,7 @@
     --shadow-up: 0 18px 34px -14px #10213280, 0 6px 14px #10213233, inset 0 1px 0 #d5e4ef24;
     --shadow-hero: 0 16px 30px -15px #14263866;
     --night-art-filter: brightness(.99) saturate(1.06); --art-ambient: #304a610a;
-    --hero-text-scrim: 32 51 68; --hero-mobile-paper: #293e51;
+    --hero-text-scrim: 47 68 86; --hero-mobile-paper: #293e51;
   }
   body, .hero-art, .preview-art { transition: background 200ms ease, color 200ms ease; }
   :root[data-study-theme="night"] body { background: radial-gradient(ellipse at 82% 0, #7896b42e, transparent 60%), radial-gradient(ellipse at 12% 95%, #4b67852b, transparent 65%), linear-gradient(135deg, #283c50, #202f40 60%, #1c2938); }
@@ -575,7 +575,7 @@
   :root[data-study-theme="night"] .art-canvas .hero-readability { background: linear-gradient(90deg, #3a5369 0%, #3a5369f7 34%, #405c7399 53%, #4d687f33 74%, transparent 91%); }
   :root[data-study-theme="night"][data-left-art="true"] .art-canvas .hero-readability { background: none; }
   :root[data-study-theme="night"][data-left-art="true"] :is(.hd-main, .preview-label)::before {
-    background: radial-gradient(ellipse 48% 64% at 29% 52%, rgb(var(--hero-text-scrim) / .74), rgb(var(--hero-text-scrim) / .66) 45%, transparent);
+    background: radial-gradient(ellipse 48% 64% at 29% 52%, rgb(var(--hero-text-scrim) / .50), rgb(var(--hero-text-scrim) / .40) 45%, transparent);
   }
   :root[data-study-theme="night"][data-left-art="true"] #top .hero-note { color: #e6eff6; }
   :root[data-study-theme="night"] :is(.hero-wash, .preview-wash) { background: linear-gradient(var(--art-ambient), var(--art-ambient)), linear-gradient(90deg, #3a5369, rgba(58,83,105,var(--art-mask-strength)) 36%, rgba(58,83,105,calc(var(--art-mask-strength) * .36)) 72%, #3a53690f); }
