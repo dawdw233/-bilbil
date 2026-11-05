@@ -23,7 +23,7 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 test("外观参数保留有效的 0、限制范围并拒绝无效颜色", () => {
   const { normalizeAppearance } = load();
   const settings = plain(normalizeAppearance({ x: -5, y: 110, zoom: 999, opacity: 0, strength: 0, fit: "contain", mask: "#ABCDEF" }));
-  assert.deepEqual(settings, { x: 0, y: 100, zoom: 250, opacity: 0, strength: 0, glass_enabled: true, glass: 50, sharpness: 0, fit: "contain", mask: "#abcdef", left_x:50,left_y:50,left_zoom:100,left_opacity:65,left_fit:"cover" });
+  assert.deepEqual(settings, { x: 0, y: 100, zoom: 250, opacity: 0, strength: 0, glass_enabled: true, glass: 50, sharpness: 0, fit: "contain", mask: "#abcdef", left_x:50,left_y:50,left_zoom:100,left_opacity:65 });
   const fallback = plain(normalizeAppearance({ zoom: "bad", opacity: "", mask: "url(https://example.invalid)", fit: "invalid" }));
   assert.equal(fallback.zoom, 100);
   assert.equal(fallback.opacity, 85);
@@ -162,6 +162,8 @@ test("页面保留主要业务入口，插画设置具备独立的可访问标�
   assert.equal(ids.length, new Set(ids).size, "页面元素 ID 不得重复");
   for (const id of ["btn-run", "btn-login", "tab-main", "tab-rhythm", "tab-upload", "tab-delivery", "tab-comments", "tab-reply", "f-speaking_style_bind_persona", "appearance-dialog", "art-file", "art-save", "art-cancel", "art-meteor_enabled", "art-meteor_count", "art-meteor_brightness", "art-meteor_speed"]) assert.ok(ids.includes(id), id);
   assert.match(html, /<dialog[^>]*aria-labelledby="appearance-title"/);
+  assert.match(markup, /for="art-fit"><span class="lbl">左右插画裁剪方式<\/span>/);
+  assert.ok(!ids.includes("art-left_fit"));
   assert.match(html, /prefers-reduced-motion/);
   assert.equal((html.match(/<\/body>/g) || []).length, 1);
 });
@@ -197,17 +199,13 @@ test("左右插画分别移除，不覆盖另一张图片", () => {
 });
 
 test("左图参数独立限制范围，取消预览同时还原两张已保存图片", () => {
-  const {normalizeAppearance} = load();
-  const settings=normalizeAppearance({left_x:-20,left_y:200,left_zoom:999,left_opacity:0,zoom:140,left_fit:"contain"});
+  const settings=load().normalizeAppearance({left_x:-20,left_y:200,left_zoom:999,left_opacity:0,zoom:140,fit:"cover",left_fit:"contain"});
   assert.equal(settings.left_x,0);
   assert.equal(settings.left_y,100);
   assert.equal(settings.left_zoom,250);
   assert.equal(settings.left_opacity,0);
   assert.equal(settings.zoom,140);
-  assert.equal(settings.left_fit,"contain");
   assert.equal(settings.fit,"cover");
-  assert.equal(normalizeAppearance({fit:"contain"}).left_fit,"cover");
-  assert.equal(normalizeAppearance({left_fit:"invalid"}).left_fit,"cover");
   const closeHandler=script.slice(script.indexOf('artDialog.addEventListener("close",'),script.indexOf('const avatarDialog ='));
   const inputs={};
   let rendered;
