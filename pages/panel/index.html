@@ -206,7 +206,18 @@
   }
   .appearance-preview-col { min-width: 0; }
   .appearance-preview-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 3px 16px; margin-top: 8px; }
-  .art-preview { isolation: isolate; position: relative; height: clamp(152px, 24dvh, 220px); overflow: hidden; border-radius: 20px; border: 0; background: linear-gradient(112deg, #f9fcfe 0%, #edf5fb 52%, #dfeaf3 100%); }
+  .art-preview {
+    --preview-max-height: clamp(152px, 24dvh, 220px);
+    isolation: isolate;
+    position: relative;
+    width: min(100%, calc(var(--preview-ratio, 3) * var(--preview-max-height)));
+    aspect-ratio: var(--preview-ratio, 3);
+    margin-inline: auto;
+    overflow: hidden;
+    border-radius: 20px;
+    border: 0;
+    background: linear-gradient(112deg, #f9fcfe 0%, #edf5fb 52%, #dfeaf3 100%);
+  }
   .preview-label { position: absolute; z-index: 1; left: 24px; bottom: 26px; max-width: 62%; }
   .preview-label strong { font: 400 28px/1.5 var(--serif); letter-spacing: .12em; }
   .preview-label span { display: block; font-size: 11px; color: var(--muted); }
@@ -280,7 +291,7 @@
     .save-bar { gap: 10px; } .appearance-dialog { width: calc(100% - 20px); max-height: calc(100dvh - 24px); border-radius: 22px; }
     .appearance-heading { padding: 22px 20px 16px; } .appearance-heading h2 { font-size: 21px; }
     .appearance-content { padding: 14px 16px; gap: 12px; }
-    .art-preview { height: 156px; }
+    .art-preview { --preview-max-height: 156px; }
     .art-columns, .art-effects { grid-template-columns: 1fr; gap: 12px; }
     .appearance-footer { padding: 15px 20px; }
     .appearance-footer > .sub { flex-basis: 100%; } .appearance-footer .row { width: 100%; }
@@ -1558,6 +1569,12 @@ async function prepareIllustration(file, maxDimension = 1600) {
 }
 const artEl = (id) => document.getElementById(id);
 const artDialog = artEl("appearance-dialog");
+const heroCard = artEl("top");
+const previewCard = artDialog.querySelector(".art-preview");
+new ResizeObserver(() => {
+  const { width, height } = heroCard.getBoundingClientRect();
+  if (width && height) previewCard.style.setProperty("--preview-ratio", String(width / height));
+}).observe(heroCard);
 let savedAppearance = { ...ART_DEFAULTS };
 let draftAppearance = { ...ART_DEFAULTS };
 let savedIllustration = null;
@@ -1644,9 +1661,9 @@ function syncAppearanceControls() {
   artEl("art-save").disabled = artBusy;
   artEl("art-reset").disabled = artBusy;
   artEl("art-upload-label").textContent = draftIllustration ? "替换右侧插画" : "上传右侧插画";
-  artEl("art-empty-note").textContent = draftIllustration
-    ? (draftAppearance.fit === "contain" ? "完整显示时插画自动靠右，留白放在文字侧；切回铺满后恢复原水平位置。" : "调整后可在预览和页首查看效果。")
-    : (draftLeftIllustration ? "当前显示左侧插画，可继续添加右侧插画。" : "尚未设置插画，当前使用柔和渐变背景。");
+  artEl("art-empty-note").textContent = draftIllustration && draftAppearance.fit === "contain"
+    ? "右图完整显示时自动靠右，切回铺满后恢复原水平位置。"
+    : (hasIllustration ? "横向没有裁剪余量时，先放大图片再调水平位置。" : "尚未设置插画，当前使用柔和渐变背景。");
   renderAppearance(draftAppearance, draftIllustration, draftLeftIllustration);
 }
 async function refreshSavedAppearance() {
