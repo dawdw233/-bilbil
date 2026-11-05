@@ -535,23 +535,21 @@
     pointer-events: none;
     background: radial-gradient(ellipse at 0% 54%, rgb(var(--hero-text-scrim, 248 252 255) / .88), rgb(var(--hero-text-scrim, 248 252 255) / .64) 35%, transparent 78%);
   }
-  @media (max-width: 480px) {
-    .study-shell .hd:has(.art-canvas img[src]), .art-preview:has(.art-canvas img[src]) {
-      display: block;
-      min-height: 0;
-      padding: 0;
-      background: var(--hero-mobile-paper, #f4f8fc);
-    }
-    .art-preview:has(.art-canvas img[src]) { width: 100%; max-width: 380px; aspect-ratio: auto; }
-    .art-canvas:has(img[src]) { position: relative; aspect-ratio: 2.55; overflow: hidden; border-radius: 0; }
-    .art-canvas:has(img[src]) .hero-readability { display: none; }
-    .art-canvas:not(:has(.left-illustration img[src])) > .art-float-plane { --art-start: 0%; }
-    .art-canvas:not(:has(.left-illustration img[src])) > .art-float-plane > .hero-art { mask-image: none; }
-    .art-canvas:not(:has(.hero-art img[src])) > .left-illustration { right: 0; mask-image: none; }
-    .study-shell .hd:has(.art-canvas img[src]) .hd-main { width: 100%; max-width: none; padding: 17px 23px 22px; }
-    .art-preview:has(.art-canvas img[src]) .preview-label { position: relative; inset: auto; max-width: none; padding: 12px 16px 15px; }
-    :root[data-left-art="true"] :has(> .art-canvas img[src]) > :is(.hd-main, .preview-label)::before { display: none; }
+  :where(:root[data-compact-hero]) :is(.study-shell .hd, .art-preview):has(.art-canvas img[src]) {
+    display: block;
+    min-height: 0;
+    padding: 0;
+    background: var(--hero-mobile-paper, #f4f8fc);
   }
+  :where(:root[data-compact-hero]) .art-preview:has(.art-canvas img[src]) { width: 100%; max-width: 380px; aspect-ratio: auto; }
+  :where(:root[data-compact-hero]) .art-canvas:has(img[src]) { position: relative; aspect-ratio: 2.55; overflow: hidden; border-radius: 0; }
+  :where(:root[data-compact-hero]) .art-canvas:has(img[src]) .hero-readability { display: none; }
+  :where(:root[data-compact-hero]) .art-canvas:not(:has(.left-illustration img[src])) > .art-float-plane { --art-start: 0%; }
+  :where(:root[data-compact-hero]) .art-canvas:not(:has(.left-illustration img[src])) > .art-float-plane > .hero-art { mask-image: none; }
+  :where(:root[data-compact-hero]) .art-canvas:not(:has(.hero-art img[src])) > .left-illustration { right: 0; mask-image: none; }
+  :where(:root[data-compact-hero]) .study-shell .hd:has(.art-canvas img[src]) .hd-main { width: 100%; max-width: none; padding: 17px 23px 22px; }
+  :where(:root[data-compact-hero]) .art-preview:has(.art-canvas img[src]) .preview-label { position: relative; inset: auto; max-width: none; padding: 12px 16px 15px; }
+  :root[data-left-art="true"]:where([data-compact-hero]) :has(> .art-canvas img[src]) > :is(.hd-main, .preview-label)::before { display: none; }
 
   :root[data-study-theme="night"] {
     color-scheme: dark; --ink: #f0f6fb; --muted: #d3e0eb; --line: #afc6d833; --line-2: #7893aa;
@@ -1623,7 +1621,9 @@ const heroCard = artEl("top");
 const previewCard = artDialog.querySelector(".art-preview");
 new ResizeObserver(() => {
   const { width, height } = heroCard.getBoundingClientRect();
-  if (width && height) previewCard.style.setProperty("--preview-ratio", String(width / height));
+  if (!width || !height) return;
+  document.documentElement.toggleAttribute("data-compact-hero", width <= 560);
+  previewCard.style.setProperty("--preview-ratio", String(width / height));
 }).observe(heroCard);
 const rightIllustrations = [artEl("hero-illustration"), artEl("preview-illustration")];
 const leftIllustrations = [artEl("hero-left-illustration"), artEl("preview-left-illustration")];
