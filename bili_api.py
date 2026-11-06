@@ -856,6 +856,45 @@ async def bili_pay_coin(bvid: str, credential: Credential) -> dict:
     return {"success": True}
 
 
+async def bili_default_favorite(credential: Credential) -> dict:
+    """读取当前账号的默认收藏夹，找不到唯一目标时跳过。"""
+    try:
+        uid = str(credential.dedeuserid or "")
+        if not uid.isdecimal():
+            uid = str((await user.get_self_info(credential))["mid"])
+        result = await favorite_list.get_video_favorite_list(int(uid), credential=credential)
+    except ResponseCodeException as exc:
+        return {"code": exc.code, "error": exc.msg}
+    folders = [
+        folder["id"] for folder in (result.get("list") or [])
+        if type(folder.get("id")) is int and type(folder.get("attr")) is int
+        and not (folder["attr"] & 0b10)  # 第二位为 0 表示默认收藏夹
+    ]
+    return {"id": folders[0] if len(folders) == 1 else None}
+
+
+async def bili_like_video(bvid: str, credential: Credential) -> dict:
+    """确保视频已点赞，保留已有点赞。"""
+    target = video.Video(bvid=bvid, credential=credential)
+    try:
+        if not await target.has_liked():
+            await target.like(True)
+    except ResponseCodeException as exc:
+        return {"code": exc.code, "error": exc.msg}
+    return {"success": True}
+
+
+async def bili_favorite_video(bvid: str, folder_id: int, credential: Credential) -> dict:
+    """尚未收藏时添加到默认收藏夹。"""
+    target = video.Video(bvid=bvid, credential=credential)
+    try:
+        if not await target.has_favoured():
+            await target.set_favorite(add_media_ids=[folder_id])
+    except ResponseCodeException as exc:
+        return {"code": exc.code, "error": exc.msg}
+    return {"success": True}
+
+
 # ========== Tool 6: 回复评论 ==========
 
 @tool()

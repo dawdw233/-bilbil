@@ -736,7 +736,7 @@
     <nav class="side-menu" aria-label="书房导航"><div class="nav-group"><div class="nav-group-label">阅读</div><div class="nav-group-buttons"><button class="tab active" id="tab-main" aria-pressed="true" data-view="刷视频"><span class="tab-icon"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg></span><span class="tab-label">刷视频</span></button></div></div><div class="nav-group"><div class="nav-group-label">写作</div><div class="nav-group-buttons"><button class="tab" id="tab-comments" aria-pressed="false" data-view="评论"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span class="tab-label">评论</span></button>
 <button class="tab" id="tab-reply" aria-pressed="false" data-view="reply"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></span><span class="tab-label">回复<span id="tab-reply-count" class="badge"></span></span></button>
 <button class="tab" id="tab-upload" aria-pressed="false" data-view="投稿"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg></span><span class="tab-label">投稿</span></button></div></div><div class="nav-group"><div class="nav-group-label">生活</div><div class="nav-group-buttons"><button class="tab" id="tab-rhythm" aria-pressed="false" data-view="作息"><span class="tab-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span><span class="tab-label">作息</span></button>
-<button class="tab" id="tab-coin" aria-pressed="false" aria-controls="view-coin" data-view="投币"><span class="tab-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 9l2-1v8m-2 0h4"/></svg></span><span class="tab-label">投币</span></button>
+<button class="tab" id="tab-coin" aria-pressed="false" aria-controls="view-coin" data-view="三连"><span class="tab-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.5 5.1 5.6.8-4 4 1 5.6-5.1-2.7L7 18.5l1-5.6-4.1-4 5.6-.8L12 3Z"/></svg></span><span class="tab-label">三连</span></button>
 <button class="tab" id="tab-delivery" aria-pressed="false" data-view="投递"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></span><span class="tab-label">投递</span></button></div></div></nav>
     <div class="side-footnote"><span>把有趣，收进日常。</span>留一点时间，给喜欢的事。</div>
   </aside>
@@ -980,21 +980,21 @@
     </section>
   </div>
 
-  <!-- ===== 投币 ===== -->
+  <!-- ===== 三连 ===== -->
   <div id="view-coin" class="hide">
     <div class="cards" id="coin-cards"></div>
     <section class="sec collapsible" id="sec-coin" aria-labelledby="coin-title">
       <div class="sec-head" aria-controls="coin-form">
         <span class="caret" aria-hidden="true">▸</span>
-        <h2 id="coin-title">投币设置</h2>
-        <span class="sub">为机器人喜欢的视频投币</span>
+        <h2 id="coin-title">三连设置</h2>
+        <span class="sub">为机器人喜欢的视频点赞、投币和收藏</span>
       </div>
       <form class="panel sec-body" id="coin-form">
         <fieldset id="coin-fields" disabled>
           <div class="grid">
             <label class="check">
-              <input id="f-auto_coin" type="checkbox" aria-labelledby="coin-switch-label" aria-describedby="coin-switch-tip" />
-              <span><span class="t" id="coin-switch-label">喜欢的视频自动投币</span><span class="d" id="coin-switch-tip">给模型明确喜欢且有字幕依据的「值得看」视频投 1 枚，跳过已投过的视频。</span></span>
+              <input id="f-auto_triple" type="checkbox" aria-labelledby="coin-switch-label" aria-describedby="coin-switch-tip" />
+              <span><span class="t" id="coin-switch-label">喜欢的视频自动三连</span><span class="d" id="coin-switch-tip">只为机器人明确喜欢且有字幕依据的「值得看」视频点赞、投 1 枚硬币并收藏。已投过币的视频会跳过。</span></span>
             </label>
             <label class="field" for="f-auto_coin_per_day">
               <span class="lbl">每日投币上限（枚）</span>
@@ -1003,11 +1003,11 @@
             </label>
           </div>
           <div class="save-bar">
-            <button type="submit" class="primary">保存投币设置</button>
+            <button type="submit" class="primary">保存三连设置</button>
           </div>
         </fieldset>
         <p class="sub" id="coin-hint" role="status"></p>
-        <div class="sub">投币结果可在「刷视频 → 日报」查看。</div>
+        <div class="sub">三连结果可在「刷视频 → 日报」查看。</div>
       </form>
     </section>
   </div>
@@ -2268,7 +2268,7 @@ studyEl("study-rhythm-link").onclick = () => studyEl("tab-rhythm").click();
 window.addEventListener("bili:refreshed", loadStudy);
 window.addEventListener("bili:run-started", loadStudy);
 window.addEventListener("bili:view", (event) => {
-  const titles = { main: "观影手记", rhythm: "作息安排", coin: "投币设置", upload: "视频投稿", delivery: "日报投递", comments: "评论与口味", reply: "回复与草稿" };
+  const titles = { main: "观影手记", rhythm: "作息安排", coin: "三连设置", upload: "视频投稿", delivery: "日报投递", comments: "评论与口味", reply: "回复与草稿" };
   studyEl("study-page-title").textContent = titles[event.detail] || "观影手记";
   if (event.detail === "main") loadStudy();
 });
@@ -2651,17 +2651,17 @@ $("tab-delivery").onclick = () => switchView("delivery");
 $("tab-comments").onclick = () => switchView("comments");
 $("tab-reply").onclick = () => switchView("reply");
 
-// ---------- 投币 tab ----------
+// ---------- 三连 tab ----------
 let coinBusy = false;
 
 function fillCoinSettings(values) {
-  const enabled = values.auto_coin === true;
+  const enabled = values.auto_triple === true;
   const limit = values.auto_coin_per_day ?? 1;
-  $("f-auto_coin").checked = enabled;
+  $("f-auto_triple").checked = enabled;
   $("f-auto_coin_per_day").value = limit;
   $("coin-cards").innerHTML = [
-    card("自动投币", enabled ? "已开启" : "已关闭", enabled ? "ok" : ""),
-    card("每日上限", `${limit} 枚`),
+    card("自动三连", enabled ? "已开启" : "已关闭", enabled ? "ok" : ""),
+    card("每日硬币上限", `${limit} 枚`),
   ].join("");
 }
 
@@ -2672,12 +2672,12 @@ async function loadCoinSettings() {
   setHint("coin-hint", "读取设置中…");
   try {
     const result = await api("config");
-    if (!result.values) throw new Error("未收到投币设置");
+    if (!result.values) throw new Error("未收到三连设置");
     fillCoinSettings(result.values);
     $("coin-fields").disabled = false;
     setHint("coin-hint", "");
   } catch (error) {
-    setHint("coin-hint", "读取失败，请重新打开投币页。" + (error?.message || error), "bad");
+    setHint("coin-hint", "读取失败，请重新打开三连页。" + (error?.message || error), "bad");
   } finally {
     coinBusy = false;
   }
@@ -2687,7 +2687,7 @@ $("coin-form").onsubmit = async (event) => {
   event.preventDefault();
   if (coinBusy || $("coin-fields").disabled) return;
   const payload = {
-    auto_coin: $("f-auto_coin").checked,
+    auto_triple: $("f-auto_triple").checked,
     auto_coin_per_day: $("f-auto_coin_per_day").valueAsNumber,
   };
   coinBusy = true;
