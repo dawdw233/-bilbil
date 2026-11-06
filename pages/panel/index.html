@@ -983,12 +983,13 @@
   <!-- ===== 投币 ===== -->
   <div id="view-coin" class="hide">
     <div class="cards" id="coin-cards"></div>
-    <section class="sec" aria-labelledby="coin-title">
-      <div class="sec-head">
+    <section class="sec collapsible" id="sec-coin" aria-labelledby="coin-title">
+      <div class="sec-head" aria-controls="coin-form">
+        <span class="caret" aria-hidden="true">▸</span>
         <h2 id="coin-title">投币设置</h2>
         <span class="sub">为机器人喜欢的视频投币</span>
       </div>
-      <form class="panel" id="coin-form">
+      <form class="panel sec-body" id="coin-form">
         <fieldset id="coin-fields" disabled>
           <div class="grid">
             <label class="check">
@@ -3155,14 +3156,16 @@ document.querySelectorAll(".sec.collapsible").forEach((sec) => {
   const saved = collapseState()[sec.id];
   const defaultCollapsed = !sec.hasAttribute("data-default-open"); // 设置默认张开，其它默认收起
   setCollapsed(sec, saved === undefined ? defaultCollapsed : !!saved, false);
-  const toggle = () => setCollapsed(sec, !sec.classList.contains("collapsed"));
+  const toggle = () => {
+    setCollapsed(sec, !sec.classList.contains("collapsed"));
+    head.setAttribute("aria-expanded", String(!sec.classList.contains("collapsed")));
+  };
   head.setAttribute("role", "button");
   head.setAttribute("tabindex", "0");
   head.setAttribute("aria-expanded", String(!sec.classList.contains("collapsed")));
   head.addEventListener("click", (ev) => {
     if (ev.target.closest("a,button,input,select,textarea")) return;
     toggle();
-    head.setAttribute("aria-expanded", String(!sec.classList.contains("collapsed")));
   });
   head.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(); }
