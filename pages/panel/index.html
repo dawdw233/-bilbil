@@ -1038,14 +1038,17 @@
             <div class="grid">
               <label class="check span-all">
                 <input id="u-auto-enabled" type="checkbox" />
-                <span><span class="t">开启自主投稿</span><span class="d">每次运行会调用 MiniMax 生成 6 秒视频，并使用当前登录的 B站账号提交。生成消耗 MiniMax 额度。</span></span>
+                <span><span class="t">开启自主投稿</span><span class="d">每次运行由所选服务生成视频，再用当前登录的 B站账号提交。生成会消耗该服务的额度。</span></span>
               </label>
-              <label class="field"><span class="lbl">MiniMax API Key</span>
-                <input id="u-auto-key" type="password" autocomplete="off" maxlength="512" />
+              <label class="field"><span class="lbl">视频生成服务</span><select id="u-auto-provider" required></select></label>
+              <label class="field"><span class="lbl">服务地区</span><select id="u-auto-region" required></select></label>
+              <label class="field"><span class="lbl">所选服务的 API Key</span>
+                <input id="u-auto-key" type="password" autocomplete="off" maxlength="512" aria-describedby="u-auto-key-state" />
                 <span class="tip" id="u-auto-key-state">正在读取配置…</span>
               </label>
-              <label class="field"><span class="lbl">MiniMax 平台</span>
-                <select id="u-auto-region"><option value="cn">中国站</option><option value="global">国际站</option></select>
+              <label class="field"><span class="lbl">视频模型</span>
+                <input id="u-auto-model" maxlength="128" aria-describedby="u-auto-model-tip" />
+                <span class="tip" id="u-auto-model-tip"></span>
               </label>
               <label class="field"><span class="lbl">自动运行时间（北京时间）</span><input id="u-auto-time" type="time" required /></label>
               <label class="field"><span class="lbl">每日生成上限（支）</span>
@@ -1061,7 +1064,7 @@
             <div class="save-bar">
               <button type="submit" class="primary">保存自主投稿设置</button>
               <button type="button" id="u-auto-start" disabled>立即生成并投稿</button>
-              <button type="button" id="u-auto-clear" disabled>清除 Key 并关闭</button>
+              <button type="button" id="u-auto-clear" disabled>清除所选 Key 并关闭</button>
             </div>
           </fieldset>
           <p id="u-auto-feedback" class="sub" role="status"></p>
@@ -3012,27 +3015,66 @@ let autoPublishFile = "";
 let autoPublishRequest = 0;
 let autoPublishReading = false;
 let autoPublishSaving = false;
+let autoPublishState = null;
 $("u-auto-tid").innerHTML = $("u-tid").innerHTML;
 
+function setAutoPublishRegions(region) {
+  const spec = autoPublishState.providers[$("u-auto-provider").value];
+  const regions = Object.entries(spec.regions);
+  $("u-auto-region").replaceChildren(...regions.map(([id, label]) => new Option(label, id)));
+  if (region in spec.regions) $("u-auto-region").value = region;
+  selectAutoPublishProfile();
+}
+
+function selectAutoPublishProfile() {
+  const provider = $("u-auto-provider").value;
+  const spec = autoPublishState.providers[provider];
+  const profile = autoPublishState.profiles[provider + ":" + $("u-auto-region").value];
+  $("u-auto-key").value = "";
+  $("u-auto-model").value = profile?.model || "";
+  $("u-auto-model").placeholder = spec.model;
+  $("u-auto-model").readOnly = provider !== "ark";
+  $("u-auto-model-tip").textContent = provider === "ark" ? "留空使用默认模型，也可填写方舟的文生视频模型或推理接入点 ID。" : `使用 ${spec.model}，生成 ${spec.duration} 秒视频。`;
+  syncAutoPublishActions();
+}
+
+function syncAutoPublishActions() {
+  const { settings, jobs, logged_in } = autoPublishState;
+  const provider = $("u-auto-provider").value;
+  const region = $("u-auto-region").value;
+  const profile = autoPublishState.profiles[provider + ":" + region];
+  const configured = profile?.key_configured === true;
+  const changed = provider !== settings.provider || region !== settings.region
+    || $("u-auto-enabled").checked !== settings.enabled || !!$("u-auto-key").value || $("u-auto-model").value !== (profile?.model || "");
+  $("u-auto-key-state").textContent = configured
+    ? "此服务和地区已配置。留空沿用已保存的 Key。"
+    : "填写该服务和地区的 Key。密钥仅保存在服务器。";
+  $("u-auto-clear").disabled = !configured;
+  const active = jobs.some(job => autoPublishActive.includes(job.phase));
+  $("u-auto-start").disabled = !settings.enabled || !configured || !logged_in || active || changed;
+  $("u-auto-start").title = changed ? "请先保存所选服务的配置" : logged_in ? "" : "请先在「刷视频」页登录 B站";
+}
+
 function renderAutoPublish(data, fill) {
-  const { settings, jobs } = data;
-  if (fill) {
+  autoPublishState = data;
+  const { settings, jobs, providers } = data;
+  if (fill || !$("u-auto-provider").value) {
+    $("u-auto-provider").replaceChildren(...Object.entries(providers).map(([id, spec]) => new Option(spec.name, id)));
+    $("u-auto-provider").value = settings.provider;
     $("u-auto-enabled").checked = settings.enabled;
-    for (const key of ["region", "time", "limit", "tid", "direction"]) {
+    setAutoPublishRegions(settings.region);
+    for (const key of ["time", "limit", "tid", "direction"]) {
       $("u-auto-" + key).value = settings[key];
     }
-    $("u-auto-key").value = "";
     $("u-auto-fields").disabled = false;
+  } else {
+    syncAutoPublishActions();
   }
-  $("u-auto-key-state").textContent = data.key_configured ? "已配置。留空会沿用已保存的 Key。" : "Key 仅保存在服务器。";
-  $("u-auto-clear").disabled = !data.key_configured;
-  const active = jobs.some(job => autoPublishActive.includes(job.phase));
-  $("u-auto-start").disabled = !settings.enabled || !data.key_configured || !data.logged_in || active;
-  $("u-auto-start").title = data.logged_in ? "" : "请先在「刷视频」页登录 B站";
   $("u-auto-jobs").querySelector("tbody").innerHTML = jobs.length ? jobs.map(job => {
     const status = (!settings.enabled && autoPublishActive.includes(job.phase) ? "已暂停 · " : "") + (autoPublishPhases[job.phase] || "未知");
     const video = /^BV[0-9A-Za-z]{10}$/.test(job.bvid) ? `<a href="https://www.bilibili.com/video/${job.bvid}" target="_blank" rel="noreferrer">${job.bvid}</a>` : "";
-    return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}</td><td>${esc(status)}</td><td>${video || esc([job.file, job.message].filter(Boolean).join(" · ") || "—")}</td></tr>`;
+    const providerName = providers[job.provider]?.name || "";
+    return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc(providerName)}</div></td><td>${esc(status)}</td><td>${video || esc([job.file, job.message].filter(Boolean).join(" · ") || "—")}</td></tr>`;
   }).join("") : '<tr><td colspan="4" class="empty">还没有自主投稿任务</td></tr>';
   const newest = jobs.find(job => job.file)?.file || "";
   if (!fill && newest !== autoPublishFile) loadUploadFiles();
@@ -3076,14 +3118,29 @@ $("u-auto-form").onsubmit = (event) => {
   saveAutoPublish({
     enabled: $("u-auto-enabled").checked,
     api_key: $("u-auto-key").value.trim(),
+    provider: $("u-auto-provider").value,
     region: $("u-auto-region").value,
+    model: $("u-auto-model").value.trim(),
     time: $("u-auto-time").value,
     limit: $("u-auto-limit").valueAsNumber,
     tid: Number($("u-auto-tid").value),
     direction: $("u-auto-direction").value.trim(),
   });
 };
-$("u-auto-clear").onclick = () => saveAutoPublish({ enabled: false, remove_key: true });
+$("u-auto-provider").onchange = () => {
+  const { settings, providers, profiles } = autoPublishState;
+  const provider = $("u-auto-provider").value;
+  const region = provider === settings.provider ? settings.region
+    : Object.keys(providers[provider].regions).find(id => profiles[provider + ":" + id]?.key_configured);
+  setAutoPublishRegions(region);
+};
+$("u-auto-region").onchange = selectAutoPublishProfile;
+$("u-auto-enabled").onchange = syncAutoPublishActions;
+$("u-auto-key").oninput = syncAutoPublishActions;
+$("u-auto-model").oninput = syncAutoPublishActions;
+$("u-auto-clear").onclick = () => saveAutoPublish({
+  enabled: false, remove_key: true, provider: $("u-auto-provider").value, region: $("u-auto-region").value,
+});
 $("u-auto-start").onclick = async () => {
   $("u-auto-start").disabled = true;
   try {

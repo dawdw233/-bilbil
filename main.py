@@ -1416,7 +1416,7 @@ class BiliScrollPlugin(Star):
             return ""
         return str(credential.dedeuserid or "")
 
-    async def _plan_auto_video(self, direction: str, recent: list[str]) -> str:
+    async def _plan_auto_video(self, direction: str, recent: list[str], duration: int) -> str:
         prompt = json.dumps({
             "创作方向": direction or "自由选题，优先考虑有趣、温和、适合公开投稿的原创短片",
             "近期标题": recent,
@@ -1424,7 +1424,7 @@ class BiliScrollPlugin(Star):
         result = await asyncio.wait_for(self.context.llm_generate(
             chat_provider_id=self._provider_id(),
             system_prompt=(
-                "你负责为 B站策划一支 6 秒的原创 AI 视频。自主选题，避免重复近期主题。"
+                f"你负责为 B站策划一支 {duration} 秒的原创 AI 视频。自主选题，避免重复近期主题。"
                 "为一个连续镜头描述明确的主角、场景、动作和画面风格。"
                 "选择虚构或自然场景，避免使用他人角色、真实人物、品牌或他人作品片段。"
                 "只返回 JSON 对象，包含四个字符串：title（中文标题），prompt（文生视频镜头描述），"

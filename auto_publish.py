@@ -1,4 +1,4 @@
-"""Scheduled MiniMax generation and Bilibili publication."""
+"""Scheduled video generation and Bilibili publication."""
 
 from __future__ import annotations
 
@@ -10,14 +10,33 @@ import tempfile
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 import aiohttp
 
-BASE_URLS = {"cn": "https://api.minimax.cn/v1", "global": "https://api.minimax.io/v1"}
+VIDEO_PROVIDERS = {
+    "minimax": {
+        "name": "MiniMax 海螺", "model": "MiniMax-Hailuo-2.3", "duration": 6,
+        "regions": {
+            "cn": ("中国站", "https://api.minimax.cn/v1"),
+            "global": ("国际站", "https://api.minimax.io/v1"),
+        },
+    },
+    "ark": {
+        "name": "火山方舟 Seedance", "model": "doubao-seedance-2-5-260628", "duration": 5,
+        "regions": {"cn": ("北京", "https://ark.cn-beijing.volces.com/api/v3")},
+    },
+    "wan": {
+        "name": "阿里云百炼 通义万相", "model": "wan2.6-t2v", "duration": 5,
+        "regions": {
+            "cn": ("中国内地", "https://dashscope.aliyuncs.com/api/v1"),
+            "global": ("新加坡", "https://dashscope-intl.aliyuncs.com/api/v1"),
+        },
+    },
+}
 DEFAULTS = {
-    "enabled": False, "region": "cn", "time": "20:00", "limit": 1,
-    "direction": "", "tid": 21, "schedule_after": "",
+    "enabled": False, "provider": "minimax", "region": "cn", "time": "20:00",
+    "limit": 1, "direction": "", "tid": 21, "schedule_after": "",
 }
 ACTIVE_PHASES = {"queued", "requesting", "generating", "ready", "uploading"}
 MAX_VIDEO_BYTES = 100 * 1024 * 1024
@@ -73,47 +92,40 @@ def parse_plan(text: str) -> dict:
     return fields
 
 
-class MiniMaxVideo:
-    def __init__(self, region: str, key: str):
-        self.base_url = BASE_URLS[region]
+class VideoClient:
+    def __init__(self, provider: str, region: str, key: str, model: str):
+        spec = VIDEO_PROVIDERS[provider]
+        self.name = spec["name"]
+        self.duration = spec["duration"]
+        self.model = model
+        self.base_url = spec["regions"][region][1]
         self.headers = {"Authorization": f"Bearer {key}"}
 
-    async def _request(self, method, path, **kwargs):
+    async def _request(self, method, path, *, headers=None, **kwargs):
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=25)) as session:
             async with session.request(
-                method, self.base_url + path, headers=self.headers, allow_redirects=False, **kwargs,
+                method, self.base_url + path, headers={**self.headers, **(headers or {})},
+                allow_redirects=False, **kwargs,
             ) as response:
                 if 400 <= response.status < 500 and response.status not in (408, 429):
-                    raise PublishError(f"MiniMax 拒绝请求（HTTP {response.status}）。")
+                    raise PublishError(f"{self.name} 拒绝请求（HTTP {response.status}）。")
                 response.raise_for_status()
-                if response.status != 200:
+                if response.status not in (200, 201, 202):
                     raise aiohttp.ClientError("Unexpected API status")
                 data = await response.json()
-        status = data.get("base_resp", {}).get("status_code")
-        if type(status) is not int:
-            raise aiohttp.ClientError("Missing MiniMax result status")
-        if status != 0:
-            raise PublishError(f"MiniMax 拒绝请求（错误码 {status}）。")
+        if not isinstance(data, dict):
+            raise aiohttp.ClientError("Invalid API response")
         return data
 
-    async def create(self, prompt: str) -> str:
-        data = await self._request("POST", "/video_generation", json={
-            "model": "MiniMax-Hailuo-2.3", "prompt": prompt, "duration": 6, "resolution": "768P",
-        })
-        task_id = data.get("task_id")
-        if not isinstance(task_id, str) or not task_id:
-            raise aiohttp.ClientError("Missing MiniMax task id")
-        return task_id
+    def _task_id(self, value) -> str:
+        if not isinstance(value, str) or not value:
+            raise aiohttp.ClientError("Missing task id")
+        return value
 
-    async def query(self, task_id: str) -> dict:
-        return await self._request("GET", "/query/video_generation", params={"task_id": task_id})
-
-    async def download(self, file_id: str, temporary: Path, destination: Path) -> None:
-        data = await self._request("GET", "/files/retrieve", params={"file_id": file_id})
-        url = data.get("file", {}).get("download_url", "")
+    async def download(self, url: str, temporary: Path, destination: Path) -> None:
         parsed = urlsplit(url)
         if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
-            raise PublishError("MiniMax 返回的成片下载地址无效。")
+            raise PublishError(f"{self.name} 返回的成片下载地址无效。")
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=90)) as session:
                 async with session.get(url, allow_redirects=False) as response:
@@ -135,6 +147,81 @@ class MiniMaxVideo:
             temporary.unlink(missing_ok=True)
 
 
+class MiniMaxVideo(VideoClient):
+    async def _request(self, method, path, **kwargs):
+        data = await super()._request(method, path, **kwargs)
+        status = data.get("base_resp", {}).get("status_code")
+        if type(status) is not int:
+            raise aiohttp.ClientError("Missing MiniMax result status")
+        if status != 0:
+            raise PublishError(f"MiniMax 拒绝请求（错误码 {status}）。")
+        return data
+
+    async def create(self, prompt: str) -> str:
+        data = await self._request("POST", "/video_generation", json={
+            "model": self.model, "prompt": prompt, "duration": self.duration, "resolution": "768P",
+        })
+        return self._task_id(data.get("task_id"))
+
+    async def query(self, task_id: str) -> str | None:
+        data = await self._request("GET", "/query/video_generation", params={"task_id": task_id})
+        if data.get("status") == "Fail":
+            raise PublishError("MiniMax 生成失败。")
+        if data.get("status") == "Success":
+            return self._task_id(data.get("file_id"))
+        return None
+
+    async def download(self, file_id: str, temporary: Path, destination: Path) -> None:
+        data = await self._request("GET", "/files/retrieve", params={"file_id": file_id})
+        await super().download(data.get("file", {}).get("download_url", ""), temporary, destination)
+
+
+class ArkVideo(VideoClient):
+    async def create(self, prompt: str) -> str:
+        data = await self._request("POST", "/contents/generations/tasks", json={
+            "model": self.model, "content": [{"type": "text", "text": prompt}],
+            "duration": self.duration, "resolution": "720p", "ratio": "16:9",
+        })
+        return self._task_id(data.get("id"))
+
+    async def query(self, task_id: str) -> str | None:
+        data = await self._request("GET", "/contents/generations/tasks/" + quote(task_id, safe=""))
+        status = data.get("status")
+        if status in ("failed", "cancelled", "expired"):
+            raise PublishError(f"火山方舟任务未完成（{status}）。")
+        if status == "succeeded":
+            return self._task_id(data.get("content", {}).get("video_url"))
+        return None
+
+
+class WanVideo(VideoClient):
+    async def create(self, prompt: str) -> str:
+        data = await self._request(
+            "POST", "/services/aigc/video-generation/video-synthesis",
+            headers={"X-DashScope-Async": "enable"},
+            json={
+                "model": self.model, "input": {"prompt": prompt},
+                "parameters": {"size": "1280*720", "duration": self.duration, "watermark": True},
+            },
+        )
+        if data.get("code"):
+            raise PublishError("阿里云百炼拒绝创建视频任务，请检查 Key 与模型权限。")
+        return self._task_id(data.get("output", {}).get("task_id"))
+
+    async def query(self, task_id: str) -> str | None:
+        data = await self._request("GET", "/tasks/" + quote(task_id, safe=""))
+        output = data.get("output", {})
+        status = output.get("task_status")
+        if status in ("FAILED", "CANCELED"):
+            raise PublishError(f"阿里云百炼任务未完成（{status}）。")
+        if status == "SUCCEEDED":
+            return self._task_id(output.get("video_url"))
+        return None
+
+
+VIDEO_CLIENTS = {"minimax": MiniMaxVideo, "ark": ArkVideo, "wan": WanVideo}
+
+
 class AutoPublisher:
     def __init__(self, data_dir: Path, plan, publish, account, upload_busy):
         self.data_dir = data_dir
@@ -149,7 +236,15 @@ class AutoPublisher:
         stored = _read(self.settings_path, {})
         if not isinstance(stored, dict):
             raise PublishError("自主投稿设置格式有误。")
-        return {**DEFAULTS, "key": "", **stored}
+        settings = {**DEFAULTS, **stored}
+        profiles = settings.get("profiles", {})
+        if not isinstance(profiles, dict):
+            raise PublishError("视频生成服务配置格式有误。")
+        legacy_key = settings.pop("key", "")
+        if legacy_key:
+            profiles.setdefault(f"minimax:{settings['region']}", {"key": legacy_key})
+        settings["profiles"] = profiles
+        return settings
 
     def jobs(self) -> list[dict]:
         rows = _read(self.jobs_path, [])
@@ -166,10 +261,24 @@ class AutoPublisher:
         rows = self.jobs()
         return {
             "settings": {key: settings[key] for key in DEFAULTS if key != "schedule_after"},
-            "key_configured": bool(settings["key"]),
+            "providers": {
+                name: {
+                    "name": spec["name"], "model": spec["model"], "duration": spec["duration"],
+                    "regions": {region: label for region, (label, _) in spec["regions"].items()},
+                }
+                for name, spec in VIDEO_PROVIDERS.items()
+            },
+            "profiles": {
+                name: {"key_configured": bool(profile.get("key")), "model": profile.get("model", "")}
+                for name, profile in settings["profiles"].items()
+            },
+            "key_configured": bool(settings["profiles"].get(f"{settings['provider']}:{settings['region']}", {}).get("key")),
             "logged_in": bool(self.account()),
             "jobs": [
-                {key: row.get(key, "") for key in ("id", "phase", "title", "created_at", "file", "bvid", "message")}
+                {
+                    **{key: row.get(key, "") for key in ("id", "phase", "title", "created_at", "file", "bvid", "message")},
+                    "provider": row.get("provider", "minimax"),
+                }
                 for row in reversed(rows[-10:])
             ],
         }
@@ -179,8 +288,12 @@ class AutoPublisher:
         settings = {key: payload.get(key, current[key]) for key in DEFAULTS if key != "schedule_after"}
         if type(settings["enabled"]) is not bool:
             raise PublishError("自主投稿开关格式不正确。")
-        if settings["region"] not in tuple(BASE_URLS):
-            raise PublishError("请选择 MiniMax 平台。")
+        provider, region = settings["provider"], settings["region"]
+        if not isinstance(provider, str) or provider not in VIDEO_PROVIDERS:
+            raise PublishError("请选择支持的视频生成服务。")
+        spec = VIDEO_PROVIDERS[provider]
+        if not isinstance(region, str) or region not in spec["regions"]:
+            raise PublishError("请选择该服务支持的地区。")
         if not isinstance(settings["time"], str) or not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", settings["time"]):
             raise PublishError("运行时间应为 HH:MM。")
         if type(settings["limit"]) is not int or not 1 <= settings["limit"] <= 5:
@@ -193,12 +306,31 @@ class AutoPublisher:
         remove = payload.get("remove_key", False)
         if type(remove) is not bool or not isinstance(supplied, str) or (supplied and not re.fullmatch(r"[!-~]{1,512}", supplied)):
             raise PublishError("API Key 格式不正确。")
-        settings["key"] = "" if remove else supplied or current["key"]
-        if settings["enabled"] and not settings["key"]:
-            raise PublishError("先填写 MiniMax API Key，再开启自主投稿。")
+        profile_name = f"{provider}:{region}"
+        profiles = dict(current["profiles"])
+        profile = profiles.get(profile_name, {})
+        model = payload.get("model", profile.get("model", "")) if provider == "ark" else ""
+        if not isinstance(model, str) or (model and not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", model)):
+            raise PublishError("请输入有效的方舟模型或推理接入点 ID。")
+        key = "" if remove else supplied or profile.get("key", "")
+        if settings["enabled"] and not key:
+            raise PublishError("先填写所选服务的 API Key，再开启自主投稿。")
+        profiles[profile_name] = {"key": key, "model": model}
+        settings["profiles"] = profiles
         settings["schedule_after"] = current["schedule_after"]
-        if settings["enabled"] and (not current["enabled"] or settings["time"] != current["time"]):
+        if settings["enabled"] and (
+            not current["enabled"] or any(settings[key] != current[key] for key in ("time", "provider", "region"))
+        ):
             settings["schedule_after"] = now.isoformat()
+        # Older queued jobs did not record a region until submission.
+        if (provider, region) != (current["provider"], current["region"]):
+            rows = self.jobs()
+            legacy = [row for row in rows if row["phase"] in ACTIVE_PHASES and "provider" not in row]
+            if legacy:
+                for row in legacy:
+                    row["provider"] = "minimax"
+                    row.setdefault("region", current["region"])
+                _write(self.jobs_path, rows)
         _write(self.settings_path, settings)
 
     def _update(self, rows: list[dict], job: dict, phase: str, **fields) -> None:
@@ -210,8 +342,10 @@ class AutoPublisher:
         rows = self.jobs()
         account = self.account()
         blocked = ""
-        if not settings["enabled"] or not settings["key"]:
-            blocked = "请先配置 MiniMax API Key 并开启自主投稿。"
+        provider, region = settings["provider"], settings["region"]
+        profile = settings["profiles"].get(f"{provider}:{region}", {})
+        if not settings["enabled"] or not profile.get("key"):
+            blocked = "请先配置所选服务的 API Key 并开启自主投稿。"
         elif not account:
             blocked = "请先在「刷视频」页登录 B站。"
         elif any(job["phase"] in ACTIVE_PHASES for job in rows):
@@ -236,13 +370,14 @@ class AutoPublisher:
         job = {
             "id": uuid.uuid4().hex, "phase": "queued", "created_at": now.isoformat(timespec="seconds"),
             "day": today, "scheduled": not manual, "account": account, "tid": settings["tid"],
+            "provider": provider, "region": region, "model": profile.get("model") or VIDEO_PROVIDERS[provider]["model"],
         }
         _write(self.jobs_path, [*rows, job][-60:])
         return job
 
     async def tick(self, now: datetime) -> None:
         settings = self.settings()
-        if not settings["enabled"] or not settings["key"]:
+        if not settings["enabled"]:
             return
         rows = self.jobs()
         job = next((row for row in reversed(rows) if row["phase"] in ACTIVE_PHASES), None)
@@ -253,8 +388,14 @@ class AutoPublisher:
             rows = self.jobs()
             job = rows[-1]
         phase = job["phase"]
+        provider = job.get("provider", "minimax")
+        spec = VIDEO_PROVIDERS[provider]
+        region = job.get("region", settings["region"] if settings["provider"] == provider else "cn")
+        profile_name = f"{provider}:{region}"
+        model = job.get("model") or spec["model"]
         if phase in ("requesting", "uploading"):
-            self._update(rows, job, "review", message="上次提交未能确认，请到 MiniMax 或 B站核对。")
+            service = spec["name"] if phase == "requesting" else "B站"
+            self._update(rows, job, "review", message=f"上次提交未能确认，请到{service}核对。")
             return
         account = self.account()
         if not account:
@@ -262,10 +403,14 @@ class AutoPublisher:
         if account != job["account"]:
             self._update(rows, job, "review", message="B站账号已切换，任务暂停待核对。")
             return
+        key = settings["profiles"].get(profile_name, {}).get("key")
+        if phase in ("queued", "generating") and not key:
+            self._update(rows, job, "review", message=f"{spec['name']} 的 Key 已清除，请到服务商核对任务。")
+            return
         if phase == "queued":
             try:
                 recent = [row["title"] for row in rows[-13:-1] if row.get("title")]
-                plan = parse_plan(await self.plan(settings["direction"], recent))
+                plan = parse_plan(await self.plan(settings["direction"], recent, spec["duration"]))
                 if plan["title"] in recent:
                     raise PublishError("选题与近期稿件重复。")
             except PublishError as exc:
@@ -275,46 +420,42 @@ class AutoPublisher:
                 self._update(rows, job, "failed", message="选题失败，请检查 AstrBot 的文本模型配置。")
                 return
             latest = self.settings()
-            if not latest["enabled"] or not latest["key"] or self.account() != job["account"]:
+            key = latest["profiles"].get(profile_name, {}).get("key")
+            if not latest["enabled"] or not key or self.account() != job["account"]:
                 return
             self._update(
                 rows, job, "requesting", title=plan["title"], desc=plan["desc"], tags=plan["tags"],
-                region=latest["region"], submitted_at=now.isoformat(),
+                provider=provider, region=region, model=model, submitted_at=now.isoformat(),
             )
             try:
-                task_id = await MiniMaxVideo(latest["region"], latest["key"]).create(plan["prompt"])
+                task_id = await VIDEO_CLIENTS[provider](provider, region, key, model).create(plan["prompt"])
             except PublishError as exc:
                 self._update(rows, job, "failed", message=str(exc))
             except Exception:
-                self._update(rows, job, "review", message="MiniMax 受理状态不明，请核对生成记录。")
+                self._update(rows, job, "review", message=f"{spec['name']} 受理状态不明，请核对生成记录。")
             else:
                 self._update(rows, job, "generating", task_id=task_id)
             return
 
         if phase == "generating":
-            client = MiniMaxVideo(job["region"], settings["key"])
+            client = VIDEO_CLIENTS[provider](provider, region, key, model)
             submitted = datetime.fromisoformat(job["submitted_at"])
             try:
-                result = await client.query(job["task_id"])
-                if result.get("status") == "Fail":
-                    raise PublishError("MiniMax 生成失败。")
-                if result.get("status") != "Success":
+                artifact = await client.query(job["task_id"])
+                if not artifact:
                     if now - submitted >= timedelta(minutes=30):
-                        self._update(rows, job, "review", message="生成等待超时，请核对 MiniMax 任务。")
+                        self._update(rows, job, "review", message=f"生成等待超时，请核对{spec['name']}任务。")
                     return
-                file_id = result.get("file_id")
-                if not file_id:
-                    raise PublishError("MiniMax 已完成生成，但缺少成片编号。")
                 name = f"ai-{job['id']}.mp4"
                 destination = self.data_dir / "media" / name
                 if not destination.is_file():
-                    await client.download(str(file_id), self.data_dir / f".ai-{job['id']}.part", destination)
+                    await client.download(artifact, self.data_dir / f".ai-{job['id']}.part", destination)
             except PublishError as exc:
                 self._update(rows, job, "failed", message=str(exc))
                 return
             except Exception:
                 if now - submitted >= timedelta(minutes=30):
-                    self._update(rows, job, "review", message="暂未取得成片，请核对 MiniMax 任务。")
+                    self._update(rows, job, "review", message=f"暂未取得成片，请核对{spec['name']}任务。")
                 return
             self._update(rows, job, "ready", file=name)
             return
@@ -330,7 +471,7 @@ class AutoPublisher:
             async with asyncio.timeout(900):
                 result = await self.publish({
                     "video_path": str(video), "title": job["title"],
-                    "desc": "AI 生成视频 · MiniMax 海螺\n\n" + job["desc"],
+                    "desc": f"AI 生成视频 · {spec['name']}\n\n" + job["desc"],
                     "tags": "AI生成," + job["tags"], "tid": job["tid"],
                 })
         except Exception:
