@@ -28,6 +28,7 @@ try:  # 插件包里是相对导入；单测里 duty 是顶层模块（sys.path 
 except ImportError:  # pragma: no cover
     import guard  # type: ignore
 
+AUTO_COIN_DAILY_RANGE = (0, 20)
 VIDEO_ACTIONS = {"auto_like": "点赞", "auto_favorite": "收藏", "auto_coin_enabled": "投币"}
 
 DEFAULT_KEYWORDS = ["搞笑", "沙雕", "整活", "名场面"]
@@ -1123,6 +1124,10 @@ class DutyRunner:
         return ""
 
     async def _auto_coin(self, favorites: list[dict], credential) -> str:
+        limit = self._cfg_int("auto_coin_per_day", 1, *AUTO_COIN_DAILY_RANGE)
+        if limit == 0:
+            return "每日投币上限为 0 枚，本轮跳过投币"
+
         ledger = self.data_dir / "coin_attempts.json"
         try:
             attempts = json.loads(ledger.read_text(encoding="utf-8"))
@@ -1136,7 +1141,6 @@ class DutyRunner:
         except (OSError, ValueError):
             return "投币记录读取失败，本轮跳过投币"
 
-        limit = self._cfg_int("auto_coin_per_day", 1, 1, 5)
         coined = False
         for item in favorites:
             bvid = item["bvid"]

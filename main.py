@@ -40,7 +40,7 @@ from . import bili_api
 from . import guard
 from . import reply as reply_logic
 from . import rhythm
-from .duty import DEFAULT_KEYWORDS, VIDEO_ACTIONS, DutyRunner, RiskPause
+from .duty import AUTO_COIN_DAILY_RANGE, DEFAULT_KEYWORDS, VIDEO_ACTIONS, DutyRunner, RiskPause
 
 PLUGIN_NAME = "astrbot_plugin_bili_scroll"
 
@@ -116,7 +116,7 @@ INT_RANGES = {
     "daily_count": (1, 10),
     "candidates_per_keyword": (3, 30),
     "max_scan": (3, 40),
-    "auto_coin_per_day": (1, 5),
+    "auto_coin_per_day": AUTO_COIN_DAILY_RANGE,
     "max_dm_items": (1, 6),
     "auto_comment_per_run": (-1, 5),
     "auto_comment_per_day": (-1, 20),
@@ -241,7 +241,7 @@ class BiliScrollPlugin(Star):
     def _config_values(self) -> dict:
         values = {key: self.cfg.get(key) for key in CONFIG_KEYS}
         values.update({key: self.cfg.get(key) is True for key in VIDEO_ACTIONS})
-        values["auto_coin_per_day"] = self._cfg_int("auto_coin_per_day", 1, 1, 5)
+        values["auto_coin_per_day"] = self._cfg_int("auto_coin_per_day", 1, *AUTO_COIN_DAILY_RANGE)
         values["comment_taste_enabled"] = self._uses_comment_taste()
         values["speaking_style_bind_persona"] = self.cfg.get("speaking_style_bind_persona", True) is not False
         return values
@@ -2019,6 +2019,8 @@ class BiliScrollPlugin(Star):
         prompt_file = Path(__file__).parent / "prompts" / "judge.md"
         system_prompt = prompt_file.read_text(encoding="utf-8")
         actions = [label for key, label in VIDEO_ACTIONS.items() if self.cfg.get(key) is True]
+        if "投币" in actions and self._cfg_int("auto_coin_per_day", 1, *AUTO_COIN_DAILY_RANGE) == 0:
+            actions.remove("投币")
         if actions:
             interaction = "、".join(actions).replace("投币", "投 1 枚硬币")
             system_prompt += (

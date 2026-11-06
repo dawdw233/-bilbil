@@ -1002,8 +1002,8 @@
             </label>
             <label class="field" for="f-auto_coin_per_day">
               <span class="lbl">每日投币上限（枚）</span>
-              <input id="f-auto_coin_per_day" type="number" min="1" max="5" step="1" value="1" required aria-describedby="coin-limit-tip" />
-              <span class="tip" id="coin-limit-tip">仅限制投币。手动刷视频和作息唤醒共用限额，按北京时间每日重置。</span>
+              <input id="f-auto_coin_per_day" type="number" min="0" max="20" step="1" value="1" required aria-describedby="coin-limit-tip" />
+              <span class="tip" id="coin-limit-tip">填 0 时跳过投币。手动刷视频和作息唤醒共用限额，按北京时间每日重置。</span>
             </label>
           </div>
           <div class="save-bar">

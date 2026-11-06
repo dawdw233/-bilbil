@@ -1,7 +1,9 @@
 """Exercise the real browse flow with a fake model and Bilibili client."""
 
+import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -74,8 +76,13 @@ class VideoActionTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_existing_coin_is_skipped_and_daily_limit_survives_another_run(self):
         self.bili.bili_coin_count.side_effect = [{"count": 1}, {"count": 0}]
-        await self.run_browse(["already_coined", "first"], ALL_ACTIONS)
-        result = await self.run_browse(["second"], ALL_ACTIONS)
+        day = datetime.now(timezone(timedelta(hours=8))).date().isoformat()
+        (self.data_dir / "coin_attempts.json").write_text(
+            json.dumps({f"previous_{i}": day for i in range(19)}), encoding="utf-8",
+        )
+        config = {**ALL_ACTIONS, "auto_coin_per_day": 20}
+        await self.run_browse(["already_coined", "first"], config)
+        result = await self.run_browse(["second"], config)
         self.bili.bili_pay_coin.assert_awaited_once_with("first", self.credential)
         self.assertEqual(self.bili.bili_coin_count.await_count, 2)
         self.assertEqual(
@@ -86,7 +93,14 @@ class VideoActionTests(unittest.IsolatedAsyncioTestCase):
             [call.args[0] for call in self.bili.bili_favorite_video.await_args_list],
             ["already_coined", "first", "second"],
         )
-        self.assertIn("上限", result["report_md"])
+        self.assertIn("今日已达到 20 枚的上限", result["report_md"])
+        self.assertIn("已确认互动：点赞、收藏", result["report_md"])
+
+    async def test_zero_limit_skips_coins_but_still_likes_and_favorites(self):
+        result = await self.run_browse(["favorite"], {**ALL_ACTIONS, "auto_coin_per_day": 0})
+        self.bili.bili_coin_count.assert_not_awaited()
+        self.bili.bili_pay_coin.assert_not_awaited()
+        self.assertFalse((self.data_dir / "coin_attempts.json").exists())
         self.assertIn("已确认互动：点赞、收藏", result["report_md"])
 
     async def test_uncertain_send_keeps_reservation_if_browse_history_is_lost(self):
@@ -194,8 +208,14 @@ class VideoActionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(instance._config_values()["auto_coin_per_day"], 2)
         self.assertTrue(instance._config_values()["auto_favorite"])
         self.assertFalse(instance._config_values()["auto_coin_enabled"])
+        for limit in (0, 20):
+            with self.subTest(limit=limit):
+                patch_values, errors = instance._coerce_config({"auto_coin_per_day": limit})
+                self.assertFalse(errors)
+                instance.cfg.update(patch_values)
+                self.assertEqual(instance._config_values()["auto_coin_per_day"], limit)
         for payload in (
             {"auto_like": "false"}, {"auto_favorite": 1}, {"auto_coin_enabled": None},
-            {"auto_coin_per_day": 1.5}, {"auto_coin_per_day": 6},
+            {"auto_coin_per_day": 1.5}, {"auto_coin_per_day": -1}, {"auto_coin_per_day": 21},
         ):
             self.assertTrue(instance._coerce_config(payload)[1])

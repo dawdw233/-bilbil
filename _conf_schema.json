@@ -61,7 +61,7 @@
   },
   "auto_coin_per_day": {
     "type": "int",
-    "description": "每天最多自动投币几枚（1~5，默认 1，按北京时间计算）",
+    "description": "每日自动投币上限（0～20 枚，默认 1 枚，0 表示跳过投币，按北京时间计算）",
     "default": 1
   },
   "dm_mode": {
