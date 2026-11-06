@@ -40,7 +40,8 @@ from . import bili_api
 from . import guard
 from . import reply as reply_logic
 from . import rhythm
-from .duty import AUTO_COIN_DAILY_RANGE, DEFAULT_KEYWORDS, VIDEO_ACTIONS, DutyRunner, RiskPause
+from .auto_publish import AutoPublisher, PublishError
+from .duty import AUTO_COIN_DAILY_RANGE, BEIJING_TIME, DEFAULT_KEYWORDS, VIDEO_ACTIONS, DutyRunner, RiskPause
 
 PLUGIN_NAME = "astrbot_plugin_bili_scroll"
 
@@ -150,6 +151,12 @@ class BiliScrollPlugin(Star):
         self._login_task: asyncio.Task | None = None
         self._reply_task: asyncio.Task | None = None
         self._reply_busy = False
+        self._auto_publish_task: asyncio.Task | None = None
+        self._auto_publish_wake = asyncio.Event()
+        self._auto_publish = AutoPublisher(
+            self.data_dir, self._plan_auto_video, self._do_upload,
+            self._auto_publish_account, lambda: self._upload.get("running", False),
+        )
         # 投稿：同一时间只跑一个
         self._upload: dict = {
             "running": False, "phase": "空闲", "title": "",
@@ -180,6 +187,7 @@ class BiliScrollPlugin(Star):
             logger.warning("[bili-scroll] 作息窗口是空的 —— 不会自动刷，只能在页面手动点")
         self._task = asyncio.create_task(self._scheduler_loop())
         self._reply_task = asyncio.create_task(self._reply_loop())
+        self._auto_publish_task = asyncio.create_task(self._auto_publish_loop())
         self._register_pages()
         logger.info(
             f"[bili-scroll] 已启动，数据目录 {self.data_dir}；凭证文件 {bili_api.CRED_FILE}"
@@ -189,6 +197,9 @@ class BiliScrollPlugin(Star):
         for task in (self._task, self._login_task, self._reply_task):
             if task and not task.done():
                 task.cancel()
+        if self._auto_publish_task:
+            self._auto_publish_task.cancel()
+            await asyncio.gather(self._auto_publish_task, return_exceptions=True)
         logger.info("[bili-scroll] 已停止")
 
     # ---------------- 插件页 API ----------------
@@ -222,6 +233,9 @@ class BiliScrollPlugin(Star):
             ("upload/files", self._api_upload_files, ["GET"], "投稿素材列表"),
             ("upload/start", self._api_upload_start, ["POST"], "开始投稿"),
             ("upload/status", self._api_upload_status, ["GET"], "投稿进度"),
+            ("upload/auto/state", self._api_auto_publish_state, ["GET"], "自主投稿设置与记录"),
+            ("upload/auto/save", self._api_auto_publish_save, ["POST"], "保存自主投稿设置"),
+            ("upload/auto/start", self._api_auto_publish_start, ["POST"], "立即自主生成并投稿"),
             ("rhythm/state", self._api_rhythm_state, ["GET"], "作息状态"),
             ("rhythm/runs", self._api_rhythm_runs, ["GET"], "最近醒来记录"),
             ("reply/summary", self._api_reply_summary, ["GET"], "回复状态"),
@@ -1311,7 +1325,7 @@ class BiliScrollPlugin(Star):
                 data["elapsed"] = 0
         return json_response(data)
 
-    async def _do_upload(self, payload: dict) -> None:
+    async def _do_upload(self, payload: dict) -> dict:
         title = str(payload.get("title") or "").strip()
         self._upload.update(
             running=True, phase="上传中", title=title,
@@ -1330,6 +1344,13 @@ class BiliScrollPlugin(Star):
                 no_reprint=bool(payload.get("no_reprint", True)),
             )
             data = json.loads(raw) if raw else {}
+            if not isinstance(data, dict):
+                data = {}
+        except asyncio.CancelledError:
+            self._upload.update(running=False, phase="待核对", result={
+                "success": False, "bvid": "", "error": "投稿中断，请到 B站创作中心核对。",
+            })
+            raise
         except Exception as exc:
             logger.exception("[bili-scroll] 投稿失败")
             data = {"success": False, "error": str(exc)}
@@ -1348,10 +1369,11 @@ class BiliScrollPlugin(Star):
             },
         )
         logger.info(f"[bili-scroll] 投稿结束：{'成功 ' + bv if ok else '失败 ' + self._upload['result']['error'][:80]}")
+        return self._upload["result"]
 
     async def _api_upload_start(self):
         if not self._cred_ok():
-            return error_response("还没登录 B站，先在主页面扫码登录")
+            return error_response("还没登录 B站，先在「刷视频」页扫码登录")
         if self._upload.get("running"):
             return error_response("上一支还在传，等它结束")
         payload = await request.json(default={})
@@ -1374,12 +1396,83 @@ class BiliScrollPlugin(Star):
         if path.stat().st_size < 1024:
             return error_response("文件太小了，不像视频")
 
+        if self._upload.get("running"):
+            return error_response("上一支还在传，等它结束")
         payload["video_path"] = str(path)
         self._upload.update(running=True, phase="排队中", title=title,
                             started_at=datetime.now().isoformat(timespec="seconds"), result=None)
         asyncio.create_task(self._do_upload(payload))
         logger.info(f"[bili-scroll] 开始投稿：{title}（{path.name}）")
         return json_response({"started": True, "file": path.name, "size": path.stat().st_size})
+
+    def _auto_publish_account(self) -> str:
+        if self._login_task and not self._login_task.done():
+            return ""
+        try:
+            credential = bili_api.load_credential()
+        except Exception:
+            return ""
+        if not credential or not credential.sessdata or not credential.bili_jct:
+            return ""
+        return str(credential.dedeuserid or "")
+
+    async def _plan_auto_video(self, direction: str, recent: list[str]) -> str:
+        prompt = json.dumps({
+            "创作方向": direction or "自由选题，优先考虑有趣、温和、适合公开投稿的原创短片",
+            "近期标题": recent,
+        }, ensure_ascii=False)
+        result = await asyncio.wait_for(self.context.llm_generate(
+            chat_provider_id=self._provider_id(),
+            system_prompt=(
+                "你负责为 B站策划一支 6 秒的原创 AI 视频。自主选题，避免重复近期主题。"
+                "为一个连续镜头描述明确的主角、场景、动作和画面风格。"
+                "选择虚构或自然场景，避免使用他人角色、真实人物、品牌或他人作品片段。"
+                "只返回 JSON 对象，包含四个字符串：title（中文标题），prompt（文生视频镜头描述），"
+                "desc（中文简介），tags（逗号分隔的中文标签）。"
+            ),
+            prompt=prompt,
+        ), timeout=90)
+        return result.completion_text or ""
+
+    async def _api_auto_publish_state(self):
+        try:
+            return json_response(self._auto_publish.state())
+        except PublishError as exc:
+            return error_response(str(exc))
+
+    async def _api_auto_publish_save(self):
+        payload = await request.json(default={})
+        if not isinstance(payload, dict):
+            return error_response("设置必须为 JSON 对象")
+        try:
+            self._auto_publish.save_settings(payload, datetime.now(BEIJING_TIME))
+            state = self._auto_publish.state()
+        except PublishError as exc:
+            return error_response(str(exc))
+        self._auto_publish_wake.set()
+        return json_response(state)
+
+    async def _api_auto_publish_start(self):
+        try:
+            job = self._auto_publish.enqueue(datetime.now(BEIJING_TIME), manual=True)
+        except PublishError as exc:
+            return error_response(str(exc))
+        self._auto_publish_wake.set()
+        return json_response({"started": True, "id": job["id"]})
+
+    async def _auto_publish_loop(self) -> None:
+        while True:
+            self._auto_publish_wake.clear()
+            try:
+                await self._auto_publish.tick(datetime.now(BEIJING_TIME))
+            except PublishError as exc:
+                logger.warning(f"[bili-scroll] {exc}")
+            except Exception:
+                logger.warning("[bili-scroll] 自主投稿任务暂未推进，请检查任务记录。")
+            try:
+                await asyncio.wait_for(self._auto_publish_wake.wait(), timeout=20)
+            except TimeoutError:
+                pass
 
     async def _scheduler_loop(self) -> None:
         while True:

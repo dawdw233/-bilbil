@@ -12,6 +12,8 @@ venv/
 .env.*
 !.env.example
 bili_credential.json
+auto_publish_settings.json
+auto_publish_jobs.json
 config/
 plugin_data/
 media/
