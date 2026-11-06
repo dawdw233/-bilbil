@@ -804,7 +804,7 @@
     <div class="sec-head">
       <span class="caret">▸</span>
       <h2>设置</h2>
-      <span class="sub">设置搜索关键词、筛选数量和使用的模型</span>
+      <span class="sub">设置搜索、筛选、使用的模型和自动投币</span>
     </div>
     <div class="sec-body">
 
@@ -838,9 +838,20 @@
           </label>
         </div>
       </section>
-
-
-
+      <section class="panel">
+        <div class="panel-title">自动投币</div>
+        <div class="grid">
+          <label class="check">
+            <input id="f-auto_coin" type="checkbox" />
+            <span><span class="t">喜欢的视频自动投币</span><span class="d">用当前 B站账号给模型明确喜欢、且有字幕依据的「值得看」视频投 1 枚硬币。</span></span>
+          </label>
+          <label class="field span-all">
+            <span class="lbl">每日投币上限（枚）</span>
+            <input id="f-auto_coin_per_day" type="number" min="1" max="5" step="1" />
+            <span class="tip">按北京时间累计手动和自动刷视频时的机器人投币。已投过的视频会跳过，投币结果可在日报里查看。</span>
+          </label>
+        </div>
+      </section>
     </div>
 
     <div class="save-bar">
@@ -2321,6 +2332,8 @@ function fillForm(values) {
   $("f-max_scan").value = values.max_scan ?? 15;
   $("f-search_order").value = values.search_order || "pubdate";
   $("f-provider_id").value = values.provider_id || "";
+  $("f-auto_coin").checked = values.auto_coin === true;
+  $("f-auto_coin_per_day").value = values.auto_coin_per_day ?? 1;
 }
 
 function card(k, v, cls) {
@@ -2456,6 +2469,8 @@ $("btn-save").onclick = async () => {
     max_scan: Number($("f-max_scan").value),
     search_order: $("f-search_order").value,
     provider_id: $("f-provider_id").value.trim(),
+    auto_coin: $("f-auto_coin").checked,
+    auto_coin_per_day: Number($("f-auto_coin_per_day").value || 1),
   };
   try {
     const r = await api("config/save", payload);

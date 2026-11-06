@@ -29,6 +29,7 @@ import qrcode_terminal
 
 from bilibili_api import video, search, comment, Credential, dynamic, opus
 from bilibili_api import hot, rank, user, session, favorite_list
+from bilibili_api.exceptions import ResponseCodeException
 from bilibili_api.video_uploader import (
     VideoUploader, VideoUploaderPage, VideoMeta, Lines,
 )
@@ -835,6 +836,24 @@ async def bili_video_info(bvid: str) -> str:
             "share": stat.get("share", 0),
         },
     }, ensure_ascii=False)
+
+
+async def bili_coin_count(bvid: str, credential: Credential) -> dict:
+    """读取这份登录凭证已给该视频投过几枚硬币。"""
+    try:
+        count = await video.Video(bvid=bvid, credential=credential).get_pay_coins()
+    except ResponseCodeException as exc:
+        return {"code": exc.code, "error": exc.msg}
+    return {"count": count}
+
+
+async def bili_pay_coin(bvid: str, credential: Credential) -> dict:
+    """仅供自动刷视频流程调用。"""
+    try:
+        await video.Video(bvid=bvid, credential=credential).pay_coin(num=1, like=False)
+    except ResponseCodeException as exc:
+        return {"code": exc.code, "error": exc.msg}
+    return {"success": True}
 
 
 # ========== Tool 6: 回复评论 ==========

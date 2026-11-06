@@ -44,6 +44,16 @@
     "description": "用来判断值不值得的模型 Provider ID（留空=用 AstrBot 当前默认）",
     "default": ""
   },
+  "auto_coin": {
+    "type": "bool",
+    "description": "自动投币。开启后，只给模型明确喜欢且有字幕依据的「值得看」视频投 1 枚",
+    "default": false
+  },
+  "auto_coin_per_day": {
+    "type": "int",
+    "description": "每天最多自动投币几枚（1~5，默认 1，按北京时间计算）",
+    "default": 1
+  },
   "dm_mode": {
     "type": "string",
     "description": "B站私信投递：off=不发 / only=发私信",

@@ -3,7 +3,7 @@
 DSH 那边是靠一个 agent + 一长串工具调用跑完的；这里改成固定步骤，
 每一步都能单独看日志、单独失败，省 token 也好排查：
 
-    搜 → 去重 → 读字幕 → 逐条判断 → （可选）自动评论 → 写日报 → 记判重表 → 私信 / 推 QQ
+    搜 → 去重 → 读字幕 → 逐条判断 → （可选）自动评论、投币 → 写日报 → 记判重表 → 私信 / 推 QQ
 
 判重表 seen.json 的结构：
     {"videos": {"BV号": {"date","title","up","verdict","link","reason"}},
@@ -19,7 +19,7 @@ import asyncio
 import json
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Awaitable, Callable
 
@@ -30,6 +30,7 @@ except ImportError:  # pragma: no cover
 
 DEFAULT_KEYWORDS = ["搞笑", "沙雕", "整活", "名场面"]
 VERDICTS = ("值得看", "可以看", "不值当")
+BEIJING_TIME = timezone(timedelta(hours=8))
 
 # 自动评论的兜底闸：LLM 写出来的东西先过一遍，命中就整条丢弃（宁可不发）
 COMMENT_BLOCKLIST = (
@@ -706,6 +707,8 @@ class DutyRunner:
             try:
                 verdict_raw = await self.judge(text[:12000], v.get("title", ""))
                 verdict = self._loads(verdict_raw)
+                if not isinstance(verdict, dict):
+                    verdict = {}
             except Exception as exc:
                 skipped.append({"bvid": bvid, "why": f"判断失败：{exc}", "title": v.get("title", ""),
                                 "keep": False})
@@ -734,6 +737,7 @@ class DutyRunner:
                 "reason": str(verdict.get("reason") or "").strip(),
                 "one_liner": str(verdict.get("one_liner") or "").strip(),
                 "material": material,
+                "want_coin": verdict.get("want_coin") is True and isinstance(verdict.get("reason"), str),
             })
             subtitles[bvid] = text
 
@@ -746,6 +750,15 @@ class DutyRunner:
             self.log(f"[warn] {risk_abort}，跳过自动评论")
         else:
             auto_comment = await self._auto_comment(picked, subtitles)
+
+        coin_note = ""
+        if self.cfg.get("auto_coin") is True:
+            if risk_abort or self.risk_pause_left() > 0:
+                coin_note = "风控暂停，本轮跳过"
+            elif broken:
+                coin_note = "判重表读取失败，本轮跳过"
+            else:
+                coin_note = await self._auto_coin(picked, cred)
 
         # 4) 写日报：当天一个文件，每轮追加一节（同一天跑多次不覆盖、不重复刷同一段）
         report_path = self.data_dir / "out" / f"{today}.md"
@@ -762,6 +775,7 @@ class DutyRunner:
             candidates=len(candidates),
             window=win["text"] if win else "",
             risk=risk_abort,
+            coin_note=coin_note,
         )
         with open(report_path, "a", encoding="utf-8") as f:
             if not prev:
@@ -1048,6 +1062,78 @@ class DutyRunner:
             await asyncio.sleep(self._cfg_int("comment_interval_seconds", 8, 5, 300))
         return result
 
+    async def _auto_coin(self, picked: list[dict], credential) -> str:
+        favorites = [
+            item for item in picked
+            if item["verdict"] == "值得看" and item["material"] == "字幕"
+            and item["want_coin"] and item["reason"]
+        ]
+        if not favorites:
+            return "本轮没有明确喜欢的视频"
+        if not getattr(credential, "bili_jct", ""):
+            return "登录凭证不完整，请重新扫码"
+
+        ledger = self.data_dir / "coin_attempts.json"
+        try:
+            attempts = json.loads(ledger.read_text(encoding="utf-8"))
+            if not isinstance(attempts, dict) or any(
+                not isinstance(day, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day)
+                for day in attempts.values()
+            ):
+                raise ValueError("投币记录格式不正确")
+        except FileNotFoundError:
+            attempts = {}
+        except (OSError, ValueError):
+            return "投币记录读取失败，本轮跳过"
+
+        limit = self._cfg_int("auto_coin_per_day", 1, 1, 5)
+        for item in favorites:
+            bvid = item["bvid"]
+            day = datetime.now(BEIJING_TIME).date().isoformat()
+            if sum(at == day for at in attempts.values()) >= limit:
+                return f"今日已达到 {limit} 枚的上限"
+            if bvid in attempts:
+                continue
+            try:
+                state = await asyncio.wait_for(self._call(self.bili.bili_coin_count, bvid, credential), timeout=15)
+            except RiskPause as exc:
+                return str(exc)
+            except Exception:
+                return "未能查询已投币数量，本轮停止投币"
+            count = state.get("count") if isinstance(state, dict) else None
+            if type(count) is not int or count < 0:
+                return "未能确认已投币数量，本轮停止投币"
+            if count:
+                continue
+
+            # 先记名额再提交，超时或进程退出时也不会重复投。
+            day = datetime.now(BEIJING_TIME).date().isoformat()
+            if sum(at == day for at in attempts.values()) >= limit:
+                return f"今日自动投币名额已用完（上限 {limit} 枚）"
+            attempts[bvid] = day
+            temporary = ledger.with_suffix(".tmp")
+            try:
+                temporary.write_text(json.dumps(attempts), encoding="utf-8")
+                temporary.replace(ledger)
+            except OSError:
+                return "投币记录写入失败，本轮停止投币"
+
+            try:
+                result = await asyncio.wait_for(self._call(self.bili.bili_pay_coin, bvid, credential), timeout=15)
+            except RiskPause as exc:
+                return str(exc)
+            except Exception:
+                return "投币结果未确认，本轮停止投币"
+            if not isinstance(result, dict):
+                return "投币结果未确认，本轮停止投币"
+            if result.get("success") is not True:
+                if result.get("code") == -104:
+                    return "B站硬币余额不足，本轮停止投币"
+                return f"B站拒绝投币（错误码 {result.get('code', '未知')}），本轮停止投币"
+            item["coined"] = True
+            self.log(f"已自动投币 {bvid} · 1 枚")
+        return "" if any(item.get("coined") for item in favorites) else "本轮喜欢的视频已有投币或提交记录"
+
     # ---------- 输出 ----------
 
     def _render_report(
@@ -1062,6 +1148,7 @@ class DutyRunner:
         candidates: int,
         window: str = "",
         risk: str = "",
+        coin_note: str = "",
     ) -> str:
         lines = [f"## 第 {run_no} 轮 · {run_at}"]
         if picked:
@@ -1080,6 +1167,8 @@ class DutyRunner:
                 ]
                 if p.get("one_liner"):
                     lines.append(f"- 一句话：{p['one_liner']}")
+                if p.get("coined"):
+                    lines.append("- 已投币：1 枚")
                 # 没字幕、靠简介+热评判出来的，标一下：别让人以为判据和别的条目一样
                 if p.get("material") and p["material"] != "字幕":
                     lines.append(f"- 素材：{p['material']}（这条没有字幕）")
@@ -1100,6 +1189,8 @@ class DutyRunner:
         )
         if risk:
             lines += ["", f"> ⚠️ 这轮被风控提前中止（{risk}），上面的结果不完整。"]
+        if coin_note:
+            lines += ["", f"> 自动投币：{coin_note}"]
         lines += [
             "",
             f"> 搜到 {candidates} 条 · 新候选 {fresh} 条 · 扫了 {scanned} 条 · "
