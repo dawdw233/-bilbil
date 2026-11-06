@@ -162,6 +162,7 @@
   .check .t { display: block; font-size: 13px; font-weight: 600; }
   .check .d { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; line-height: 1.8; }
   .save-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 22px; }
+  #coin-fields { min-width: 0; margin: 0; padding: 0; border: 0; }
   .md { padding: 24px; border: 1px solid #ffffffd9; border-radius: var(--r); background: var(--surface); box-shadow: var(--shadow); overflow: auto; scrollbar-gutter: stable; }
   #report { max-height: min(64vh, 700px); }
   .md h1 { font: 600 25px/1.6 var(--serif); margin: 0 0 16px; letter-spacing: .03em; }
@@ -480,10 +481,10 @@
     .study-shell .main { margin-left: 0; }
     .study-profile { padding: 2px 4px 13px; gap: 10px; }
     .study-room-name { font-size: 17px; } .study-room-caption { display: block; margin: 3px 0 0; }
-    .study-shell .side-menu { display: grid; grid-template-columns: .8fr 1.6fr 1.1fr; gap: 12px; }
+    .study-shell .side-menu { display: grid; grid-template-columns: minmax(0, .8fr) repeat(2, minmax(0, 1.6fr)); gap: 8px; }
     .nav-group { margin: 0; } .nav-group-label { padding: 0 5px; margin-bottom: 5px; font-size: 9px; }
     .nav-group-buttons { display: flex; gap: 4px; }
-    .nav-group .tab { flex: 1; width: auto; flex-direction: column; justify-content: center; padding: 8px 4px 9px; min-height: 58px; gap: 4px; font-size: 10px; margin: 0; }
+    .nav-group .tab { flex: 1; width: auto; min-width: 0; flex-direction: column; justify-content: center; padding: 8px 4px 9px; min-height: 58px; gap: 4px; font-size: 10px; margin: 0; }
     .study-shell .tab.active::before { left: 50%; top: auto; bottom: 3px; height: 2px; width: 13px; transform: translateX(-50%); }
     .side-footnote { display: none; }
     .study-toolbar { position: relative; top: auto; padding: 3px 0 9px; margin-bottom: 8px; flex-wrap: wrap; background: transparent; backdrop-filter: none; }
@@ -735,6 +736,7 @@
     <nav class="side-menu" aria-label="书房导航"><div class="nav-group"><div class="nav-group-label">阅读</div><div class="nav-group-buttons"><button class="tab active" id="tab-main" aria-pressed="true" data-view="刷视频"><span class="tab-icon"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg></span><span class="tab-label">刷视频</span></button></div></div><div class="nav-group"><div class="nav-group-label">写作</div><div class="nav-group-buttons"><button class="tab" id="tab-comments" aria-pressed="false" data-view="评论"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span class="tab-label">评论</span></button>
 <button class="tab" id="tab-reply" aria-pressed="false" data-view="reply"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></span><span class="tab-label">回复<span id="tab-reply-count" class="badge"></span></span></button>
 <button class="tab" id="tab-upload" aria-pressed="false" data-view="投稿"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg></span><span class="tab-label">投稿</span></button></div></div><div class="nav-group"><div class="nav-group-label">生活</div><div class="nav-group-buttons"><button class="tab" id="tab-rhythm" aria-pressed="false" data-view="作息"><span class="tab-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span><span class="tab-label">作息</span></button>
+<button class="tab" id="tab-coin" aria-pressed="false" aria-controls="view-coin" data-view="投币"><span class="tab-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 9l2-1v8m-2 0h4"/></svg></span><span class="tab-label">投币</span></button>
 <button class="tab" id="tab-delivery" aria-pressed="false" data-view="投递"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></span><span class="tab-label">投递</span></button></div></div></nav>
     <div class="side-footnote"><span>把有趣，收进日常。</span>留一点时间，给喜欢的事。</div>
   </aside>
@@ -804,7 +806,7 @@
     <div class="sec-head">
       <span class="caret">▸</span>
       <h2>设置</h2>
-      <span class="sub">设置搜索、筛选、使用的模型和自动投币</span>
+      <span class="sub">设置搜索关键词、筛选数量和使用的模型</span>
     </div>
     <div class="sec-body">
 
@@ -835,20 +837,6 @@
           </label>
           <label class="field span-all"><span class="lbl">使用的模型（Provider ID，留空 = AstrBot 当前默认）</span><input id="f-provider_id" placeholder="留空使用当前默认模型" />
             <span class="tip">用于视频判断、自动评论和回复；留空使用 AstrBot 当前默认模型。</span>
-          </label>
-        </div>
-      </section>
-      <section class="panel">
-        <div class="panel-title">自动投币</div>
-        <div class="grid">
-          <label class="check">
-            <input id="f-auto_coin" type="checkbox" />
-            <span><span class="t">喜欢的视频自动投币</span><span class="d">用当前 B站账号给模型明确喜欢、且有字幕依据的「值得看」视频投 1 枚硬币。</span></span>
-          </label>
-          <label class="field span-all">
-            <span class="lbl">每日投币上限（枚）</span>
-            <input id="f-auto_coin_per_day" type="number" min="1" max="5" step="1" />
-            <span class="tip">按北京时间累计手动和自动刷视频时的机器人投币。已投过的视频会跳过，投币结果可在日报里查看。</span>
           </label>
         </div>
       </section>
@@ -989,6 +977,37 @@
         </div>
       </div>
     </div><!-- /sec-body -->
+    </section>
+  </div>
+
+  <!-- ===== 投币 ===== -->
+  <div id="view-coin" class="hide">
+    <div class="cards" id="coin-cards"></div>
+    <section class="sec" aria-labelledby="coin-title">
+      <div class="sec-head">
+        <h2 id="coin-title">投币设置</h2>
+        <span class="sub">为机器人喜欢的视频投币</span>
+      </div>
+      <form class="panel" id="coin-form">
+        <fieldset id="coin-fields" disabled>
+          <div class="grid">
+            <label class="check">
+              <input id="f-auto_coin" type="checkbox" aria-labelledby="coin-switch-label" aria-describedby="coin-switch-tip" />
+              <span><span class="t" id="coin-switch-label">喜欢的视频自动投币</span><span class="d" id="coin-switch-tip">给模型明确喜欢且有字幕依据的「值得看」视频投 1 枚，跳过已投过的视频。</span></span>
+            </label>
+            <label class="field" for="f-auto_coin_per_day">
+              <span class="lbl">每日投币上限（枚）</span>
+              <input id="f-auto_coin_per_day" type="number" min="1" max="5" step="1" value="1" required aria-describedby="coin-limit-tip" />
+              <span class="tip" id="coin-limit-tip">手动刷视频和作息唤醒共用限额，每天按北京时间重置。</span>
+            </label>
+          </div>
+          <div class="save-bar">
+            <button type="submit" class="primary">保存投币设置</button>
+          </div>
+        </fieldset>
+        <p class="sub" id="coin-hint" role="status"></p>
+        <div class="sub">投币结果可在「刷视频 → 日报」查看。</div>
+      </form>
     </section>
   </div>
 
@@ -2248,7 +2267,7 @@ studyEl("study-rhythm-link").onclick = () => studyEl("tab-rhythm").click();
 window.addEventListener("bili:refreshed", loadStudy);
 window.addEventListener("bili:run-started", loadStudy);
 window.addEventListener("bili:view", (event) => {
-  const titles = { main: "观影手记", rhythm: "作息安排", upload: "视频投稿", delivery: "日报投递", comments: "评论与口味", reply: "回复与草稿" };
+  const titles = { main: "观影手记", rhythm: "作息安排", coin: "投币设置", upload: "视频投稿", delivery: "日报投递", comments: "评论与口味", reply: "回复与草稿" };
   studyEl("study-page-title").textContent = titles[event.detail] || "观影手记";
   if (event.detail === "main") loadStudy();
 });
@@ -2332,8 +2351,6 @@ function fillForm(values) {
   $("f-max_scan").value = values.max_scan ?? 15;
   $("f-search_order").value = values.search_order || "pubdate";
   $("f-provider_id").value = values.provider_id || "";
-  $("f-auto_coin").checked = values.auto_coin === true;
-  $("f-auto_coin_per_day").value = values.auto_coin_per_day ?? 1;
 }
 
 function card(k, v, cls) {
@@ -2469,8 +2486,6 @@ $("btn-save").onclick = async () => {
     max_scan: Number($("f-max_scan").value),
     search_order: $("f-search_order").value,
     provider_id: $("f-provider_id").value.trim(),
-    auto_coin: $("f-auto_coin").checked,
-    auto_coin_per_day: Number($("f-auto_coin_per_day").value || 1),
   };
   try {
     const r = await api("config/save", payload);
@@ -2613,13 +2628,14 @@ $("report-date").onchange = (e) => loadReport(e.target.value);
 const MODE_TEXT = { off: "不检测", draft: "先审再发", auto: "自己发" };
 
 function switchView(name) {
-  for (const [tab, view] of [["main", "main"], ["rhythm", "rhythm"], ["upload", "upload"], ["delivery", "delivery"], ["comments", "comments"], ["reply", "reply"]]) {
-    $("tab-" + tab).classList.toggle("active", name === tab);
-    $("tab-" + tab).ariaPressed = String(name === tab);
+  for (const view of ["main", "rhythm", "coin", "upload", "delivery", "comments", "reply"]) {
+    $("tab-" + view).classList.toggle("active", name === view);
+    $("tab-" + view).ariaPressed = String(name === view);
     $("view-" + view).classList.toggle("hide", name !== view);
   }
   window.dispatchEvent?.(new CustomEvent("bili:view", { detail: name }));
   if (name === "rhythm") loadRhythm();
+  if (name === "coin") loadCoinSettings();
   if (name === "upload") loadUpload();
   if (name === "delivery") loadDelivery();
   if (name === "comments") loadComments();
@@ -2628,10 +2644,66 @@ function switchView(name) {
 
 $("tab-main").onclick = () => switchView("main");
 $("tab-rhythm").onclick = () => switchView("rhythm");
+$("tab-coin").onclick = () => switchView("coin");
 $("tab-upload").onclick = () => switchView("upload");
 $("tab-delivery").onclick = () => switchView("delivery");
 $("tab-comments").onclick = () => switchView("comments");
 $("tab-reply").onclick = () => switchView("reply");
+
+// ---------- 投币 tab ----------
+let coinBusy = false;
+
+function fillCoinSettings(values) {
+  const enabled = values.auto_coin === true;
+  const limit = values.auto_coin_per_day ?? 1;
+  $("f-auto_coin").checked = enabled;
+  $("f-auto_coin_per_day").value = limit;
+  $("coin-cards").innerHTML = [
+    card("自动投币", enabled ? "已开启" : "已关闭", enabled ? "ok" : ""),
+    card("每日上限", `${limit} 枚`),
+  ].join("");
+}
+
+async function loadCoinSettings() {
+  if (coinBusy) return;
+  coinBusy = true;
+  $("coin-fields").disabled = true;
+  setHint("coin-hint", "读取设置中…");
+  try {
+    const result = await api("config");
+    if (!result.values) throw new Error("未收到投币设置");
+    fillCoinSettings(result.values);
+    $("coin-fields").disabled = false;
+    setHint("coin-hint", "");
+  } catch (error) {
+    setHint("coin-hint", "读取失败，请重新打开投币页。" + (error?.message || error), "bad");
+  } finally {
+    coinBusy = false;
+  }
+}
+
+$("coin-form").onsubmit = async (event) => {
+  event.preventDefault();
+  if (coinBusy || $("coin-fields").disabled) return;
+  const payload = {
+    auto_coin: $("f-auto_coin").checked,
+    auto_coin_per_day: $("f-auto_coin_per_day").valueAsNumber,
+  };
+  coinBusy = true;
+  $("coin-fields").disabled = true;
+  setHint("coin-hint", "保存中…");
+  try {
+    const result = await api("config/save", payload);
+    if (!result.saved || !result.values) throw new Error("未收到保存确认");
+    fillCoinSettings(result.values);
+    setHint("coin-hint", "已保存，下轮刷视频时生效。", "ok");
+  } catch (error) {
+    setHint("coin-hint", "保存失败：" + (error?.message || error), "bad");
+  } finally {
+    coinBusy = false;
+    $("coin-fields").disabled = false;
+  }
+};
 
 // ---------- 作息 tab ----------
 function hShowErr(msg) { $("h-err").textContent = msg ? String(msg) : ""; }
