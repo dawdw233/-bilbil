@@ -185,7 +185,7 @@ test("恢复默认仅重置参数，保留当前图片或无插画状态，忙�
 });
 
 test("左右插画分别移除，不覆盖另一张图片", () => {
-  const handlers = script.slice(script.indexOf('artEl("art-left-remove").onclick ='), script.indexOf('artEl("art-recenter").onclick ='));
+  const handlers = script.slice(script.indexOf('artEl("art-left-remove").onclick ='), script.indexOf('artEl("art-reset").onclick ='));
   const buttons = {};
   const context = {artEl:id=>buttons[id] ||= {}, draftIllustration:"right",draftLeftIllustration:"left",syncAppearanceControls(){},artStatus(){}};
   vm.runInNewContext(handlers,context);

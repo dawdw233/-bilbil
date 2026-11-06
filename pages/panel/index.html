@@ -241,9 +241,7 @@
   .art-section .art-file-actions { margin: 2px 0 4px; }
   .art-section .range-field { gap: 3px; }
   .art-effect-group { display: grid; align-content: start; gap: 10px; min-width: 0; }
-  .art-crop { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
-  .art-crop select { padding: 8px 11px; }
-  .art-crop button { font-size: 12px; padding-inline: 11px; }
+  #art-fit { padding: 8px 11px; }
   .art-filter-defs { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
   .art-effect-group .check .tip { display: block; margin-top: 4px; }
   .range-field { display: grid; gap: 7px; min-width: 0; }
@@ -285,8 +283,6 @@
     .row-btns { justify-content: flex-start; } #appearance-open { margin-top: 0; }
     .hero-note { font-size: 13px; margin-bottom: 12px; } .hero-eyebrow { font-size: 9px; }
     .hero-art { left: 27%; } .hero-readability { background: linear-gradient(90deg, #f8fcfff5, #f5faffd4 40%, #f2f8fd77 72%, #f2f8fd1a); }
-    .art-crop { grid-template-columns: 1fr; }
-    .art-crop button { justify-self: start; }
   }
   @media (max-width: 520px) {
     body { padding: 12px 12px 32px; } .hd { padding: 25px 22px; }
@@ -1389,10 +1385,7 @@
       <h3 id="art-effects-title">裁剪与画面效果</h3>
       <div class="art-effects">
         <div class="art-effect-group">
-          <div class="art-crop">
-            <label class="field" for="art-fit"><span class="lbl">左右插画裁剪方式</span><select id="art-fit"><option value="cover">铺满画面 · 超出部分裁剪</option><option value="contain">完整显示 · 保留整张图片</option></select></label>
-            <button type="button" id="art-recenter">重置右图位置</button>
-          </div>
+          <label class="field" for="art-fit"><span class="lbl">左右插画裁剪方式</span><select id="art-fit"><option value="cover">铺满画面 · 超出部分裁剪</option><option value="contain">完整显示 · 保留整张图片</option></select></label>
           <label class="color-field" for="art-mask">渐变遮罩颜色<input id="art-mask" type="color" value="#edf6fc" /></label>
           <label class="range-field" for="art-strength"><span class="range-label">渐变遮罩强度<output id="art-strength-value" for="art-strength">85%</output></span><input id="art-strength" type="range" min="0" max="100" step="1" value="85" /><span class="tip">0% 关闭渐变遮罩。数值越高，所选颜色越明显。</span></label>
         </div>
@@ -1887,7 +1880,6 @@ function syncAppearanceControls() {
   artEl("art-glass").disabled = !hasIllustration || !draftAppearance.glass_enabled || artBusy;
   for (const key of ["mask", "strength"]) artEl("art-" + key).disabled = artBusy;
   artEl("art-remove").disabled = !draftIllustration || artBusy;
-  artEl("art-recenter").disabled = !draftIllustration || artBusy;
   artEl("art-upload").disabled = artBusy;
   artEl("art-left-upload").disabled = artBusy;
   artEl("art-left-remove").disabled = !draftLeftIllustration || artBusy;
@@ -1976,11 +1968,6 @@ artEl("art-remove").onclick = () => {
   draftIllustration = null;
   syncAppearanceControls();
   artStatus("右侧插画已移除，左侧插画保持不变，保存后生效。");
-};
-artEl("art-recenter").onclick = () => {
-  draftAppearance = { ...draftAppearance, x: 50, y: 50, zoom: 100, fit: "cover" };
-  fillAppearanceControls();
-  artStatus("已恢复居中铺满，可继续调整。");
 };
 artEl("art-reset").onclick = () => {
   if (artBusy) return;
