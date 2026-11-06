@@ -1,6 +1,5 @@
 """Exercise the real browse flow with a fake model and Bilibili client."""
 
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,7 +9,10 @@ from unittest.mock import AsyncMock, patch
 from test_appearance import plugin
 
 
-class AutoTripleTests(unittest.IsolatedAsyncioTestCase):
+ALL_ACTIONS = {"auto_like": True, "auto_favorite": True, "auto_coin_enabled": True}
+
+
+class VideoActionTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
@@ -34,7 +36,7 @@ class AutoTripleTests(unittest.IsolatedAsyncioTestCase):
             "videos": [{"bvid": name, "title": name, "description": "只有简介"} for name in videos]
         }
         judge = AsyncMock(side_effect=lambda text, title: self.verdicts.get(
-            title, {"verdict": "值得看", "want_triple": True, "reason": "喜欢剪辑的反差"}
+            title, {"verdict": "值得看", "want_interaction": True, "reason": "喜欢剪辑的反差"}
         ))
         runner = plugin.DutyRunner(
             bili=self.bili, config={"keywords": ["整活"], **(config or {})},
@@ -43,70 +45,107 @@ class AutoTripleTests(unittest.IsolatedAsyncioTestCase):
         return await runner.run()
 
     async def test_default_off_even_when_model_likes_a_video(self):
-        result = await self.run_browse(["favorite"], {"auto_coin": True})
+        result = await self.run_browse(["favorite"], {"auto_triple": True, "auto_coin": True})
         self.assertEqual(len(result["picked"]), 1)
-        self.assertNotIn("三连", result["report_md"])
+        self.assertNotIn("已确认互动", result["report_md"])
         self.bili.bili_coin_count.assert_not_awaited()
+        self.bili.bili_like_video.assert_not_awaited()
+        self.bili.bili_default_favorite.assert_not_awaited()
+        self.bili.bili_favorite_video.assert_not_awaited()
         self.bili.bili_pay_coin.assert_not_awaited()
         self.assertFalse((self.data_dir / "coin_attempts.json").exists())
 
-    async def test_only_liked_videos_with_subtitles_can_receive_a_triple(self):
+    async def test_only_liked_videos_with_subtitles_receive_interactions(self):
         self.verdicts = {
-            "ordinary": {"verdict": "可以看", "want_triple": True, "reason": "有一点意思"},
-            "ambiguous": {"verdict": "值得看", "want_triple": "true", "reason": "不明确"},
-            "declined": {"verdict": "值得看", "want_triple": False, "reason": "有质量但不合兴趣"},
-            "no_reason": {"verdict": "值得看", "want_triple": True, "reason": ""},
+            "ordinary": {"verdict": "可以看", "want_interaction": True, "reason": "有一点意思"},
+            "ambiguous": {"verdict": "值得看", "want_interaction": "true", "reason": "不明确"},
+            "declined": {"verdict": "值得看", "want_interaction": False, "reason": "有质量但不合兴趣"},
+            "no_reason": {"verdict": "值得看", "want_interaction": True, "reason": ""},
         }
         result = await self.run_browse(
             ["ordinary", "ambiguous", "declined", "no_reason", "fallback", "favorite"],
-            {"auto_triple": True, "daily_count": 6},
+            {**ALL_ACTIONS, "daily_count": 6},
         )
         self.bili.bili_coin_count.assert_awaited_once_with("favorite", self.credential)
         self.bili.bili_pay_coin.assert_awaited_once_with("favorite", self.credential)
         self.bili.bili_like_video.assert_awaited_once_with("favorite", self.credential)
         self.bili.bili_favorite_video.assert_awaited_once_with("favorite", 123, self.credential)
-        self.assertEqual(result["report_md"].count("已三连：点赞、投币 1 枚、收藏"), 1)
+        self.assertEqual(result["report_md"].count("已确认互动：投币 1 枚、点赞、收藏"), 1)
 
     async def test_existing_coin_is_skipped_and_daily_limit_survives_another_run(self):
         self.bili.bili_coin_count.side_effect = [{"count": 1}, {"count": 0}]
-        await self.run_browse(["already_coined", "first"], {"auto_triple": True})
-        result = await self.run_browse(["second"], {"auto_triple": True})
+        await self.run_browse(["already_coined", "first"], ALL_ACTIONS)
+        result = await self.run_browse(["second"], ALL_ACTIONS)
         self.bili.bili_pay_coin.assert_awaited_once_with("first", self.credential)
         self.assertEqual(self.bili.bili_coin_count.await_count, 2)
+        self.assertEqual(
+            [call.args[0] for call in self.bili.bili_like_video.await_args_list],
+            ["already_coined", "first", "second"],
+        )
+        self.assertEqual(
+            [call.args[0] for call in self.bili.bili_favorite_video.await_args_list],
+            ["already_coined", "first", "second"],
+        )
         self.assertIn("上限", result["report_md"])
+        self.assertIn("已确认互动：点赞、收藏", result["report_md"])
 
     async def test_uncertain_send_keeps_reservation_if_browse_history_is_lost(self):
         self.bili.bili_pay_coin.side_effect = TimeoutError
-        config = {"auto_triple": True, "auto_coin_per_day": 2}
+        config = {"auto_coin_enabled": True, "auto_coin_per_day": 2}
         first = await self.run_browse(["uncertain"], config)
         self.assertIn("投币结果未确认", first["report_md"])
         (self.data_dir / "seen.json").unlink()
         self.bili.bili_pay_coin.side_effect = None
         second = await self.run_browse(["uncertain", "new"], config)
         self.assertEqual([call.args[0] for call in self.bili.bili_pay_coin.await_args_list], ["uncertain", "new"])
-        self.assertEqual(second["report_md"].count("已三连：点赞、投币 1 枚、收藏"), 1)
+        self.assertEqual(second["report_md"].count("已确认互动：投币 1 枚"), 1)
 
     async def test_risk_response_prevents_spending(self):
         self.bili.bili_coin_count.return_value = {"code": -412, "error": "风控"}
-        result = await self.run_browse(["first", "second"], {"auto_triple": True})
+        result = await self.run_browse(["first", "second"], ALL_ACTIONS)
         self.bili.bili_coin_count.assert_awaited_once()
         self.bili.bili_pay_coin.assert_not_awaited()
+        self.bili.bili_like_video.assert_not_awaited()
+        self.bili.bili_default_favorite.assert_not_awaited()
         self.assertIn("风控", result["report_md"])
         self.assertFalse((self.data_dir / "coin_attempts.json").exists())
 
-    async def test_missing_default_folder_prevents_spending(self):
+    async def test_missing_default_folder_only_skips_favorite(self):
         self.bili.bili_default_favorite.return_value = {"id": None}
-        result = await self.run_browse(["favorite"], {"auto_triple": True})
-        self.bili.bili_pay_coin.assert_not_awaited()
+        result = await self.run_browse(["favorite"], ALL_ACTIONS)
+        self.bili.bili_pay_coin.assert_awaited_once()
+        self.bili.bili_like_video.assert_awaited_once()
+        self.bili.bili_favorite_video.assert_not_awaited()
         self.assertIn("未能确认默认收藏夹", result["report_md"])
-        self.assertFalse((self.data_dir / "coin_attempts.json").exists())
+
+    async def test_each_switch_works_on_its_own(self):
+        actions = {
+            "auto_like": self.bili.bili_like_video,
+            "auto_favorite": self.bili.bili_favorite_video,
+            "auto_coin_enabled": self.bili.bili_pay_coin,
+        }
+        for enabled in actions:
+            with self.subTest(enabled=enabled):
+                for operation in actions.values():
+                    operation.reset_mock()
+                self.bili.bili_default_favorite.reset_mock()
+                await self.run_browse([enabled], {enabled: True})
+                for key, operation in actions.items():
+                    self.assertEqual(operation.await_count, int(key == enabled))
+                self.assertEqual(self.bili.bili_default_favorite.await_count, int(enabled == "auto_favorite"))
+
+    async def test_insufficient_coins_does_not_stop_like_and_favorite(self):
+        self.bili.bili_pay_coin.return_value = {"code": -104}
+        result = await self.run_browse(["favorite"], ALL_ACTIONS)
+        self.assertIn("硬币余额不足", result["report_md"])
+        self.assertIn("已确认互动：点赞、收藏", result["report_md"])
 
     async def test_partial_success_is_reported_without_spending_twice(self):
         self.bili.bili_favorite_video.return_value = {"code": -403}
-        config = {"auto_triple": True, "auto_coin_per_day": 2}
+        config = {**ALL_ACTIONS, "auto_coin_per_day": 2}
         result = await self.run_browse(["favorite"], config)
-        self.assertIn("三连未完成，已确认：投币 1 枚、点赞", result["report_md"])
-        self.assertNotIn("已三连", result["report_md"])
+        self.assertIn("已确认互动：投币 1 枚、点赞", result["report_md"])
+        self.assertIn("未能确认收藏", result["report_md"])
         (self.data_dir / "seen.json").unlink()
         await self.run_browse(["favorite"], config)
         self.bili.bili_pay_coin.assert_awaited_once()
@@ -143,15 +182,20 @@ class AutoTripleTests(unittest.IsolatedAsyncioTestCase):
         instance.cfg = {"keywords": ["整活"], "provider_id": "test-model"}
         generate = AsyncMock(return_value=SimpleNamespace(completion_text="{}"))
         instance.context = SimpleNamespace(llm_generate=generate)
-        self.assertFalse(instance._config_values()["auto_triple"])
+        self.assertTrue(all(instance._config_values()[key] is False for key in ALL_ACTIONS))
         await instance._judge("有字幕内容", "整活视频")
-        self.assertNotIn("want_triple", generate.call_args.kwargs["system_prompt"])
-        patch_values, errors = instance._coerce_config({"auto_triple": True, "auto_coin_per_day": 2})
+        self.assertNotIn("want_interaction", generate.call_args.kwargs["system_prompt"])
+        patch_values, errors = instance._coerce_config({"auto_favorite": True, "auto_coin_per_day": 2})
         self.assertFalse(errors)
         instance.cfg.update(patch_values)
         await instance._judge("有字幕内容", "整活视频")
-        self.assertIn("want_triple", generate.call_args.kwargs["system_prompt"])
+        self.assertIn("want_interaction", generate.call_args.kwargs["system_prompt"])
         self.assertIn("整活", generate.call_args.kwargs["system_prompt"])
         self.assertEqual(instance._config_values()["auto_coin_per_day"], 2)
-        for payload in ({"auto_triple": "false"}, {"auto_coin_per_day": 1.5}, {"auto_coin_per_day": 6}):
+        self.assertTrue(instance._config_values()["auto_favorite"])
+        self.assertFalse(instance._config_values()["auto_coin_enabled"])
+        for payload in (
+            {"auto_like": "false"}, {"auto_favorite": 1}, {"auto_coin_enabled": None},
+            {"auto_coin_per_day": 1.5}, {"auto_coin_per_day": 6},
+        ):
             self.assertTrue(instance._coerce_config(payload)[1])

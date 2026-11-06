@@ -44,14 +44,24 @@
     "description": "用来判断值不值得的模型 Provider ID（留空=用 AstrBot 当前默认）",
     "default": ""
   },
-  "auto_triple": {
+  "auto_like": {
     "type": "bool",
-    "description": "自动三连。开启后，为模型明确喜欢且有字幕依据的「值得看」视频点赞、投 1 枚硬币并收藏",
+    "description": "为明确喜欢且有字幕依据的「值得看」视频自动点赞",
+    "default": false
+  },
+  "auto_favorite": {
+    "type": "bool",
+    "description": "为明确喜欢且有字幕依据的「值得看」视频自动收藏",
+    "default": false
+  },
+  "auto_coin_enabled": {
+    "type": "bool",
+    "description": "为明确喜欢且有字幕依据的「值得看」视频自动投 1 枚硬币",
     "default": false
   },
   "auto_coin_per_day": {
     "type": "int",
-    "description": "自动三连每天最多使用几枚硬币（1~5，默认 1，按北京时间计算）",
+    "description": "每天最多自动投币几枚（1~5，默认 1，按北京时间计算）",
     "default": 1
   },
   "dm_mode": {

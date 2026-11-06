@@ -987,19 +987,27 @@
       <div class="sec-head" aria-controls="coin-form">
         <span class="caret" aria-hidden="true">▸</span>
         <h2 id="coin-title">三连设置</h2>
-        <span class="sub">为机器人喜欢的视频点赞、投币和收藏</span>
+        <span class="sub">为机器人明确喜欢且有字幕依据的「值得看」视频自动互动</span>
       </div>
       <form class="panel sec-body" id="coin-form">
         <fieldset id="coin-fields" disabled>
           <div class="grid">
             <label class="check">
-              <input id="f-auto_triple" type="checkbox" aria-labelledby="coin-switch-label" aria-describedby="coin-switch-tip" />
-              <span><span class="t" id="coin-switch-label">喜欢的视频自动三连</span><span class="d" id="coin-switch-tip">只为机器人明确喜欢且有字幕依据的「值得看」视频点赞、投 1 枚硬币并收藏。已投过币的视频会跳过。</span></span>
+              <input id="f-auto_like" type="checkbox" aria-label="自动点赞" aria-describedby="auto_like-tip" />
+              <span><span class="t">自动点赞</span><span class="d" id="auto_like-tip">为喜欢的视频点赞。</span></span>
+            </label>
+            <label class="check">
+              <input id="f-auto_favorite" type="checkbox" aria-label="自动收藏" aria-describedby="auto_favorite-tip" />
+              <span><span class="t">自动收藏</span><span class="d" id="auto_favorite-tip">将喜欢的视频加入默认收藏夹，已有收藏会保留。</span></span>
+            </label>
+            <label class="check">
+              <input id="f-auto_coin_enabled" type="checkbox" aria-label="自动投币" aria-describedby="auto_coin_enabled-tip" />
+              <span><span class="t">自动投币</span><span class="d" id="auto_coin_enabled-tip">每条投 1 枚硬币，跳过已投过币的视频。</span></span>
             </label>
             <label class="field" for="f-auto_coin_per_day">
               <span class="lbl">每日投币上限（枚）</span>
               <input id="f-auto_coin_per_day" type="number" min="1" max="5" step="1" value="1" required aria-describedby="coin-limit-tip" />
-              <span class="tip" id="coin-limit-tip">手动刷视频和作息唤醒共用限额，每天按北京时间重置。</span>
+              <span class="tip" id="coin-limit-tip">仅限制投币。手动刷视频和作息唤醒共用限额，按北京时间每日重置。</span>
             </label>
           </div>
           <div class="save-bar">
@@ -1007,7 +1015,7 @@
           </div>
         </fieldset>
         <p class="sub" id="coin-hint" role="status"></p>
-        <div class="sub">三连结果可在「刷视频 → 日报」查看。</div>
+        <div class="sub">互动结果可在「刷视频 → 日报」查看。</div>
       </form>
     </section>
   </div>
@@ -2654,16 +2662,27 @@ $("tab-reply").onclick = () => switchView("reply");
 // ---------- 三连 tab ----------
 let coinBusy = false;
 
+const VIDEO_ACTION_LABELS = { auto_like: "点赞", auto_favorite: "收藏", auto_coin_enabled: "投币" };
+
 function fillCoinSettings(values) {
-  const enabled = values.auto_triple === true;
+  const enabled = [];
+  for (const [key, label] of Object.entries(VIDEO_ACTION_LABELS)) {
+    const checked = values[key] === true;
+    $("f-" + key).checked = checked;
+    if (checked) enabled.push(label);
+  }
   const limit = values.auto_coin_per_day ?? 1;
-  $("f-auto_triple").checked = enabled;
   $("f-auto_coin_per_day").value = limit;
+  $("f-auto_coin_per_day").disabled = !$("f-auto_coin_enabled").checked;
   $("coin-cards").innerHTML = [
-    card("自动三连", enabled ? "已开启" : "已关闭", enabled ? "ok" : ""),
-    card("每日硬币上限", `${limit} 枚`),
+    card("已开启的互动", enabled.join("、") || "全部关闭", enabled.length ? "ok" : ""),
+    card("每日投币上限", `${limit} 枚`),
   ].join("");
 }
+
+$("f-auto_coin_enabled").onchange = (event) => {
+  $("f-auto_coin_per_day").disabled = !event.target.checked;
+};
 
 async function loadCoinSettings() {
   if (coinBusy) return;
@@ -2686,10 +2705,12 @@ async function loadCoinSettings() {
 $("coin-form").onsubmit = async (event) => {
   event.preventDefault();
   if (coinBusy || $("coin-fields").disabled) return;
-  const payload = {
-    auto_triple: $("f-auto_triple").checked,
-    auto_coin_per_day: $("f-auto_coin_per_day").valueAsNumber,
-  };
+  const payload = Object.fromEntries(
+    Object.keys(VIDEO_ACTION_LABELS).map((key) => [key, $("f-" + key).checked]),
+  );
+  if (payload.auto_coin_enabled) {
+    payload.auto_coin_per_day = $("f-auto_coin_per_day").valueAsNumber;
+  }
   coinBusy = true;
   $("coin-fields").disabled = true;
   setHint("coin-hint", "保存中…");
