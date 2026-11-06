@@ -757,7 +757,6 @@
     <div id="run-hint" class="sub" role="status" aria-live="polite"></div>
     <div id="err" class="err" role="alert"></div>
 
-  <div id="view-home">
     <header class="hd" id="top">
       <div class="art-canvas" aria-hidden="true">
         <div class="left-illustration"><img id="hero-left-illustration" alt="" decoding="async" /><div class="hero-wash"></div></div>
@@ -766,6 +765,8 @@
       </div>
       <div class="hd-main"><div class="hero-eyebrow">A QUIET CORNER · BILIBILI JOURNAL</div><h1><span id="study-greeting">欢迎回来，</span><br/><strong data-room-name>一隅书房</strong></h1><p class="hero-note">今日也留一点闲时，看看世界的有趣。<br/>让喜欢的内容，在这里慢慢留下来。</p><div class="hero-tags"><span class="hero-tag">B站观影手记</span><span class="hero-tag" id="study-style-tag">人设相伴</span></div></div>
     </header>
+
+  <div id="view-home">
   <section class="study-overview" aria-labelledby="study-overview-title">
     <div class="study-section-head"><h2 id="study-overview-title">今日书页</h2><span id="study-date" class="sub">正在同步今日记录</span></div>
     <section class="study-timeline-card" aria-labelledby="study-timeline-title">
@@ -1765,12 +1766,10 @@ function updateContainedPair(width) {
   // Allow the pair to use the available width without cropping or making a tall card for portrait art.
   heroCard.style.setProperty("--art-pair-height", Math.min(420, (frameWidth + overlap) / pairRatio) + "px");
 }
-new ResizeObserver(([entry]) => {
-  document.documentElement.toggleAttribute("data-compact-hero", entry.contentRect.width <= 560);
-}).observe(heroCard.closest(".main"));
 new ResizeObserver(() => {
   const { width, height } = heroCard.getBoundingClientRect();
   if (!width || !height) return;
+  document.documentElement.toggleAttribute("data-compact-hero", width <= 560);
   previewCard.style.setProperty("--preview-ratio", String(width / height));
   updateContainedPair(width);
 }).observe(heroCard);
