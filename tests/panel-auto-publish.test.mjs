@@ -9,12 +9,13 @@ const modelOptions = html.slice(html.indexOf("function setAutoPublishModelOption
 
 function form() {
   const nodes = {};
-  for (const name of ["provider", "region", "model", "key", "time", "limit", "direction", "tid", "workspace", "duration", "mode", "total", "duration-field", "total-field", "storyboard-tip", "enabled", "category", "draft-hint", "tid-label", "tid-tip", "key-state", "clear", "start"]) nodes["u-auto-" + name] = {};
+  for (const name of ["provider", "region", "model", "key", "time", "limit", "direction", "tid", "workspace", "duration", "mode", "total", "duration-field", "total-field", "storyboard-tip", "enabled", "category", "reference", "reference-dir", "reference-status", "reference-model", "draft-hint", "tid-label", "tid-tip", "key-state", "clear", "start"]) nodes["u-auto-" + name] = {};
   const settings = {provider:"minimax",region:"cn",enabled:true,auto_category:false,tid:21,direction:"鱼吃饭",time:"20:00",limit:1};
   for (const key of ["provider", "region", "tid", "time", "direction"]) nodes["u-auto-" + key].value = String(settings[key]);
   for (const key of ["key", "model", "workspace"]) nodes["u-auto-" + key].value = "";
   nodes["u-auto-enabled"].checked = true;
   nodes["u-auto-category"].checked = false;
+  nodes["u-auto-reference"].checked = false;
   nodes["u-auto-limit"].valueAsNumber = 1;
   nodes["u-auto-duration"].value = "6";
   nodes["u-auto-mode"].value = "single";
@@ -31,7 +32,7 @@ test("自主投稿的全部可编辑设置有改动时，禁止立即生成并�
     ["workspace","value","workspace-1"],["key","value","new-key"],["model","value","T2V-01"],
     ["category","checked",true],["tid","value","17"],["enabled","checked",false],
     ["duration","value","10"],
-    ["mode","value","storyboard"],["total","value","60"],
+    ["mode","value","storyboard"],["total","value","60"],["reference","checked",true],
   ]) {
     const {nodes,context} = form();
     context.syncAutoPublishActions();
@@ -57,6 +58,38 @@ test("分镜估算按模型合法时长组合 30/60 秒，并显示分别生成�
   assert.match(nodes["u-auto-storyboard-tip"].textContent,/分别生成和计费/);
   assert.deepEqual(Array.from(context.storyboardLengths([6,10],60)),[10,10,10,10,10,10]);
   assert.deepEqual(Array.from(context.storyboardLengths([5,10,15],30)),[15,15]);
+});
+
+test("参考图显示真实目录与图集状态，空图集及不支持的模型阻止生成，关闭后恢复文字模式", () => {
+  const {nodes,context}=form();
+  const state=context.autoPublishState;
+  state.settings.reference_enabled=true;
+  nodes["u-auto-reference"].checked=true;
+  state.providers.minimax.model="MiniMax-Hailuo-2.3";
+  state.providers.minimax.reference_models={"MiniMax-Hailuo-2.3":"MiniMax-Hailuo-2.3"};
+  state.references={directory:"/data/reference_images",count:0,files:[],invalid_count:0,error:""};
+  context.syncAutoPublishActions();
+  assert.equal(nodes["u-auto-start"].disabled,true);
+  assert.match(nodes["u-auto-reference-status"].textContent,/空图集不会生成/);
+  state.references.count=1;
+  state.references.files=[{name:"<unsafe>.png"}];
+  context.syncAutoPublishActions();
+  assert.equal(nodes["u-auto-start"].disabled,false);
+  assert.equal(nodes["u-auto-reference-dir"].textContent,"/data/reference_images");
+  assert.match(nodes["u-auto-reference-model"].textContent,/识图策划模型/);
+  state.references.error="无法读取参考图文件夹";
+  context.syncAutoPublishActions();
+  assert.equal(nodes["u-auto-start"].disabled,true);
+  state.references.error="";
+  nodes["u-auto-model"].value="T2V-01";
+  state.profiles["minimax:cn"].model="T2V-01";
+  context.syncAutoPublishActions();
+  assert.equal(nodes["u-auto-start"].disabled,true);
+  assert.match(nodes["u-auto-reference-model"].textContent,/未适配/);
+  state.settings.reference_enabled=false;
+  nodes["u-auto-reference"].checked=false;
+  context.syncAutoPublishActions();
+  assert.equal(nodes["u-auto-start"].disabled,false);
 });
 
 test("接口没有返回视频模型时，保留已适配选项并明确权限未验证", () => {

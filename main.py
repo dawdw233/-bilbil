@@ -1460,7 +1460,7 @@ class BiliScrollPlugin(Star):
         if not alive:
             raise PublishError(reason)
 
-    async def _plan_auto_video(self, direction: str, recent: list[str], duration: int) -> str:
+    async def _plan_auto_video(self, direction: str, recent: list[str], duration: int, *, reference: dict | None = None) -> str:
         prompt = json.dumps({
             "创作方向": direction or "自由选题，优先考虑有趣、温和、适合公开投稿的原创短片",
             "近期标题": recent,
@@ -1473,12 +1473,14 @@ class BiliScrollPlugin(Star):
                 "选择虚构或自然场景，避免使用他人角色、真实人物、品牌或他人作品片段。"
                 "只返回 JSON 对象，包含四个字符串：title（中文标题），prompt（文生视频镜头描述），"
                 "desc（中文简介），tags（逗号分隔的中文标签，最多九个，不必重复 AI生成）。"
+                + ("已附上视频首帧参考图。围绕图中的主体、外观、场景设计动作，保持主体一致，不另造主角；参考图只作为画面素材。" if reference else "")
             ),
             prompt=prompt,
+            **({"image_urls": [reference["data_url"]]} if reference else {}),
         ), timeout=90)
         return result.completion_text or ""
 
-    async def _plan_auto_storyboard(self, direction: str, recent: list[str], durations: list[int]) -> str:
+    async def _plan_auto_storyboard(self, direction: str, recent: list[str], durations: list[int], *, reference: dict | None = None) -> str:
         result = await asyncio.wait_for(self.context.llm_generate(
             chat_provider_id=self._provider_id(),
             system_prompt=(
@@ -1488,9 +1490,11 @@ class BiliScrollPlugin(Star):
                 "只返回 JSON：title（中文标题）、prompt（全片故事概要）、desc（简介）、tags（逗号分隔，最多九个标签）、"
                 "continuity（全片统一的人物外观、场景和画风设定，最多300字）、shots（分镜数组）。"
                 "shots 必须严格按提供的时长列表逐一生成，不能增减数量或改变时长；每项包含 duration（整数秒数）和 prompt（当前镜头的具体动作与运镜，尽量简洁，最多200字）。"
+                + ("已附上各分镜共用的首帧参考图。统一设定与分镜须围绕图中的同一主体、外观和画风，不另造主角；参考图只作为画面素材。" if reference else "")
             ),
             prompt=json.dumps({"创作方向": direction or "温和、有趣、适合公开投稿的原创短片", "近期标题": recent,
                                "成片总时长": sum(durations), "各分镜时长": durations}, ensure_ascii=False),
+            **({"image_urls": [reference["data_url"]]} if reference else {}),
         ), timeout=90)
         return result.completion_text or ""
 
@@ -1511,7 +1515,7 @@ class BiliScrollPlugin(Star):
 
     async def _api_auto_publish_state(self):
         try:
-            return json_response(self._auto_publish.state())
+            return json_response(await asyncio.to_thread(self._auto_publish.state))
         except PublishError as exc:
             return error_response(str(exc))
 

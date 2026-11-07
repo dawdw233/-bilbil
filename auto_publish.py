@@ -17,6 +17,7 @@ from urllib.parse import quote, urlsplit
 import aiohttp
 
 from .video_compose import CompositionError, compose_video
+from .reference_images import ReferenceError, ReferenceLibrary
 
 VIDEO_PROVIDERS = {
     "minimax": {
@@ -41,7 +42,7 @@ VIDEO_PROVIDERS = {
 DEFAULTS = {
     "enabled": False, "provider": "minimax", "region": "cn", "time": "20:00",
     "limit": 1, "direction": "", "tid": 21, "auto_category": False, "schedule_after": "",
-    "mode": "single", "total_duration": 30,
+    "mode": "single", "total_duration": 30, "reference_enabled": False,
 }
 ACTIVE_PHASES = {"queued", "requesting", "generating", "storyboard", "assembling", "ready", "uploading"}
 MAX_VIDEO_BYTES = 100 * 1024 * 1024
@@ -96,6 +97,23 @@ class PublishError(Exception):
 
 class GenerationFailed(PublishError):
     """The provider explicitly confirmed that an existing task failed."""
+
+
+REFERENCE_MODELS = {
+    "minimax": {model: model for model in ("MiniMax-Hailuo-2.3", "MiniMax-Hailuo-02")},
+    "wan": {"wan2.6-t2v": "wan2.6-i2v", "wan2.5-t2v-preview": "wan2.5-i2v-preview"},
+}
+
+
+def reference_video_model(provider: str, model: str) -> str:
+    if provider == "ark" and supported_video_model(provider, model) and "-t2v" not in model:
+        return model
+    models = REFERENCE_MODELS.get(provider, {})
+    if model in models:
+        return models[model]
+    if model in models.values():
+        return model
+    raise PublishError("此模型尚未适配参考图，请选择海螺 2.3/02、支持图生视频的方舟模型或万相 2.5/2.6。")
 
 
 def supported_video_model(provider: str, model: str) -> bool:
@@ -327,10 +345,13 @@ class MiniMaxVideo(VideoClient):
             raise PublishError(f"MiniMax 拒绝请求（错误码 {status}）。")
         return data
 
-    async def create(self, prompt: str) -> str:
-        data = await self._request("POST", "/video_generation", json={
+    async def create(self, prompt: str, *, reference_image: str | None = None) -> str:
+        body = {
             "model": self.model, "prompt": prompt, "duration": self.duration, "resolution": "720P" if self.model.startswith("T2V-") else "768P",
-        })
+        }
+        if reference_image:
+            body.update(model=reference_video_model(self.provider, self.model), first_frame_image=reference_image)
+        data = await self._request("POST", "/video_generation", json=body)
         return self._task_id(data.get("task_id"))
 
     async def query(self, task_id: str) -> str | None:
@@ -347,9 +368,13 @@ class MiniMaxVideo(VideoClient):
 
 
 class ArkVideo(VideoClient):
-    async def create(self, prompt: str) -> str:
+    async def create(self, prompt: str, *, reference_image: str | None = None) -> str:
+        content = [{"type": "text", "text": prompt}]
+        if reference_image:
+            reference_video_model(self.provider, self.model)
+            content.append({"type": "image_url", "image_url": {"url": reference_image}, "role": "first_frame"})
         data = await self._request("POST", "/contents/generations/tasks", json={
-            "model": self.model, "content": [{"type": "text", "text": prompt}],
+            "model": self.model, "content": content,
             "duration": self.duration, "resolution": "720p", "ratio": "16:9",
         })
         return self._task_id(data.get("id"))
@@ -365,13 +390,19 @@ class ArkVideo(VideoClient):
 
 
 class WanVideo(VideoClient):
-    async def create(self, prompt: str) -> str:
+    async def create(self, prompt: str, *, reference_image: str | None = None) -> str:
+        model = reference_video_model(self.provider, self.model) if reference_image else self.model
+        inputs = {"prompt": prompt}
+        parameters = {"size": "1280*720", "duration": self.duration, "watermark": True}
+        if reference_image:
+            inputs["img_url"] = reference_image
+            parameters.pop("size")
+            parameters["resolution"] = "720P"
         data = await self._request(
             "POST", "/services/aigc/video-generation/video-synthesis",
             headers={"X-DashScope-Async": "enable"},
             json={
-                "model": self.model, "input": {"prompt": prompt},
-                "parameters": {"size": "1280*720", "duration": self.duration, "watermark": True},
+                "model": model, "input": inputs, "parameters": parameters,
             },
         )
         if data.get("code"):
@@ -406,6 +437,11 @@ class AutoPublisher:
         self.verify_publication = verify_publication
         self.plan_storyboard = plan_storyboard
         self.compose = compose or compose_video
+        self.references = ReferenceLibrary(data_dir)
+        try:
+            self.references.ensure()
+        except ReferenceError:
+            pass  # Report directory errors in the panel without breaking other features.
 
     def settings(self) -> dict:
         stored = _read(self.settings_path, {})
@@ -434,7 +470,11 @@ class AutoPublisher:
     def state(self) -> dict:
         settings = self.settings()
         rows = self.jobs()
+        references = self.references.scan()
         return {
+            "references": {**references, "files": [
+                {key: item[key] for key in ("name", "size", "width", "height")}
+                for item in references["files"][:12]], "invalid": references["invalid"][:6]},
             "settings": {key: settings[key] for key in DEFAULTS if key != "schedule_after"},
             "providers": {
                 name: {
@@ -442,6 +482,7 @@ class AutoPublisher:
                     "models": list(VIDEO_MODELS[name]),
                     "duration_rules": [{"prefix": prefix, "options": options} for prefix, options in DURATION_RULES[name]],
                     "duration_fallback": duration_options(name, ""),
+                    "reference_models": REFERENCE_MODELS.get(name, {}),
                     "regions": {region: label for region, (label, _) in spec["regions"].items()},
                 }
                 for name, spec in VIDEO_PROVIDERS.items()
@@ -466,6 +507,7 @@ class AutoPublisher:
                     "shot_count": len(row.get("shot_durations", [])),
                     "shots": [{"number": index + 1, "duration": shot["duration"], "phase": shot["phase"],
                                "task_id": shot.get("task_id", "")} for index, shot in enumerate(row.get("shots", []))],
+                    "reference_image": row.get("reference_image", {}).get("name", ""),
                 }
                 for row in reversed(rows[-10:])
             ],
@@ -505,6 +547,8 @@ class AutoPublisher:
             raise PublishError("自主投稿开关格式不正确。")
         if type(settings["auto_category"]) is not bool:
             raise PublishError("自动选择投稿分区开关格式不正确。")
+        if type(settings["reference_enabled"]) is not bool:
+            raise PublishError("参考图开关格式不正确。")
         if settings["mode"] not in ("single", "storyboard"):
             raise PublishError("请选择单段生成或分镜合成。")
         if type(settings["total_duration"]) is not int or settings["total_duration"] not in (30, 60):
@@ -536,6 +580,8 @@ class AutoPublisher:
         if model and not supported_video_model(provider, model):
             raise PublishError("该模型尚未适配当前文生视频接口，请从读取结果中选择。")
         effective_model = model or spec["model"]
+        if settings["reference_enabled"]:
+            reference_video_model(provider, effective_model)
         duration = payload.get("duration", profile.get("duration", spec["duration"]))
         if "duration" not in payload and duration not in duration_options(provider, effective_model):
             duration = spec["duration"]
@@ -604,6 +650,16 @@ class AutoPublisher:
                 return None
 
         model = profile.get("model") or VIDEO_PROVIDERS[provider]["model"]
+        reference = None
+        if settings["reference_enabled"]:
+            try:
+                model = reference_video_model(provider, model)
+                reference = self.references.choose(rows)
+                self.references.load(reference, provider=provider)
+            except (ReferenceError, PublishError) as exc:
+                if manual:
+                    raise PublishError(str(exc)) from exc
+                return None
         duration = video_duration(provider, model, profile.get("duration", VIDEO_PROVIDERS[provider]["duration"]))
         lengths = storyboard_lengths(provider, model, settings["total_duration"]) if settings["mode"] == "storyboard" else []
         job = {
@@ -615,6 +671,8 @@ class AutoPublisher:
             "cleanup_after_publish": True,
             "mode": settings["mode"], "shot_durations": lengths,
         }
+        if reference:
+            job["reference_image"] = reference
         if lengths:
             job["duration"] = sum(lengths)
         _write(self.jobs_path, [*rows, job][-60:])
@@ -728,6 +786,14 @@ class AutoPublisher:
             return False
         return self.settings()["enabled"] and self.account() == job["account"]
 
+    async def _job_reference(self, job: dict) -> dict | None:
+        if not job.get("reference_image"):
+            return None
+        try:
+            return await asyncio.to_thread(self.references.load, job["reference_image"], provider=job["provider"])
+        except ReferenceError as exc:
+            raise PublishError(str(exc)) from exc
+
     async def _tick_storyboard(self, rows: list[dict], job: dict, now: datetime, key: str | None) -> None:
         shots = job["shots"]
         if job["phase"] == "assembling":
@@ -760,6 +826,12 @@ class AutoPublisher:
         if shot["phase"] == "queued":
             if not await self._preflight_job(rows, job, now):
                 return
+            try:
+                reference = await self._job_reference(job)
+            except PublishError as exc:
+                shot["phase"] = "failed"
+                self._update(rows, job, "failed", recoverable=True, retry_stage="shot", message=f"{label}尚未提交：{exc}")
+                return
             profile = self.settings()["profiles"].get(f"{provider}:{region}", {})
             key = profile.get("key")
             if not key or key_revision(key) != job["key_revision"]:
@@ -771,7 +843,8 @@ class AutoPublisher:
             shot.update(phase="requesting", submitted_at=now.isoformat())
             self._update(rows, job, "storyboard", message=f"正在提交{label}。", retry_after="")
             try:
-                task_id = await VIDEO_CLIENTS[provider](provider, region, key, model, duration=shot["duration"]).create(prompt)
+                task_id = await VIDEO_CLIENTS[provider](provider, region, key, model, duration=shot["duration"]).create(
+                    prompt, **({"reference_image": reference["data_url"]} if reference else {}))
             except PublishError as exc:
                 shot["phase"] = "failed"
                 self._update(rows, job, "failed", recoverable=True, retry_stage="shot", message=f"{label}提交被拒绝：{exc} 已完成片段保留。")
@@ -859,19 +932,22 @@ class AutoPublisher:
                 return
         if phase == "queued":
             try:
+                reference = await self._job_reference(job)
+                plan_options = {"reference": reference} if reference else {}
                 recent = [row["title"] for row in rows[-13:-1] if row.get("title")]
                 if job.get("mode") == "storyboard":
-                    plan = parse_storyboard(await self.plan_storyboard(job["direction"], recent, job["shot_durations"]), job["shot_durations"])
+                    plan = parse_storyboard(await self.plan_storyboard(job["direction"], recent, job["shot_durations"], **plan_options), job["shot_durations"])
                 else:
                     duration = video_duration(provider, model, duration)
-                    plan = parse_plan(await self.plan(job.get("direction", settings["direction"]), recent, duration))
+                    plan = parse_plan(await self.plan(job.get("direction", settings["direction"]), recent, duration, **plan_options))
                 if plan["title"] in recent:
                     raise PublishError("选题与近期稿件重复。")
             except PublishError as exc:
                 self._update(rows, job, "failed", message=str(exc))
                 return
             except Exception:
-                self._update(rows, job, "failed", message="选题失败，请检查 AstrBot 的文本模型配置。")
+                message = "参考图选题失败，请检查 AstrBot 模型是否支持图片输入，以及模型连接是否正常。" if job.get("reference_image") else "选题失败，请检查 AstrBot 的文本模型配置。"
+                self._update(rows, job, "failed", message=message)
                 return
             category = {"category_mode": "manual", "category_reason": "使用手动设置的投稿分区。"}
             if job.get("auto_category", False):
@@ -888,6 +964,12 @@ class AutoPublisher:
                         "category_mode": "fallback",
                         "category_reason": "未能读取可用分区或完成有效判断，已使用备用分区。",
                     }
+            if job.get("mode") != "storyboard":
+                try:
+                    reference = await self._job_reference(job)
+                except PublishError as exc:
+                    self._update(rows, job, "failed", message=str(exc))
+                    return
             latest = self.settings()
             key = latest["profiles"].get(profile_name, {}).get("key")
             if not latest["enabled"] or not key or self.account() != job["account"]:
@@ -907,7 +989,8 @@ class AutoPublisher:
                 **category,
             )
             try:
-                task_id = await VIDEO_CLIENTS[provider](provider, region, key, model, duration=duration).create(plan["prompt"])
+                task_id = await VIDEO_CLIENTS[provider](provider, region, key, model, duration=duration).create(
+                    plan["prompt"], **({"reference_image": reference["data_url"]} if reference else {}))
             except PublishError as exc:
                 self._update(rows, job, "failed", message=str(exc))
             except Exception:
