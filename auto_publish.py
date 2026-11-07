@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -40,6 +41,11 @@ DEFAULTS = {
 }
 ACTIVE_PHASES = {"queued", "requesting", "generating", "ready", "uploading"}
 MAX_VIDEO_BYTES = 100 * 1024 * 1024
+VIDEO_MODELS = {
+    "minimax": ("MiniMax-Hailuo-2.3", "MiniMax-Hailuo-02", "T2V-01", "T2V-01-Director"),
+    "wan": ("wan2.6-t2v", "wan2.5-t2v-preview", "wan2.2-t2v-plus", "wanx2.1-t2v-turbo", "wanx2.1-t2v-plus"),
+    "ark": (VIDEO_PROVIDERS["ark"]["model"],),
+}
 
 
 class PublishError(Exception):
@@ -47,14 +53,40 @@ class PublishError(Exception):
 
 
 def supported_video_model(provider: str, model: str) -> bool:
-    if provider == "minimax":
-        return model in {"MiniMax-Hailuo-2.3", "MiniMax-Hailuo-02", "T2V-01", "T2V-01-Director"}
-    if provider == "wan":
-        return model in {
-            "wanx2.1-t2v-turbo", "wanx2.1-t2v-plus", "wan2.2-t2v-plus",
-            "wan2.5-t2v-preview", "wan2.6-t2v",
-        }
+    if provider in ("minimax", "wan"):
+        return model in VIDEO_MODELS[provider]
     return bool(re.fullmatch(r"(?:doubao-seedance-[A-Za-z0-9_.-]+|ep-[A-Za-z0-9-]+)", model)) and "-i2v" not in model
+
+
+def publication_tags(value: str) -> str:
+    tags = ["AI生成"]
+    seen = {"ai生成"}
+    for tag in re.split(r"[,，;；\r\n]+", value):
+        tag = tag.strip()
+        if tag and tag.casefold() not in seen:
+            tags.append(tag)
+            seen.add(tag.casefold())
+        if len(tags) == 10:
+            break
+    return ",".join(tags)
+
+
+def key_revision(key: str) -> str:
+    # Only a fingerprint is stored on the job, never a second copy of the Key.
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
+def workspace_id(value) -> str:
+    if not isinstance(value, str) or (value and not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", value)):
+        raise PublishError("百炼业务空间 ID 格式不正确，请填写 ID 而不是网址。")
+    return value
+
+
+def upload_error(value) -> str:
+    text = str(value or "未返回明确的投稿结果")
+    text = re.sub(r"https?://\S+", "[地址已隐藏]", text)
+    text = re.sub(r"(?i)(SESSDATA|bili_jct|token|api[_ -]?key|authorization)\s*[:=]\s*[^\s,;]+", r"\1=[已隐藏]", text)
+    return re.sub(r"[\r\n\x00-\x1f]+", " ", text)[:240]
 
 
 def _read(path: Path, default):
@@ -100,6 +132,7 @@ def parse_plan(text: str) -> dict:
         if not isinstance(value, str) or not value.strip():
             raise PublishError("选题缺少标题、镜头描述、简介或标签。")
         fields[name] = value.strip()[:size]
+    fields["tags"] = publication_tags(fields["tags"])
     return fields
 
 
@@ -122,7 +155,7 @@ def parse_category(text: str, categories: list[dict]) -> dict:
 
 
 class VideoClient:
-    def __init__(self, provider: str, region: str, key: str, model: str):
+    def __init__(self, provider: str, region: str, key: str, model: str, workspace: str = ""):
         spec = VIDEO_PROVIDERS[provider]
         self.name = spec["name"]
         self.provider = provider
@@ -130,11 +163,17 @@ class VideoClient:
         self.model = model
         self.base_url = spec["regions"][region][1]
         self.headers = {"Authorization": f"Bearer {key}"}
+        self.models_url = self.base_url
+        if provider == "wan":
+            workspace = workspace_id(workspace)
+            location = "cn-beijing" if region == "cn" else "ap-southeast-1"
+            self.models_url = f"https://{workspace}.{location}.maas.aliyuncs.com/api/v1" if workspace else ""
 
     async def _request(self, method, path, *, headers=None, **kwargs):
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=25)) as session:
             async with session.request(
-                method, self.base_url + path, headers={**self.headers, **(headers or {})},
+                method, (self.models_url if path == "/models" else self.base_url) + path,
+                headers={**self.headers, **(headers or {})},
                 allow_redirects=False, **kwargs,
             ) as response:
                 if 400 <= response.status < 500 and response.status not in (408, 429):
@@ -153,6 +192,8 @@ class VideoClient:
         return value
 
     async def models(self) -> list[dict]:
+        if not self.models_url:
+            raise PublishError("读取百炼模型需填写业务空间 ID；也可以直接选择已适配模型。")
         results = {}
         for page in range(1, 11):
             params = {"capabilities": "VG", "page_no": page, "page_size": 100} if self.provider == "wan" else {}
@@ -282,7 +323,7 @@ VIDEO_CLIENTS = {"minimax": MiniMaxVideo, "ark": ArkVideo, "wan": WanVideo}
 
 
 class AutoPublisher:
-    def __init__(self, data_dir: Path, plan, publish, account, upload_busy, select_category=None):
+    def __init__(self, data_dir: Path, plan, publish, account, upload_busy, select_category=None, preflight=None):
         self.data_dir = data_dir
         self.settings_path = data_dir / "auto_publish_settings.json"
         self.jobs_path = data_dir / "auto_publish_jobs.json"
@@ -291,6 +332,7 @@ class AutoPublisher:
         self.account = account
         self.upload_busy = upload_busy
         self.select_category = select_category
+        self.preflight = preflight
 
     def settings(self) -> dict:
         stored = _read(self.settings_path, {})
@@ -324,19 +366,20 @@ class AutoPublisher:
             "providers": {
                 name: {
                     "name": spec["name"], "model": spec["model"], "duration": spec["duration"],
+                    "models": list(VIDEO_MODELS[name]),
                     "regions": {region: label for region, (label, _) in spec["regions"].items()},
                 }
                 for name, spec in VIDEO_PROVIDERS.items()
             },
             "profiles": {
-                name: {"key_configured": bool(profile.get("key")), "model": profile.get("model", "")}
+                name: {"key_configured": bool(profile.get("key")), "model": profile.get("model", ""), "workspace": profile.get("workspace", "")}
                 for name, profile in settings["profiles"].items()
             },
             "key_configured": bool(settings["profiles"].get(f"{settings['provider']}:{settings['region']}", {}).get("key")),
             "logged_in": bool(self.account()),
             "jobs": [
                 {
-                    **{key: row.get(key, "") for key in ("id", "phase", "title", "created_at", "file", "bvid", "message", "model", "tid", "category_mode", "category_name", "category_reason")},
+                    **{key: row.get(key, "") for key in ("id", "phase", "title", "created_at", "file", "bvid", "message", "model", "tid", "category_mode", "category_name", "category_reason", "task_id")},
                     "provider": row.get("provider", "minimax"),
                 }
                 for row in reversed(rows[-10:])
@@ -357,8 +400,9 @@ class AutoPublisher:
         key = supplied or settings["profiles"].get(f"{provider}:{region}", {}).get("key")
         if not key:
             raise PublishError("先填写该服务的 Key，再读取模型。")
+        workspace = workspace_id(payload.get("workspace", settings["profiles"].get(f"{provider}:{region}", {}).get("workspace", ""))) if provider == "wan" else ""
         try:
-            client = VIDEO_CLIENTS[provider](provider, region, key, VIDEO_PROVIDERS[provider]["model"])
+            client = VIDEO_CLIENTS[provider](provider, region, key, VIDEO_PROVIDERS[provider]["model"], workspace)
             models = await client.models()
         except PublishError:
             raise
@@ -402,7 +446,8 @@ class AutoPublisher:
         key = "" if remove else supplied or profile.get("key", "")
         if settings["enabled"] and not key:
             raise PublishError("先填写所选服务的 API Key，再开启自主投稿。")
-        profiles[profile_name] = {"key": key, "model": model}
+        workspace = workspace_id(payload.get("workspace", profile.get("workspace", ""))) if provider == "wan" else ""
+        profiles[profile_name] = {"key": key, "model": model, "workspace": workspace}
         settings["profiles"] = profiles
         settings["schedule_after"] = current["schedule_after"]
         if settings["enabled"] and (
@@ -410,14 +455,21 @@ class AutoPublisher:
         ):
             settings["schedule_after"] = now.isoformat()
         # Older queued jobs did not record a region until submission.
-        if (provider, region) != (current["provider"], current["region"]):
-            rows = self.jobs()
-            legacy = [row for row in rows if row["phase"] in ACTIVE_PHASES and "provider" not in row]
-            if legacy:
-                for row in legacy:
-                    row["provider"] = "minimax"
-                    row.setdefault("region", current["region"])
-                _write(self.jobs_path, rows)
+        rows = self.jobs()
+        migrated = False
+        for row in rows:
+            if row["phase"] not in ACTIVE_PHASES:
+                continue
+            if "provider" not in row:
+                row["provider"] = "minimax"
+                row.setdefault("region", current["region"])
+                migrated = True
+            old_profile = current["profiles"].get(f"{row['provider']}:{row.get('region', current['region'])}", {})
+            if "key_revision" not in row and old_profile.get("key"):
+                row["key_revision"] = key_revision(old_profile["key"])
+                migrated = True
+        if migrated:
+            _write(self.jobs_path, rows)
         _write(self.settings_path, settings)
 
     def _update(self, rows: list[dict], job: dict, phase: str, **fields) -> None:
@@ -458,6 +510,7 @@ class AutoPublisher:
             "id": uuid.uuid4().hex, "phase": "queued", "created_at": now.isoformat(timespec="seconds"),
             "day": today, "scheduled": not manual, "account": account, "tid": settings["tid"],
             "auto_category": settings["auto_category"],
+            "direction": settings["direction"], "key_revision": key_revision(profile["key"]),
             "provider": provider, "region": region, "model": profile.get("model") or VIDEO_PROVIDERS[provider]["model"],
         }
         _write(self.jobs_path, [*rows, job][-60:])
@@ -495,10 +548,30 @@ class AutoPublisher:
         if phase in ("queued", "generating") and not key:
             self._update(rows, job, "review", message=f"{spec['name']} 的 Key 已清除，请到服务商核对任务。")
             return
+        if phase in ("queued", "generating"):
+            if job.get("key_revision") and job["key_revision"] != key_revision(key):
+                self._update(rows, job, "review", message="视频服务的 Key 已更换，旧任务保留待核对；不会用新 Key 查询或重新生成。")
+                return
+            if "key_revision" not in job:
+                self._update(rows, job, phase, key_revision=key_revision(key))
+        if phase in ("queued", "ready") and self.preflight is not None:
+            if job.get("retry_after") and now < datetime.fromisoformat(job["retry_after"]):
+                return
+            try:
+                await asyncio.wait_for(self.preflight(job["account"]), timeout=25)
+            except Exception as exc:
+                reason = str(exc) if isinstance(exc, PublishError) else "暂时无法完成运行前检查，请稍后重试。"
+                self._update(rows, job, phase, message=reason, retry_after=(now + timedelta(minutes=1)).isoformat())
+                return
+            latest = self.settings()
+            if not latest["enabled"] or self.account() != job["account"]:
+                return
+            if phase == "ready" and self.upload_busy():
+                return
         if phase == "queued":
             try:
                 recent = [row["title"] for row in rows[-13:-1] if row.get("title")]
-                plan = parse_plan(await self.plan(settings["direction"], recent, spec["duration"]))
+                plan = parse_plan(await self.plan(job.get("direction", settings["direction"]), recent, spec["duration"]))
                 if plan["title"] in recent:
                     raise PublishError("选题与近期稿件重复。")
             except PublishError as exc:
@@ -526,9 +599,13 @@ class AutoPublisher:
             key = latest["profiles"].get(profile_name, {}).get("key")
             if not latest["enabled"] or not key or self.account() != job["account"]:
                 return
+            if key_revision(key) != job["key_revision"]:
+                self._update(rows, job, "review", message="选题期间视频服务的 Key 已更换，任务已停止，未提交视频生成。")
+                return
             self._update(
                 rows, job, "requesting", title=plan["title"], desc=plan["desc"], tags=plan["tags"],
                 provider=provider, region=region, model=model, submitted_at=now.isoformat(),
+                prompt=plan["prompt"], message="", retry_after="",
                 **category,
             )
             try:
@@ -561,7 +638,7 @@ class AutoPublisher:
                 if now - submitted >= timedelta(minutes=30):
                     self._update(rows, job, "review", message=f"暂未取得成片，请核对{spec['name']}任务。")
                 return
-            self._update(rows, job, "ready", file=name)
+            self._update(rows, job, "ready", file=name, message="", retry_after="")
             return
 
         if self.upload_busy():
@@ -570,19 +647,21 @@ class AutoPublisher:
         if not video.is_file():
             self._update(rows, job, "failed", message="成片文件已移除。")
             return
-        self._update(rows, job, "uploading")
+        self._update(rows, job, "uploading", message="", retry_after="")
         try:
             async with asyncio.timeout(900):
                 result = await self.publish({
                     "video_path": str(video), "title": job["title"],
                     "desc": f"AI 生成视频 · {spec['name']}\n\n" + job["desc"],
-                    "tags": "AI生成," + job["tags"], "tid": job["tid"],
+                    "tags": publication_tags(job["tags"]), "tid": job["tid"],
                 })
         except Exception:
             self._update(rows, job, "review", message="投稿结果未能确认，请到 B站创作中心核对。")
             return
+        if not isinstance(result, dict):
+            result = {}
         bvid = result.get("bvid")
         if result.get("success") and isinstance(bvid, str) and re.fullmatch(r"BV[0-9A-Za-z]{10}", bvid):
             self._update(rows, job, "published", bvid=bvid)
         else:
-            self._update(rows, job, "review", message="投稿结果未能确认，请到 B站创作中心核对。")
+            self._update(rows, job, "review", message="投稿未能确认：" + upload_error(result.get("error")) + "。成片已保留，请先到 B站创作中心核对。")

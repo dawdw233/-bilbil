@@ -22,6 +22,8 @@ import base64
 import binascii
 import json
 import re
+import shutil
+import tempfile
 import time
 import uuid
 from datetime import datetime
@@ -40,7 +42,7 @@ from . import bili_api
 from . import guard
 from . import reply as reply_logic
 from . import rhythm
-from .auto_publish import AutoPublisher, PublishError, parse_category
+from .auto_publish import MAX_VIDEO_BYTES, AutoPublisher, PublishError, parse_category
 from .duty import AUTO_COIN_DAILY_RANGE, BEIJING_TIME, DEFAULT_KEYWORDS, VIDEO_ACTIONS, DutyRunner, RiskPause
 
 PLUGIN_NAME = "astrbot_plugin_bili_scroll"
@@ -157,6 +159,7 @@ class BiliScrollPlugin(Star):
             self.data_dir, self._plan_auto_video, self._do_upload,
             self._auto_publish_account, lambda: self._upload.get("running", False),
             self._select_auto_video_category,
+            self._auto_publish_preflight,
         )
         # 投稿：同一时间只跑一个
         self._upload: dict = {
@@ -1418,6 +1421,26 @@ class BiliScrollPlugin(Star):
             return ""
         return str(credential.dedeuserid or "")
 
+    async def _auto_publish_preflight(self, account: str) -> None:
+        if self._auto_publish_account() != account:
+            raise PublishError("请先登录任务绑定的 B站账号，任务将等待后重试。")
+        credential = bili_api.load_credential()
+        def check_storage():
+            if not shutil.which("ffmpeg"):
+                raise PublishError("服务器缺少 ffmpeg，无法生成投稿封面；安装后任务会继续。")
+            if shutil.disk_usage(self._media_dir).free < 2 * MAX_VIDEO_BYTES:
+                raise PublishError("视频素材目录所在磁盘可用空间不足 200 MB，请清理后重试。")
+            try:
+                with tempfile.TemporaryFile(dir=self._media_dir) as stream:
+                    stream.write(b"check")
+                    stream.flush()
+            except OSError as exc:
+                raise PublishError("视频素材目录不可写，请检查服务器目录权限。") from exc
+        await asyncio.to_thread(check_storage)
+        alive, reason = await asyncio.to_thread(bili_api._cred_alive_sync, credential, strict=True)
+        if not alive:
+            raise PublishError(reason)
+
     async def _plan_auto_video(self, direction: str, recent: list[str], duration: int) -> str:
         prompt = json.dumps({
             "创作方向": direction or "自由选题，优先考虑有趣、温和、适合公开投稿的原创短片",
@@ -1430,7 +1453,7 @@ class BiliScrollPlugin(Star):
                 "为一个连续镜头描述明确的主角、场景、动作和画面风格。"
                 "选择虚构或自然场景，避免使用他人角色、真实人物、品牌或他人作品片段。"
                 "只返回 JSON 对象，包含四个字符串：title（中文标题），prompt（文生视频镜头描述），"
-                "desc（中文简介），tags（逗号分隔的中文标签）。"
+                "desc（中文简介），tags（逗号分隔的中文标签，最多九个，不必重复 AI生成）。"
             ),
             prompt=prompt,
         ), timeout=90)

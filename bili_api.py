@@ -401,7 +401,7 @@ async def bili_login_check() -> str:
 _NAV_URL = "https://api.bilibili.com/x/web-interface/nav"
 
 
-def _cred_alive_sync(cred: Credential) -> tuple[bool, str]:
+def _cred_alive_sync(cred: Credential, *, strict: bool = False) -> tuple[bool, str]:
     """只有问 nav 接口才能真判断 cookie 还有没有效。
 
     ⚠️ 别拿 user.User(uid).get_user_info() 当校验：那是公开接口，拿一条瞎编的
@@ -420,6 +420,8 @@ def _cred_alive_sync(cred: Credential) -> tuple[bool, str]:
         body = resp.json() or {}
         data = body.get("data") or {}
     except Exception as exc:
+        if strict:
+            return False, "暂时无法验证 B站登录，任务将等待后重试，不会开始视频生成。"
         # 网络抖一下不能当"掉登录"，否则会误把人踢去重扫
         return True, f"验证请求失败（{type(exc).__name__}），先按已登录处理"
 
@@ -428,11 +430,15 @@ def _cred_alive_sync(cred: Credential) -> tuple[bool, str]:
         # nav 对"cookie 无效/过期"回的就是 -101（账号未登录）
         return False, "凭证已过期或被踢下线，需要重新扫码登录"
     if code != 0:
+        if strict:
+            return False, f"B站暂时无法确认登录（返回 {code}），任务将等待后重试。"
         # -352 / -412 是风控或限流，不是"你没登录"。这时候宁可放过，
         # 不然会把好的登录状态误判成过期，把人拦在门外。
         return True, f"nav 返回 {code}（{body.get('message') or '可能被限流'}），先按已登录处理"
 
     if data.get("isLogin") and str(data.get("mid") or ""):
+        if strict and str(data["mid"]) != str(cred.dedeuserid or ""):
+            return False, "B站登录账号与任务账号不一致，请重新核对登录。"
         return True, f"凭证有效（uid {data.get('mid')}）"
     return False, "凭证已过期或被踢下线，需要重新扫码登录"
 

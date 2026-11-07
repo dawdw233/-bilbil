@@ -7,7 +7,7 @@ import unittest
 from datetime import datetime, timedelta
 from importlib import import_module
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from test_appearance import plugin
 
@@ -194,7 +194,7 @@ class AutoPublishTests(unittest.IsolatedAsyncioTestCase):
         self.worker.enqueue(self.now, manual=True)
         self.worker.save_settings({"auto_category": False, "tid": 17}, self.now)
         await self.worker.tick(self.now)
-        self.select_category.assert_awaited_once_with(json.loads(PLAN))
+        self.select_category.assert_awaited_once_with(auto_publish.parse_plan(PLAN))
         self.worker = self.new_worker()
         await self.worker.tick(self.now)
         await self.worker.tick(self.now)
@@ -249,6 +249,171 @@ class AutoPublishTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(auto_publish.PublishError):
                 self.configure(auto_category=value)
 
+    async def test_tags_are_normalized_before_generation_and_fit_upload_limit(self):
+        from bilibili_api.video_uploader import VideoMeta
+        from bilibili_api.utils.picture import Picture
+        self.configure()
+        self.plan.return_value = json.dumps({**json.loads(PLAN), "tags": "AI生成，鱼, 鱼；" + ",".join("标签" + str(i) for i in range(14))})
+        self.worker.enqueue(self.now, manual=True)
+        for _ in range(3):
+            await self.worker.tick(self.now)
+        tags = self.publish.await_args.args[0]["tags"].split(",")
+        self.assertEqual((len(tags), tags.count("AI生成"), tags.count("鱼")), (10, 1, 1))
+        VideoMeta(tid=21, title="test", desc="test", cover=Picture(), tags=tags)
+
+    async def test_key_replacement_preserves_remote_task_for_review(self):
+        self.configure()
+        self.worker.enqueue(self.now, manual=True)
+        await self.worker.tick(self.now)
+        self.worker.save_settings({"api_key": "another-account-key"}, self.now)
+        await self.worker.tick(self.now)
+        job = self.worker.jobs()[0]
+        self.assertEqual((job["phase"], job["task_id"]), ("review", "test-task"))
+        self.query.assert_not_awaited()
+        self.create.assert_awaited_once()
+        self.assertNotIn("key_revision", json.dumps(self.worker.state()))
+
+    async def test_workspace_and_models_are_independent_across_services(self):
+        self.configure(provider="wan", workspace="workspace-123", model="wan2.6-t2v")
+        self.worker.save_settings({"provider": "minimax", "api_key": "minimax-key", "workspace": "", "model": "T2V-01"}, self.now)
+        profiles = self.worker.state()["profiles"]
+        self.assertEqual(profiles["wan:cn"]["workspace"], "workspace-123")
+        self.assertEqual(profiles["wan:cn"]["model"], "wan2.6-t2v")
+        self.assertEqual(profiles["minimax:cn"]["workspace"], "")
+        self.assertNotIn("minimax-key", json.dumps(profiles))
+
+    async def test_legacy_key_binding_happens_before_key_is_overwritten(self):
+        self.configure()
+        self.worker.enqueue(self.now, manual=True)
+        await self.worker.tick(self.now)
+        rows = self.worker.jobs()
+        rows[0].pop("key_revision")
+        self.worker.jobs_path.write_text(json.dumps(rows), encoding="utf-8")
+        self.worker.save_settings({"api_key": "replacement-key"}, self.now)
+        await self.new_worker().tick(self.now)
+        self.assertEqual(self.worker.jobs()[0]["phase"], "review")
+        self.query.assert_not_awaited()
+
+    async def test_key_replacement_during_planning_never_starts_paid_request(self):
+        self.configure()
+        self.worker.enqueue(self.now, manual=True)
+        async def plan(*_args):
+            self.worker.save_settings({"api_key": "replacement-key"}, self.now)
+            return PLAN
+        self.plan.side_effect = plan
+        await self.worker.tick(self.now)
+        self.assertEqual(self.worker.jobs()[0]["phase"], "review")
+        self.create.assert_not_awaited()
+
+    async def test_queued_job_keeps_original_direction(self):
+        self.configure(direction="原来的鱼")
+        self.worker.enqueue(self.now, manual=True)
+        self.worker.save_settings({"direction": "后来的猫"}, self.now)
+        await self.worker.tick(self.now)
+        self.assertEqual(self.plan.await_args.args[0], "原来的鱼")
+
+    async def test_failed_preflight_waits_without_planning_or_generating_then_recovers(self):
+        self.configure()
+        preflight = AsyncMock(side_effect=auto_publish.PublishError("登录已过期，请重新扫码"))
+        self.worker.preflight = preflight
+        self.worker.enqueue(self.now, manual=True)
+        await self.worker.tick(self.now)
+        self.assertIn("登录已过期", self.worker.state()["jobs"][0]["message"])
+        self.plan.assert_not_awaited()
+        self.create.assert_not_awaited()
+        await self.worker.tick(self.now + timedelta(seconds=20))
+        preflight.assert_awaited_once_with("42")
+        preflight.side_effect = None
+        await self.worker.tick(self.now + timedelta(minutes=1))
+        self.create.assert_awaited_once()
+        self.assertEqual(self.worker.jobs()[0]["message"], "")
+
+    async def test_preflight_rechecks_login_before_publication_and_keeps_finished_video(self):
+        self.configure()
+        self.worker.enqueue(self.now, manual=True)
+        await self.worker.tick(self.now)
+        await self.worker.tick(self.now)
+        self.worker.preflight = AsyncMock(side_effect=TimeoutError())
+        await self.worker.tick(self.now)
+        self.assertEqual(self.worker.jobs()[0]["phase"], "ready")
+        self.assertTrue((self.path / "media" / self.worker.jobs()[0]["file"]).is_file())
+        self.publish.assert_not_awaited()
+
+    async def test_preflight_disable_and_upload_race_do_not_submit(self):
+        self.configure()
+        self.worker.enqueue(self.now, manual=True)
+        async def disable(_account):
+            self.worker.save_settings({"enabled": False}, self.now)
+        self.worker.preflight = disable
+        await self.worker.tick(self.now)
+        self.create.assert_not_awaited()
+        self.worker.save_settings({"enabled": True}, self.now)
+        self.worker.preflight = None
+        await self.worker.tick(self.now)
+        await self.worker.tick(self.now)
+        async def busy(_account):
+            self.busy = True
+        self.worker.preflight = busy
+        await self.worker.tick(self.now)
+        self.publish.assert_not_awaited()
+
+    async def test_failed_upload_explains_reason_keeps_file_and_does_not_retry(self):
+        self.configure()
+        self.worker.enqueue(self.now, manual=True)
+        self.publish.return_value = {"success": False, "error": "标签不合法 token=secret https://example.com/?secret"}
+        for _ in range(4):
+            await self.worker.tick(self.now)
+        job = self.worker.jobs()[0]
+        self.assertEqual(job["phase"], "review")
+        self.assertIn("标签不合法", job["message"])
+        self.assertNotIn("secret", job["message"])
+        self.assertTrue((self.path / "media" / job["file"]).is_file())
+        self.publish.assert_awaited_once()
+
+
+class PreflightContractTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.instance = plugin.BiliScrollPlugin.__new__(plugin.BiliScrollPlugin)
+        self.instance.data_dir = Path(directory.name)
+        (self.instance.data_dir / "media").mkdir()
+        self.instance._auto_publish_account = lambda: "42"
+        self.credentials = patch.object(plugin.bili_api, "load_credential", return_value=object())
+        self.credentials.start()
+        self.addCleanup(self.credentials.stop)
+
+    async def test_missing_ffmpeg_stops_before_login_or_paid_work(self):
+        with patch.object(plugin.shutil, "which", return_value=None), patch.object(plugin.bili_api, "_cred_alive_sync") as login:
+            with self.assertRaisesRegex(auto_publish.PublishError, "ffmpeg"):
+                await self.instance._auto_publish_preflight("42")
+        login.assert_not_called()
+
+    async def test_low_disk_space_and_unwritable_directory_stop_preflight(self):
+        with patch.object(plugin.shutil, "which", return_value="ffmpeg"), patch.object(plugin.shutil, "disk_usage", return_value=Mock(free=1)):
+            with self.assertRaisesRegex(auto_publish.PublishError, "空间"):
+                await self.instance._auto_publish_preflight("42")
+        with patch.object(plugin.shutil, "which", return_value="ffmpeg"), patch.object(plugin.tempfile, "TemporaryFile", side_effect=PermissionError()):
+            with self.assertRaisesRegex(auto_publish.PublishError, "不可写"):
+                await self.instance._auto_publish_preflight("42")
+
+    async def test_login_must_be_strictly_confirmed(self):
+        with patch.object(plugin.shutil, "which", return_value="ffmpeg"), patch.object(plugin.bili_api, "_cred_alive_sync", return_value=(False, "登录已过期")) as login:
+            with self.assertRaisesRegex(auto_publish.PublishError, "登录已过期"):
+                await self.instance._auto_publish_preflight("42")
+        self.assertTrue(login.call_args.kwargs["strict"])
+
+    async def test_strict_login_distinguishes_expiry_network_limit_and_other_account(self):
+        from bilibili_api import Credential
+        credential = Credential(sessdata="fake", bili_jct="fake", dedeuserid="42")
+        for response in ({"code": -101}, {"code": -412}, {"code": 0, "data": {"isLogin": True, "mid": 43}}):
+            with patch("curl_cffi.requests.get", return_value=Mock(json=lambda: response)):
+                self.assertFalse(plugin.bili_api._cred_alive_sync(credential, strict=True)[0])
+        with patch("curl_cffi.requests.get", side_effect=TimeoutError()):
+            self.assertFalse(plugin.bili_api._cred_alive_sync(credential, strict=True)[0])
+            self.assertTrue(plugin.bili_api._cred_alive_sync(credential)[0])
+        with patch("curl_cffi.requests.get", return_value=Mock(json=lambda: {"code": 0, "data": {"isLogin": True, "mid": 42}})):
+            self.assertTrue(plugin.bili_api._cred_alive_sync(credential, strict=True)[0])
 
 class CategoryContractTests(unittest.IsolatedAsyncioTestCase):
     async def test_classifier_receives_video_details_and_current_categories(self):
@@ -342,7 +507,9 @@ class ProviderContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(submit.await_args.kwargs["json"]["resolution"], "720P")
 
     async def test_wan_model_listing_reads_all_pages_and_filters_unsupported_protocols(self):
-        client = auto_publish.WanVideo("wan", "cn", "fake-key", "wan2.6-t2v")
+        client = auto_publish.WanVideo("wan", "cn", "fake-key", "wan2.6-t2v", "workspace-123")
+        self.assertEqual(client.models_url, "https://workspace-123.cn-beijing.maas.aliyuncs.com/api/v1")
+        self.assertEqual(client.base_url, "https://dashscope.aliyuncs.com/api/v1")
         request = AsyncMock(side_effect=[
             {"output": {"total": 101, "models": [{"model": "wan2.6-t2v"}] * 100}},
             {"output": {"total": 101, "models": [{"model": "wan2.5-t2v-preview"}, {"model": "wan3.0-video"}]}},
@@ -351,3 +518,11 @@ class ProviderContractTests(unittest.IsolatedAsyncioTestCase):
             models = await client.models()
         self.assertEqual([item["id"] for item in models], ["wan2.6-t2v", "wan2.5-t2v-preview"])
         self.assertEqual(request.await_args_list[1].kwargs["params"]["page_no"], 2)
+
+    async def test_wan_workspace_required_only_for_listing_and_rejects_urls(self):
+        client = auto_publish.WanVideo("wan", "global", "fake-key", "wan2.6-t2v")
+        with self.assertRaisesRegex(auto_publish.PublishError, "业务空间"):
+            await client.models()
+        for value in ("https://evil.example", "x.evil", "abc/../", "a" * 64):
+            with self.assertRaises(auto_publish.PublishError):
+                auto_publish.WanVideo("wan", "cn", "fake-key", "wan2.6-t2v", value)

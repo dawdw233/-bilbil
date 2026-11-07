@@ -1057,6 +1057,10 @@
                 </div>
                 <span class="tip" id="u-auto-model-tip" role="status"></span>
               </div>
+              <label class="field span-all hide" id="u-auto-workspace-field"><span class="lbl">百炼业务空间 ID（读取模型时填写）</span>
+                <input id="u-auto-workspace" maxlength="63" autocomplete="off" placeholder="填写控制台的业务空间 ID" aria-describedby="u-auto-workspace-tip" />
+                <span class="tip" id="u-auto-workspace-tip">无需填写网址；留空也可选择已适配模型，实际可用性取决于 Key 的权限。</span>
+              </label>
               <label class="field"><span class="lbl">自动运行时间（北京时间）</span><input id="u-auto-time" type="time" required /></label>
               <label class="field"><span class="lbl">每日生成上限（支）</span>
                 <input id="u-auto-limit" type="number" min="1" max="5" step="1" required />
@@ -1079,6 +1083,7 @@
               <button type="button" id="u-auto-start" disabled>立即生成并投稿</button>
               <button type="button" id="u-auto-clear" disabled>清除所选 Key 并关闭</button>
             </div>
+            <p id="u-auto-draft-hint" class="sub" role="status"></p>
           </fieldset>
           <p id="u-auto-feedback" class="sub" role="status"></p>
         </form>
@@ -3043,49 +3048,58 @@ function setAutoPublishRegions(region) {
 function resetAutoPublishModels() {
   const provider = $("u-auto-provider").value;
   const region = $("u-auto-region").value;
-  const spec = autoPublishState.providers[provider];
   const profile = autoPublishState.profiles[provider + ":" + region];
   const model = profile?.model || "";
-  const label = model ? "当前保存 · " + model : "默认配置 · " + spec.model;
-  $("u-auto-model").replaceChildren(new Option(label, model));
-  $("u-auto-model-tip").textContent = "读取接口返回的模型列表后，可以在这里选择。";
+  setAutoPublishModelOptions(model, []);
+  $("u-auto-model-tip").textContent = "可直接选择已适配模型，或读取接口列表；模型选项不代表当前 Key 已开通权限。";
   $("u-auto-model-read").disabled = false;
+}
+
+function setAutoPublishModelOptions(selected, discovered) {
+  const spec = autoPublishState.providers[$("u-auto-provider").value];
+  const options = [new Option(selected ? "当前选择 · " + selected : "默认配置 · " + spec.model, selected)];
+  const seen = new Set([selected]);
+  for (const model of discovered) {
+    if (seen.has(model.id)) continue;
+    options.push(new Option("接口返回 · " + (model.name && model.name !== model.id ? model.name + " · " : "") + model.id, model.id));
+    seen.add(model.id);
+  }
+  for (const model of spec.models || [spec.model]) {
+    if (!seen.has(model)) options.push(new Option("已适配 · " + model + "（权限未验证）", model));
+  }
+  $("u-auto-model").replaceChildren(...options);
+  $("u-auto-model").value = selected;
 }
 
 function selectAutoPublishProfile() {
   ++autoModelRequest;
   $("u-auto-key").value = "";
+  const provider = $("u-auto-provider").value;
+  const profile = autoPublishState.profiles[provider + ":" + $("u-auto-region").value];
+  $("u-auto-workspace").value = profile?.workspace || "";
+  $("u-auto-workspace-field").classList.toggle("hide", provider !== "wan");
   resetAutoPublishModels();
   syncAutoPublishActions();
-  const profile = autoPublishState.profiles[$("u-auto-provider").value + ":" + $("u-auto-region").value];
-  if (profile?.key_configured) readAutoPublishModels();
+  if (profile?.key_configured && (provider !== "wan" || $("u-auto-workspace").value)) readAutoPublishModels();
 }
 
 async function readAutoPublishModels() {
   const requestId = ++autoModelRequest;
   const provider = $("u-auto-provider").value;
   const region = $("u-auto-region").value;
-  const selected = $("u-auto-model").value;
   $("u-auto-model-read").disabled = true;
   $("u-auto-model-tip").textContent = "正在读取服务商的文生视频模型…";
   try {
     const data = await api("upload/auto/models", {
       provider, region, api_key: $("u-auto-key").value.trim(),
+      workspace: $("u-auto-workspace").value.trim(),
     });
     if (requestId !== autoModelRequest) return;
     if (!Array.isArray(data.models)) throw new Error("服务商未返回有效模型列表");
-    const options = data.models.map(model => new Option(
-      model.name && model.name !== model.id ? model.name + " · " + model.id : model.id, model.id,
-    ));
-    if (!data.models.some(model => model.id === selected)) {
-      const spec = autoPublishState.providers[provider];
-      options.unshift(new Option(selected ? "当前保存 · " + selected : "默认配置 · " + spec.model, selected));
-    }
-    $("u-auto-model").replaceChildren(...options);
-    $("u-auto-model").value = selected;
+    setAutoPublishModelOptions($("u-auto-model").value, data.models);
     $("u-auto-model-tip").textContent = data.models.length
-      ? `从接口读到 ${data.models.length} 个已适配的文生视频模型，选择后保存生效。`
-      : "接口未返回已适配的文生视频模型。请核对服务商的模型列表和权限。";
+      ? `从接口读到 ${data.models.length} 个已适配的文生视频模型，选择后保存生效；仍需对应模型权限。`
+      : "接口没有列出已适配的视频模型；可直接选择标注「已适配」的模型，实际可用性取决于 Key 权限。";
     syncAutoPublishActions();
   } catch (error) {
     if (requestId === autoModelRequest) $("u-auto-model-tip").textContent = "读取失败：" + (error?.message || error);
@@ -3102,7 +3116,10 @@ function syncAutoPublishActions() {
   const configured = profile?.key_configured === true;
   const changed = provider !== settings.provider || region !== settings.region
     || $("u-auto-enabled").checked !== settings.enabled || !!$("u-auto-key").value || $("u-auto-model").value !== (profile?.model || "")
-    || $("u-auto-category").checked !== (settings.auto_category === true) || Number($("u-auto-tid").value) !== settings.tid;
+    || $("u-auto-category").checked !== (settings.auto_category === true) || Number($("u-auto-tid").value) !== settings.tid
+    || $("u-auto-direction").value.trim() !== settings.direction || $("u-auto-time").value !== settings.time
+    || $("u-auto-limit").valueAsNumber !== settings.limit || $("u-auto-workspace").value.trim() !== (profile?.workspace || "");
+  $("u-auto-draft-hint").textContent = changed ? "设置有未保存的修改，请先保存，再立即生成。" : "";
   const autoCategory = $("u-auto-category").checked;
   $("u-auto-tid-label").textContent = autoCategory ? "备用投稿分区" : "投稿分区";
   $("u-auto-tid-tip").textContent = autoCategory
@@ -3140,7 +3157,8 @@ function renderAutoPublish(data, fill) {
     const categoryMode = {auto: "自动分区", fallback: "备用分区", manual: "手动分区"}[job.category_mode];
     const categoryName = job.category_name || Array.from($("u-auto-tid").options).find(option => Number(option.value) === job.tid)?.textContent || `分区 ${job.tid}`;
     const category = categoryMode ? `<div class="sub">${esc(categoryMode + " · " + categoryName)}</div><div class="sub">${esc(job.category_reason || "")}</div>` : "";
-    return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc([providerName, job.model].filter(Boolean).join(" · "))}</div>${category}</td><td>${esc(status)}</td><td>${video || esc([job.file, job.message].filter(Boolean).join(" · ") || "—")}</td></tr>`;
+    const task = job.task_id ? `<div class="sub">服务商任务：${esc(job.task_id)}</div>` : "";
+    return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc([providerName, job.model].filter(Boolean).join(" · "))}</div>${category}${task}</td><td>${esc(status)}</td><td>${video || esc([job.file, job.message].filter(Boolean).join(" · ") || "—")}</td></tr>`;
   }).join("") : '<tr><td colspan="4" class="empty">还没有自主投稿任务</td></tr>';
   const newest = jobs.find(job => job.file)?.file || "";
   if (!fill && newest !== autoPublishFile) loadUploadFiles();
@@ -3187,6 +3205,7 @@ $("u-auto-form").onsubmit = (event) => {
     provider: $("u-auto-provider").value,
     region: $("u-auto-region").value,
     model: $("u-auto-model").value.trim(),
+    workspace: $("u-auto-workspace").value.trim(),
     time: $("u-auto-time").value,
     limit: $("u-auto-limit").valueAsNumber,
     tid: Number($("u-auto-tid").value),
@@ -3213,10 +3232,19 @@ $("u-auto-key").oninput = () => {
 $("u-auto-key").onchange = readAutoPublishModels;
 $("u-auto-model-read").onclick = readAutoPublishModels;
 $("u-auto-model").onchange = syncAutoPublishActions;
+$("u-auto-form").addEventListener("input", syncAutoPublishActions);
+$("u-auto-workspace").oninput = () => {
+  ++autoModelRequest;
+  resetAutoPublishModels();
+  syncAutoPublishActions();
+};
+$("u-auto-workspace").onchange = readAutoPublishModels;
 $("u-auto-clear").onclick = () => saveAutoPublish({
   enabled: false, remove_key: true, provider: $("u-auto-provider").value, region: $("u-auto-region").value,
 });
 $("u-auto-start").onclick = async () => {
+  syncAutoPublishActions();
+  if ($("u-auto-start").disabled) return;
   $("u-auto-start").disabled = true;
   try {
     await api("upload/auto/start", {});
