@@ -29,6 +29,9 @@ class AutoPublishTests(unittest.IsolatedAsyncioTestCase):
         self.busy = False
         self.plan = AsyncMock(return_value=PLAN)
         self.publish = AsyncMock(return_value={"success": True, "bvid": "BV1234567890"})
+        self.select_category = AsyncMock(return_value={
+            "tid": 47, "category_name": "动画 / 短片·手书", "category_reason": "以虚构鱼为主角的剧情动画。",
+        })
         self.worker = self.new_worker()
         self.create = AsyncMock(return_value="test-task")
         self.query = AsyncMock(return_value="test-file")
@@ -41,6 +44,7 @@ class AutoPublishTests(unittest.IsolatedAsyncioTestCase):
     def new_worker(self):
         return auto_publish.AutoPublisher(
             self.path, self.plan, self.publish, lambda: self.account, lambda: self.busy,
+            self.select_category,
         )
 
     def configure(self, **kwargs):
@@ -184,6 +188,112 @@ class AutoPublishTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.worker.jobs()[0]["model"], "MiniMax-Hailuo-02")
         with self.assertRaises(auto_publish.PublishError):
             self.worker.save_settings({"model": "MiniMax-M3"}, self.now)
+
+    async def test_auto_category_is_pinned_and_reaches_publication_after_restart(self):
+        self.configure(auto_category=True, tid=21)
+        self.worker.enqueue(self.now, manual=True)
+        self.worker.save_settings({"auto_category": False, "tid": 17}, self.now)
+        await self.worker.tick(self.now)
+        self.select_category.assert_awaited_once_with(json.loads(PLAN))
+        self.worker = self.new_worker()
+        await self.worker.tick(self.now)
+        await self.worker.tick(self.now)
+        self.assertEqual(self.publish.await_args.args[0]["tid"], 47)
+        job = self.worker.state()["jobs"][0]
+        self.assertEqual((job["category_mode"], job["category_name"]), ("auto", "动画 / 短片·手书"))
+        self.assertIn("剧情动画", job["category_reason"])
+        self.select_category.assert_awaited_once()
+
+    async def test_manual_and_legacy_jobs_never_request_category_judgement(self):
+        self.configure(tid=17)
+        self.assertFalse(self.worker.settings()["auto_category"])
+        self.worker.enqueue(self.now, manual=True)
+        rows = self.worker.jobs()
+        rows[0].pop("auto_category")
+        self.worker.jobs_path.write_text(json.dumps(rows), encoding="utf-8")
+        self.worker.save_settings({"auto_category": True}, self.now)
+        for _ in range(3):
+            await self.worker.tick(self.now)
+        self.select_category.assert_not_awaited()
+        self.assertEqual(self.publish.await_args.args[0]["tid"], 17)
+        self.assertEqual(self.worker.jobs()[0]["category_mode"], "manual")
+
+    async def test_category_failure_uses_pinned_fallback_without_stopping_video(self):
+        for failure in (TimeoutError(), auto_publish.PublishError("unavailable"), ValueError("bad response")):
+            with self.subTest(failure=type(failure).__name__):
+                self.worker.jobs_path.unlink(missing_ok=True)
+                self.configure(auto_category=True, tid=21)
+                self.worker.enqueue(self.now, manual=True)
+                self.worker.save_settings({"tid": 17}, self.now)
+                self.select_category.side_effect = failure
+                for _ in range(3):
+                    await self.worker.tick(self.now)
+                self.assertEqual(self.publish.await_args.args[0]["tid"], 21)
+                job = self.worker.state()["jobs"][0]
+                self.assertEqual((job["phase"], job["category_mode"]), ("published", "fallback"))
+                self.assertIn("备用分区", job["category_reason"])
+
+    async def test_disabling_during_category_selection_prevents_paid_request(self):
+        self.configure(auto_category=True)
+        self.worker.enqueue(self.now, manual=True)
+        async def disable(_plan):
+            self.worker.save_settings({"enabled": False}, self.now)
+            return self.select_category.return_value
+        self.select_category.side_effect = disable
+        await self.worker.tick(self.now)
+        self.create.assert_not_awaited()
+        self.assertEqual(self.worker.jobs()[0]["phase"], "queued")
+
+    async def test_category_switch_requires_a_boolean(self):
+        for value in (1, "true", None):
+            with self.assertRaises(auto_publish.PublishError):
+                self.configure(auto_category=value)
+
+
+class CategoryContractTests(unittest.IsolatedAsyncioTestCase):
+    async def test_classifier_receives_video_details_and_current_categories(self):
+        instance = plugin.BiliScrollPlugin.__new__(plugin.BiliScrollPlugin)
+        categories = [{"tid": 47, "name": "动画 / 短片·手书"}]
+        instance._provider_id = lambda: "text-model"
+        instance.context = type("Context", (), {"llm_generate": AsyncMock(return_value=type(
+            "Result", (), {"completion_text": '{"tid":47,"reason":"虚构角色动画"}'},
+        )())})()
+        with patch.object(plugin.bili_api, "bili_upload_categories", AsyncMock(return_value=categories)):
+            result = await instance._select_auto_video_category(json.loads(PLAN))
+        self.assertEqual(result["tid"], 47)
+        payload = json.loads(instance.context.llm_generate.await_args.kwargs["prompt"])
+        self.assertEqual(payload["视频内容"], json.loads(PLAN))
+        self.assertEqual(payload["可用投稿分区"], categories)
+
+    async def test_category_parser_rejects_invented_ids_parent_ids_and_invalid_types(self):
+        categories = [{"tid": 47, "name": "动画 / 短片·手书"}]
+        for text in ('{"tid":1,"reason":"父分区"}', '{"tid":9999,"reason":"虚构"}',
+                     '{"tid":"47","reason":"字符串"}', '{"tid":true,"reason":"布尔"}',
+                     '{"tid":47,"reason":" "}', '[]', 'not json'):
+            with self.subTest(text=text), self.assertRaises(auto_publish.PublishError):
+                auto_publish.parse_category(text, categories)
+        result = auto_publish.parse_category('```json\n{"tid":47,"reason":"剧情动画"}\n```', categories)
+        self.assertEqual(result["category_name"], "动画 / 短片·手书")
+
+    async def test_bilibili_list_uses_visible_child_categories_only(self):
+        from bilibili_api.utils import network
+        class FakeApi:
+            def __init__(self, **kwargs):
+                assert kwargs["method"] == "GET"
+            def update_params(self, **kwargs):
+                return self
+            @property
+            async def result(self):
+                return {"typelist": [
+                    {"id": 1, "name": "动画", "children": [
+                        {"id": 47, "name": "短片·手书", "show": True, "description": "原创动画"},
+                        {"id": 99, "name": "隐藏", "show": False},
+                        {"id": True, "name": "无效"},
+                    ]}, {"id": 2, "name": "隐藏父分区", "show": False, "children": [{"id": 100, "name": "隐藏"}]},
+                ]}
+        with patch.object(network, "Api", FakeApi), patch.object(plugin.bili_api, "get_cred", return_value=object()):
+            result = await plugin.bili_api.bili_upload_categories()
+        self.assertEqual(result, [{"tid": 47, "name": "动画 / 短片·手书", "description": "原创动画"}])
 
 
 

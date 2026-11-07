@@ -838,6 +838,31 @@ async def bili_video_info(bvid: str) -> str:
     }, ensure_ascii=False)
 
 
+async def bili_upload_categories() -> list[dict]:
+    """Read the current account's submission subcategories without publishing."""
+    from bilibili_api.utils.network import Api
+
+    data = await Api(
+        url="https://member.bilibili.com/x/vupre/web/archive/pre", method="GET",
+        credential=get_cred(),
+    ).update_params(lang="cn").result
+    categories = {}
+    for parent in data.get("typelist", data.get("tid_list", [])):
+        if parent.get("show") is False:
+            continue
+        for child in parent.get("children", []):
+            tid, name = child.get("id"), child.get("name")
+            if (child.get("show") is not False and type(tid) is int and tid > 0
+                    and isinstance(name, str) and name.strip()):
+                categories[tid] = {
+                    "tid": tid, "name": f"{parent.get('name', '')} / {name}",
+                    "description": str(child.get("description") or "")[:300],
+                }
+    if not categories:
+        raise ValueError("B站未返回可用的投稿子分区。")
+    return list(categories.values())
+
+
 async def bili_coin_count(bvid: str, credential: Credential) -> dict:
     """读取这份登录凭证已给该视频投过几枚硬币。"""
     try:

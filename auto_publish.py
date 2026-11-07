@@ -36,7 +36,7 @@ VIDEO_PROVIDERS = {
 }
 DEFAULTS = {
     "enabled": False, "provider": "minimax", "region": "cn", "time": "20:00",
-    "limit": 1, "direction": "", "tid": 21, "schedule_after": "",
+    "limit": 1, "direction": "", "tid": 21, "auto_category": False, "schedule_after": "",
 }
 ACTIVE_PHASES = {"queued", "requesting", "generating", "ready", "uploading"}
 MAX_VIDEO_BYTES = 100 * 1024 * 1024
@@ -101,6 +101,24 @@ def parse_plan(text: str) -> dict:
             raise PublishError("选题缺少标题、镜头描述、简介或标签。")
         fields[name] = value.strip()[:size]
     return fields
+
+
+def parse_category(text: str, categories: list[dict]) -> dict:
+    """Accept only an available submission category and a concrete explanation."""
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.I)
+    try:
+        data = json.loads(text)
+    except ValueError as exc:
+        raise PublishError("分区判断未返回有效结果。") from exc
+    if not isinstance(data, dict):
+        raise PublishError("分区判断未返回有效结果。")
+    tid, reason = data.get("tid"), data.get("reason")
+    category = next((item for item in categories if type(tid) is int and item["tid"] == tid), None)
+    if category is None or not isinstance(reason, str) or not reason.strip():
+        raise PublishError("分区判断未选择可用分区或未说明理由。")
+    return {"tid": tid, "category_name": category["name"], "category_reason": reason.strip()[:200]}
 
 
 class VideoClient:
@@ -264,7 +282,7 @@ VIDEO_CLIENTS = {"minimax": MiniMaxVideo, "ark": ArkVideo, "wan": WanVideo}
 
 
 class AutoPublisher:
-    def __init__(self, data_dir: Path, plan, publish, account, upload_busy):
+    def __init__(self, data_dir: Path, plan, publish, account, upload_busy, select_category=None):
         self.data_dir = data_dir
         self.settings_path = data_dir / "auto_publish_settings.json"
         self.jobs_path = data_dir / "auto_publish_jobs.json"
@@ -272,6 +290,7 @@ class AutoPublisher:
         self.publish = publish
         self.account = account
         self.upload_busy = upload_busy
+        self.select_category = select_category
 
     def settings(self) -> dict:
         stored = _read(self.settings_path, {})
@@ -317,7 +336,7 @@ class AutoPublisher:
             "logged_in": bool(self.account()),
             "jobs": [
                 {
-                    **{key: row.get(key, "") for key in ("id", "phase", "title", "created_at", "file", "bvid", "message", "model")},
+                    **{key: row.get(key, "") for key in ("id", "phase", "title", "created_at", "file", "bvid", "message", "model", "tid", "category_mode", "category_name", "category_reason")},
                     "provider": row.get("provider", "minimax"),
                 }
                 for row in reversed(rows[-10:])
@@ -352,6 +371,8 @@ class AutoPublisher:
         settings = {key: payload.get(key, current[key]) for key in DEFAULTS if key != "schedule_after"}
         if type(settings["enabled"]) is not bool:
             raise PublishError("自主投稿开关格式不正确。")
+        if type(settings["auto_category"]) is not bool:
+            raise PublishError("自动选择投稿分区开关格式不正确。")
         provider, region = settings["provider"], settings["region"]
         if not isinstance(provider, str) or provider not in VIDEO_PROVIDERS:
             raise PublishError("请选择支持的视频生成服务。")
@@ -436,6 +457,7 @@ class AutoPublisher:
         job = {
             "id": uuid.uuid4().hex, "phase": "queued", "created_at": now.isoformat(timespec="seconds"),
             "day": today, "scheduled": not manual, "account": account, "tid": settings["tid"],
+            "auto_category": settings["auto_category"],
             "provider": provider, "region": region, "model": profile.get("model") or VIDEO_PROVIDERS[provider]["model"],
         }
         _write(self.jobs_path, [*rows, job][-60:])
@@ -485,6 +507,21 @@ class AutoPublisher:
             except Exception:
                 self._update(rows, job, "failed", message="选题失败，请检查 AstrBot 的文本模型配置。")
                 return
+            category = {"category_mode": "manual", "category_reason": "使用手动设置的投稿分区。"}
+            if job.get("auto_category", False):
+                try:
+                    chosen = await asyncio.wait_for(self.select_category(plan), timeout=90)
+                    if (not isinstance(chosen, dict) or type(chosen.get("tid")) is not int
+                            or not 1 <= chosen["tid"] <= 9999 or not isinstance(chosen.get("category_name"), str)
+                            or not chosen["category_name"].strip() or not isinstance(chosen.get("category_reason"), str)
+                            or not chosen["category_reason"].strip()):
+                        raise PublishError("分区判断未返回有效结果。")
+                    category = {**chosen, "category_mode": "auto"}
+                except Exception:
+                    category = {
+                        "category_mode": "fallback",
+                        "category_reason": "未能读取可用分区或完成有效判断，已使用备用分区。",
+                    }
             latest = self.settings()
             key = latest["profiles"].get(profile_name, {}).get("key")
             if not latest["enabled"] or not key or self.account() != job["account"]:
@@ -492,6 +529,7 @@ class AutoPublisher:
             self._update(
                 rows, job, "requesting", title=plan["title"], desc=plan["desc"], tags=plan["tags"],
                 provider=provider, region=region, model=model, submitted_at=now.isoformat(),
+                **category,
             )
             try:
                 task_id = await VIDEO_CLIENTS[provider](provider, region, key, model).create(plan["prompt"])

@@ -40,7 +40,7 @@ from . import bili_api
 from . import guard
 from . import reply as reply_logic
 from . import rhythm
-from .auto_publish import AutoPublisher, PublishError
+from .auto_publish import AutoPublisher, PublishError, parse_category
 from .duty import AUTO_COIN_DAILY_RANGE, BEIJING_TIME, DEFAULT_KEYWORDS, VIDEO_ACTIONS, DutyRunner, RiskPause
 
 PLUGIN_NAME = "astrbot_plugin_bili_scroll"
@@ -156,6 +156,7 @@ class BiliScrollPlugin(Star):
         self._auto_publish = AutoPublisher(
             self.data_dir, self._plan_auto_video, self._do_upload,
             self._auto_publish_account, lambda: self._upload.get("running", False),
+            self._select_auto_video_category,
         )
         # 投稿：同一时间只跑一个
         self._upload: dict = {
@@ -1434,6 +1435,21 @@ class BiliScrollPlugin(Star):
             prompt=prompt,
         ), timeout=90)
         return result.completion_text or ""
+
+    async def _select_auto_video_category(self, plan: dict) -> dict:
+        categories = await bili_api.bili_upload_categories()
+        result = await self.context.llm_generate(
+            chat_provider_id=self._provider_id(),
+            system_prompt=(
+                "为这支原创 AI 短片选择最贴切的 B站投稿子分区。"
+                "根据镜头描述、标题、简介和标签综合判断实际表现形式与主要内容，不要只匹配关键词。"
+                "例如动物题材的剧情动画不能仅因出现吃饭就选择美食。"
+                "只从提供的可用分区中选一个，不能编造分区 ID。"
+                "只返回 JSON：tid（整数分区 ID），reason（简短中文选择理由）。"
+            ),
+            prompt=json.dumps({"视频内容": plan, "可用投稿分区": categories}, ensure_ascii=False),
+        )
+        return parse_category(result.completion_text or "", categories)
 
     async def _api_auto_publish_state(self):
         try:

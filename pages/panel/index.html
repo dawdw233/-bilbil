@@ -1062,7 +1062,13 @@
                 <input id="u-auto-limit" type="number" min="1" max="5" step="1" required />
                 <span class="tip">每天安排一次自动运行，手动立即运行也计入上限。</span>
               </label>
-              <label class="field"><span class="lbl">投稿分区</span><select id="u-auto-tid"></select></label>
+              <label class="check">
+                <input id="u-auto-category" type="checkbox" />
+                <span><span class="t">自动选择投稿分区</span><span class="d">根据视频内容选择可用分区，判断失败时使用备用分区。</span></span>
+              </label>
+              <label class="field"><span class="lbl" id="u-auto-tid-label">投稿分区</span><select id="u-auto-tid" aria-labelledby="u-auto-tid-label" aria-describedby="u-auto-tid-tip"></select>
+                <span class="tip" id="u-auto-tid-tip">关闭自动选择时，每次使用此分区。</span>
+              </label>
               <label class="field span-all"><span class="lbl">创作方向（可选）</span>
                 <textarea id="u-auto-direction" class="tight" rows="2" maxlength="500" placeholder="例如：温暖搞笑的动物日常，像大肥鱼吃饭"></textarea>
                 <span class="tip">留空由机器人自由选题。成片会保存到 media/，稿件会注明 AI 生成。</span>
@@ -3095,14 +3101,19 @@ function syncAutoPublishActions() {
   const profile = autoPublishState.profiles[provider + ":" + region];
   const configured = profile?.key_configured === true;
   const changed = provider !== settings.provider || region !== settings.region
-    || $("u-auto-enabled").checked !== settings.enabled || !!$("u-auto-key").value || $("u-auto-model").value !== (profile?.model || "");
+    || $("u-auto-enabled").checked !== settings.enabled || !!$("u-auto-key").value || $("u-auto-model").value !== (profile?.model || "")
+    || $("u-auto-category").checked !== (settings.auto_category === true) || Number($("u-auto-tid").value) !== settings.tid;
+  const autoCategory = $("u-auto-category").checked;
+  $("u-auto-tid-label").textContent = autoCategory ? "备用投稿分区" : "投稿分区";
+  $("u-auto-tid-tip").textContent = autoCategory
+    ? "未能读取可用分区或完成有效判断时，使用此分区。" : "关闭自动选择时，每次使用此分区。";
   $("u-auto-key-state").textContent = configured
     ? "此服务和地区已配置。留空沿用已保存的 Key。"
     : "填写该服务和地区的 Key。密钥仅保存在服务器。";
   $("u-auto-clear").disabled = !configured;
   const active = jobs.some(job => autoPublishActive.includes(job.phase));
   $("u-auto-start").disabled = !settings.enabled || !configured || !logged_in || active || changed;
-  $("u-auto-start").title = changed ? "请先保存所选服务的配置" : logged_in ? "" : "请先在「刷视频」页登录 B站";
+  $("u-auto-start").title = changed ? "请先保存自主投稿设置" : logged_in ? "" : "请先在「刷视频」页登录 B站";
 }
 
 function renderAutoPublish(data, fill) {
@@ -3116,6 +3127,8 @@ function renderAutoPublish(data, fill) {
     for (const key of ["time", "limit", "tid", "direction"]) {
       $("u-auto-" + key).value = settings[key];
     }
+    $("u-auto-category").checked = settings.auto_category === true;
+    syncAutoPublishActions();
     $("u-auto-fields").disabled = false;
   } else {
     syncAutoPublishActions();
@@ -3124,7 +3137,10 @@ function renderAutoPublish(data, fill) {
     const status = (!settings.enabled && autoPublishActive.includes(job.phase) ? "已暂停 · " : "") + (autoPublishPhases[job.phase] || "未知");
     const video = /^BV[0-9A-Za-z]{10}$/.test(job.bvid) ? `<a href="https://www.bilibili.com/video/${job.bvid}" target="_blank" rel="noreferrer">${job.bvid}</a>` : "";
     const providerName = providers[job.provider]?.name || "";
-    return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc([providerName, job.model].filter(Boolean).join(" · "))}</div></td><td>${esc(status)}</td><td>${video || esc([job.file, job.message].filter(Boolean).join(" · ") || "—")}</td></tr>`;
+    const categoryMode = {auto: "自动分区", fallback: "备用分区", manual: "手动分区"}[job.category_mode];
+    const categoryName = job.category_name || Array.from($("u-auto-tid").options).find(option => Number(option.value) === job.tid)?.textContent || `分区 ${job.tid}`;
+    const category = categoryMode ? `<div class="sub">${esc(categoryMode + " · " + categoryName)}</div><div class="sub">${esc(job.category_reason || "")}</div>` : "";
+    return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc([providerName, job.model].filter(Boolean).join(" · "))}</div>${category}</td><td>${esc(status)}</td><td>${video || esc([job.file, job.message].filter(Boolean).join(" · ") || "—")}</td></tr>`;
   }).join("") : '<tr><td colspan="4" class="empty">还没有自主投稿任务</td></tr>';
   const newest = jobs.find(job => job.file)?.file || "";
   if (!fill && newest !== autoPublishFile) loadUploadFiles();
@@ -3174,6 +3190,7 @@ $("u-auto-form").onsubmit = (event) => {
     time: $("u-auto-time").value,
     limit: $("u-auto-limit").valueAsNumber,
     tid: Number($("u-auto-tid").value),
+    auto_category: $("u-auto-category").checked,
     direction: $("u-auto-direction").value.trim(),
   });
 };
@@ -3186,6 +3203,8 @@ $("u-auto-provider").onchange = () => {
 };
 $("u-auto-region").onchange = selectAutoPublishProfile;
 $("u-auto-enabled").onchange = syncAutoPublishActions;
+$("u-auto-category").onchange = syncAutoPublishActions;
+$("u-auto-tid").onchange = syncAutoPublishActions;
 $("u-auto-key").oninput = () => {
   ++autoModelRequest;
   resetAutoPublishModels();
