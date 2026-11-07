@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 import tempfile
 import uuid
 from datetime import datetime, timedelta
@@ -346,7 +347,7 @@ VIDEO_CLIENTS = {"minimax": MiniMaxVideo, "ark": ArkVideo, "wan": WanVideo}
 
 
 class AutoPublisher:
-    def __init__(self, data_dir: Path, plan, publish, account, upload_busy, select_category=None, preflight=None):
+    def __init__(self, data_dir: Path, plan, publish, account, upload_busy, select_category=None, preflight=None, verify_publication=None):
         self.data_dir = data_dir
         self.settings_path = data_dir / "auto_publish_settings.json"
         self.jobs_path = data_dir / "auto_publish_jobs.json"
@@ -356,6 +357,7 @@ class AutoPublisher:
         self.upload_busy = upload_busy
         self.select_category = select_category
         self.preflight = preflight
+        self.verify_publication = verify_publication
 
     def settings(self) -> dict:
         stored = _read(self.settings_path, {})
@@ -408,7 +410,7 @@ class AutoPublisher:
             "logged_in": bool(self.account()),
             "jobs": [
                 {
-                    **{key: row.get(key, "") for key in ("id", "phase", "title", "created_at", "file", "bvid", "message", "model", "tid", "category_mode", "category_name", "category_reason", "task_id")},
+                    **{key: row.get(key, "") for key in ("id", "phase", "title", "created_at", "file", "bvid", "message", "model", "tid", "category_mode", "category_name", "category_reason", "task_id", "cleanup_state")},
                     "duration": row.get("duration", VIDEO_PROVIDERS[row.get("provider", "minimax")]["duration"]),
                     "provider": row.get("provider", "minimax"),
                 }
@@ -549,11 +551,73 @@ class AutoPublisher:
             "auto_category": settings["auto_category"],
             "direction": settings["direction"], "key_revision": key_revision(profile["key"]),
             "provider": provider, "region": region, "model": model, "duration": duration,
+            "cleanup_after_publish": True,
         }
         _write(self.jobs_path, [*rows, job][-60:])
         return job
 
+    @staticmethod
+    def _file_identity(path: Path) -> list[int]:
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode):
+            raise PublishError("本地成片不是普通文件，已保留供核对。")
+        return [info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns]
+
+    def _cleanup_path(self, job: dict) -> Path:
+        folder = self.data_dir / "media"
+        name = f"ai-{job['id']}.mp4"
+        target = folder / name
+        if (job.get("file") != name or folder.is_symlink()
+                or folder.resolve() != self.data_dir.resolve() / "media"
+                or target.is_symlink() or target.resolve() != folder.resolve() / name):
+            raise PublishError("本地成片路径已变化，已保留供核对。")
+        return target
+
+    async def _cleanup_published(self, now: datetime) -> None:
+        rows = self.jobs()
+        job = next((row for row in rows if row["phase"] == "published"
+                    and row.get("cleanup_after_publish") is True and row.get("cleanup_state") == "pending"
+                    and (not row.get("cleanup_retry_after") or now >= datetime.fromisoformat(row["cleanup_retry_after"]))), None)
+        if job is None or self.verify_publication is None or self.upload_busy():
+            return
+        if not isinstance(job.get("bvid"), str) or not re.fullmatch(r"BV[0-9A-Za-z]{10}", job["bvid"]):
+            return
+        if self.account() != job.get("account"):
+            return
+        try:
+            verified = await asyncio.wait_for(self.verify_publication(dict(job)), timeout=25)
+        except Exception:
+            verified = False
+        # A manual start may have appended a new job while the read-only check awaited.
+        rows = self.jobs()
+        current = next((row for row in rows if row["id"] == job["id"]), None)
+        if (current is None or current["phase"] != "published" or current.get("cleanup_state") != "pending"
+                or current.get("cleanup_after_publish") is not True
+                or current.get("bvid") != job["bvid"] or self.account() != current.get("account") or self.upload_busy()):
+            return
+        job = current
+        if verified is not True:
+            self._update(rows, job, "published", cleanup_retry_after=(now + timedelta(minutes=1)).isoformat(),
+                         message="投稿已提交，等待 B站确认视频正常可访问后清理本地成片。")
+            return
+        try:
+            target = self._cleanup_path(job)
+            if target.exists():
+                if self._file_identity(target) != job.get("cleanup_identity"):
+                    raise PublishError("本地成片已被修改，已保留供核对。")
+                target.unlink()
+        except PublishError as exc:
+            self._update(rows, job, "published", cleanup_state="kept", message=str(exc))
+            return
+        except OSError:
+            self._update(rows, job, "published", cleanup_retry_after=(now + timedelta(minutes=1)).isoformat(),
+                         message="B站视频已确认正常，本地清理暂时失败，稍后自动重试。")
+            return
+        self._update(rows, job, "published", cleanup_state="deleted", cleanup_retry_after="",
+                     cleaned_at=now.isoformat(), message="B站视频已确认正常，本地成片已清理。")
+
     async def tick(self, now: datetime) -> None:
+        await self._cleanup_published(now)
         settings = self.settings()
         if not settings["enabled"]:
             return
@@ -677,7 +741,8 @@ class AutoPublisher:
                 if now - submitted >= timedelta(minutes=30):
                     self._update(rows, job, "review", message=f"暂未取得成片，请核对{spec['name']}任务。")
                 return
-            self._update(rows, job, "ready", file=name, message="", retry_after="")
+            self._update(rows, job, "ready", file=name, message="", retry_after="",
+                         cleanup_identity=self._file_identity(destination))
             return
 
         if self.upload_busy():
@@ -700,7 +765,9 @@ class AutoPublisher:
         if not isinstance(result, dict):
             result = {}
         bvid = result.get("bvid")
-        if result.get("success") and isinstance(bvid, str) and re.fullmatch(r"BV[0-9A-Za-z]{10}", bvid):
-            self._update(rows, job, "published", bvid=bvid)
+        if result.get("success") is True and isinstance(bvid, str) and re.fullmatch(r"BV[0-9A-Za-z]{10}", bvid):
+            cleanup = job.get("cleanup_after_publish") is True
+            self._update(rows, job, "published", bvid=bvid, cleanup_state="pending" if cleanup else "",
+                         message="投稿成功，确认 B站视频正常可访问后自动清理本地成片。" if cleanup else "")
         else:
             self._update(rows, job, "review", message="投稿未能确认：" + upload_error(result.get("error")) + "。成片已保留，请先到 B站创作中心核对。")

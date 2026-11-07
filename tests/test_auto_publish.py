@@ -405,6 +405,151 @@ class AutoPublishTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue((self.path / "media" / job["file"]).is_file())
         self.publish.assert_awaited_once()
 
+    async def prepare_cleanup(self):
+        self.configure()
+        self.worker.enqueue(self.now, manual=True)
+        for _ in range(3):
+            await self.worker.tick(self.now)
+        self.worker.verify_publication = AsyncMock(return_value=True)
+        return self.path / "media" / self.worker.jobs()[0]["file"]
+
+    async def test_cleanup_requires_remote_confirmation_and_keeps_receipt_and_manual_files(self):
+        media = await self.prepare_cleanup()
+        manual = self.path / "media" / "my-video.mp4"
+        manual.write_bytes(b"manual video")
+        self.assertTrue(media.exists())
+        self.assertEqual(self.worker.jobs()[0]["phase"], "published")
+        await self.worker.tick(self.now)
+        self.assertFalse(media.exists())
+        self.assertTrue(manual.exists())
+        job = self.worker.state()["jobs"][0]
+        self.assertEqual((job["phase"], job["cleanup_state"], job["bvid"]), ("published", "deleted", "BV1234567890"))
+        self.assertIn("已清理", job["message"])
+        self.publish.assert_awaited_once()
+
+    async def test_pending_review_and_network_errors_keep_file_then_retry(self):
+        media = await self.prepare_cleanup()
+        verify = self.worker.verify_publication
+        verify.side_effect = [False, TimeoutError(), True]
+        await self.worker.tick(self.now)
+        await self.worker.tick(self.now + timedelta(seconds=20))
+        verify.assert_awaited_once()
+        self.assertTrue(media.exists())
+        await self.worker.tick(self.now + timedelta(minutes=1))
+        self.assertTrue(media.exists())
+        await self.worker.tick(self.now + timedelta(minutes=2))
+        self.assertFalse(media.exists())
+        self.publish.assert_awaited_once()
+
+    async def test_failed_or_unconfirmed_upload_is_never_cleaned(self):
+        for response in ({"success": False, "bvid": "BV1234567890"}, {"success": True, "bvid": "bad"}, {"success": "false", "bvid": "BV1234567890"}):
+            with self.subTest(response=response):
+                self.worker.jobs_path.unlink(missing_ok=True)
+                self.configure()
+                self.worker.enqueue(self.now, manual=True)
+                self.publish.return_value = response
+                self.worker.verify_publication = AsyncMock(return_value=True)
+                for _ in range(4):
+                    await self.worker.tick(self.now)
+                job = self.worker.jobs()[0]
+                self.assertEqual(job["phase"], "review")
+                self.assertTrue((self.path / "media" / job["file"]).exists())
+                self.worker.verify_publication.assert_not_awaited()
+
+    async def test_old_published_jobs_are_not_retroactively_cleaned(self):
+        media = await self.prepare_cleanup()
+        rows = self.worker.jobs()
+        rows[0].pop("cleanup_after_publish")
+        self.worker.jobs_path.write_text(json.dumps(rows), encoding="utf-8")
+        await self.worker.tick(self.now)
+        self.assertTrue(media.exists())
+        self.worker.verify_publication.assert_not_awaited()
+
+    async def test_cleanup_resumes_after_restart_and_after_file_removal_before_record_write(self):
+        media = await self.prepare_cleanup()
+        self.worker = self.new_worker()
+        self.worker.verify_publication = AsyncMock(return_value=True)
+        media.unlink()
+        await self.worker.tick(self.now)
+        self.assertEqual(self.worker.jobs()[0]["cleanup_state"], "deleted")
+        self.publish.assert_awaited_once()
+
+    async def test_modified_file_is_kept(self):
+        media = await self.prepare_cleanup()
+        media.write_bytes(b"manually replaced video with different content")
+        await self.worker.tick(self.now)
+        self.assertTrue(media.exists())
+        self.assertEqual(self.worker.jobs()[0]["cleanup_state"], "kept")
+
+    async def test_foreign_path_and_symlink_are_never_deleted(self):
+        media = await self.prepare_cleanup()
+        outside = self.path / "manual.mp4"
+        outside.write_bytes(b"manual")
+        rows = self.worker.jobs()
+        rows[0]["file"] = "../manual.mp4"
+        self.worker.jobs_path.write_text(json.dumps(rows), encoding="utf-8")
+        await self.worker.tick(self.now)
+        self.assertTrue(outside.exists())
+        self.assertTrue(media.exists())
+        rows = self.worker.jobs()
+        rows[0].update(file=media.name, cleanup_state="pending")
+        self.worker.jobs_path.write_text(json.dumps(rows), encoding="utf-8")
+        media.unlink()
+        media.symlink_to(outside)
+        await self.worker.tick(self.now)
+        self.assertTrue(outside.exists())
+        self.assertTrue(media.is_symlink())
+        self.assertEqual(self.worker.jobs()[0]["cleanup_state"], "kept")
+
+    async def test_permission_failure_retries_cleanup_without_uploading_again(self):
+        media = await self.prepare_cleanup()
+        unlink = Path.unlink
+        def denied(path, *args, **kwargs):
+            if path == media:
+                raise PermissionError()
+            return unlink(path, *args, **kwargs)
+        with patch.object(Path, "unlink", denied):
+            await self.worker.tick(self.now)
+        self.assertTrue(media.exists())
+        self.assertEqual(self.worker.jobs()[0]["cleanup_state"], "pending")
+        await self.worker.tick(self.now + timedelta(minutes=1))
+        self.assertFalse(media.exists())
+        self.publish.assert_awaited_once()
+
+    async def test_cleanup_does_not_overwrite_job_enqueued_during_remote_check(self):
+        media = await self.prepare_cleanup()
+        self.worker.save_settings({"limit": 2}, self.now)
+        async def concurrent(_job):
+            self.worker.enqueue(self.now, manual=True)
+            self.worker.save_settings({"enabled": False}, self.now)
+            return True
+        self.worker.verify_publication.side_effect = concurrent
+        await self.worker.tick(self.now)
+        self.assertFalse(media.exists())
+        rows = self.worker.jobs()
+        self.assertEqual(len(rows), 2)
+        self.assertEqual((rows[0]["cleanup_state"], rows[1]["phase"]), ("deleted", "queued"))
+
+    async def test_account_switch_during_cleanup_check_keeps_the_video(self):
+        media = await self.prepare_cleanup()
+        async def switched(_job):
+            self.account = "88"
+            return True
+        self.worker.verify_publication.side_effect = switched
+        await self.worker.tick(self.now)
+        self.assertTrue(media.exists())
+        self.assertEqual(self.worker.jobs()[0]["cleanup_state"], "pending")
+
+    async def test_other_upload_starting_during_cleanup_check_defers_deletion(self):
+        media = await self.prepare_cleanup()
+        async def busy(_job):
+            self.busy = True
+            return True
+        self.worker.verify_publication.side_effect = busy
+        await self.worker.tick(self.now)
+        self.assertTrue(media.exists())
+        self.assertEqual(self.worker.jobs()[0]["cleanup_state"], "pending")
+
 
 class PreflightContractTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -423,6 +568,15 @@ class PreflightContractTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(auto_publish.PublishError, "ffmpeg"):
                 await self.instance._auto_publish_preflight("42")
         login.assert_not_called()
+
+    async def test_cleanup_verification_requires_correct_video_owner_normal_state_and_pages(self):
+        job = {"bvid": "BV1234567890", "account": "42"}
+        normal = {"bvid": job["bvid"], "state": 0, "owner": {"mid": 42}, "pages": [{"cid": 123}]}
+        for info, expected in ((normal, True), ({**normal, "state": -40}, False), ({**normal, "state": False}, False),
+                               ({**normal, "owner": {"mid": 88}}, False), ({**normal, "bvid": "BV0000000000"}, False),
+                               ({**normal, "pages": []}, False), ({**normal, "pages": [{"cid": 0}]}, False)):
+            with self.subTest(info=info), patch.object(plugin.bili_api.video, "Video", return_value=Mock(get_info=AsyncMock(return_value=info))):
+                self.assertEqual(await self.instance._verify_auto_publication(job), expected)
 
     async def test_low_disk_space_and_unwritable_directory_stop_preflight(self):
         with patch.object(plugin.shutil, "which", return_value="ffmpeg"), patch.object(plugin.shutil, "disk_usage", return_value=Mock(free=1)):

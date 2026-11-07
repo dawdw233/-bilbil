@@ -160,6 +160,7 @@ class BiliScrollPlugin(Star):
             self._auto_publish_account, lambda: self._upload.get("running", False),
             self._select_auto_video_category,
             self._auto_publish_preflight,
+            self._verify_auto_publication,
         )
         # 投稿：同一时间只跑一个
         self._upload: dict = {
@@ -1420,6 +1421,20 @@ class BiliScrollPlugin(Star):
         if not credential or not credential.sessdata or not credential.bili_jct:
             return ""
         return str(credential.dedeuserid or "")
+
+    async def _verify_auto_publication(self, job: dict) -> bool:
+        if self._auto_publish_account() != job.get("account"):
+            return False
+        info = await bili_api.video.Video(bvid=job["bvid"], credential=bili_api.load_credential()).get_info()
+        if not isinstance(info, dict) or not isinstance(info.get("owner"), dict):
+            return False
+        pages = info.get("pages")
+        return (
+            info.get("bvid") == job["bvid"] and type(info.get("state")) is int and info["state"] == 0
+            and str(info.get("owner", {}).get("mid") or "") == job["account"]
+            and isinstance(pages, list) and bool(pages)
+            and all(isinstance(page, dict) and type(page.get("cid")) is int and page["cid"] > 0 for page in pages)
+        )
 
     async def _auto_publish_preflight(self, account: str) -> None:
         if self._auto_publish_account() != account:

@@ -1078,7 +1078,7 @@
               </label>
               <label class="field span-all"><span class="lbl">创作方向（可选）</span>
                 <textarea id="u-auto-direction" class="tight" rows="2" maxlength="500" placeholder="例如：温暖搞笑的动物日常，像大肥鱼吃饭"></textarea>
-                <span class="tip">留空由机器人自由选题。成片会保存到 media/，稿件会注明 AI 生成。</span>
+                <span class="tip">留空由机器人自由选题。成片先保存到 media/；投稿成功并确认 B站视频正常可访问后自动清理，失败或待核对时保留。</span>
               </label>
             </div>
             <div class="save-bar">
@@ -3152,6 +3152,12 @@ function syncAutoPublishActions() {
   $("u-auto-start").title = changed || durationChanged ? "请先保存自主投稿设置" : logged_in ? "" : "请先在「刷视频」页登录 B站";
 }
 
+function autoPublishResultMarkup(job) {
+  const video = /^BV[0-9A-Za-z]{10}$/.test(job.bvid) ? `<a href="https://www.bilibili.com/video/${job.bvid}" target="_blank" rel="noreferrer">${job.bvid}</a>` : "";
+  const detail = esc([job.file, job.message].filter(Boolean).join(" · "));
+  return video ? video + (detail ? `<div class="sub">${detail}</div>` : "") : detail || "—";
+}
+
 function renderAutoPublish(data, fill) {
   autoPublishState = data;
   const { settings, jobs, providers } = data;
@@ -3171,17 +3177,16 @@ function renderAutoPublish(data, fill) {
   }
   $("u-auto-jobs").querySelector("tbody").innerHTML = jobs.length ? jobs.map(job => {
     const status = (!settings.enabled && autoPublishActive.includes(job.phase) ? "已暂停 · " : "") + (autoPublishPhases[job.phase] || "未知");
-    const video = /^BV[0-9A-Za-z]{10}$/.test(job.bvid) ? `<a href="https://www.bilibili.com/video/${job.bvid}" target="_blank" rel="noreferrer">${job.bvid}</a>` : "";
     const providerName = providers[job.provider]?.name || "";
     const categoryMode = {auto: "自动分区", fallback: "备用分区", manual: "手动分区"}[job.category_mode];
     const categoryName = job.category_name || Array.from($("u-auto-tid").options).find(option => Number(option.value) === job.tid)?.textContent || `分区 ${job.tid}`;
     const category = categoryMode ? `<div class="sub">${esc(categoryMode + " · " + categoryName)}</div><div class="sub">${esc(job.category_reason || "")}</div>` : "";
     const task = job.task_id ? `<div class="sub">服务商任务：${esc(job.task_id)}</div>` : "";
-    return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc([providerName, job.model, job.duration ? "计划 " + job.duration + " 秒" : ""].filter(Boolean).join(" · "))}</div>${category}${task}</td><td>${esc(status)}</td><td>${video || esc([job.file, job.message].filter(Boolean).join(" · ") || "—")}</td></tr>`;
+    return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc([providerName, job.model, job.duration ? "计划 " + job.duration + " 秒" : ""].filter(Boolean).join(" · "))}</div>${category}${task}</td><td>${esc(status)}</td><td>${autoPublishResultMarkup(job)}</td></tr>`;
   }).join("") : '<tr><td colspan="4" class="empty">还没有自主投稿任务</td></tr>';
-  const newest = jobs.find(job => job.file)?.file || "";
-  if (!fill && newest !== autoPublishFile) loadUploadFiles();
-  autoPublishFile = newest;
+  const filesState = jobs.filter(job => job.file).map(job => job.file + ":" + (job.cleanup_state || "")).join("|");
+  if (!fill && filesState !== autoPublishFile) loadUploadFiles();
+  autoPublishFile = filesState;
 }
 
 async function loadAutoPublish(fill = false) {

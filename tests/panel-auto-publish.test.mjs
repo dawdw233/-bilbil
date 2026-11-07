@@ -68,3 +68,14 @@ test("切换到短时长模型时收回不支持的选项，不把较长时长�
   assert.equal(nodes["u-auto-duration"].value,"6");
   assert.match(nodes["u-auto-duration-tip"].textContent,/仅支持 6 秒/);
 });
+
+test("投稿成功后同时展示 BV 链接和本地清理状态，并转义错误内容", () => {
+  const source=html.slice(html.indexOf("function autoPublishResultMarkup("),html.indexOf("function renderAutoPublish("));
+  const context={esc:value=>String(value).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")};
+  vm.runInNewContext(source,context);
+  const result=context.autoPublishResultMarkup({bvid:"BV1234567890",file:"ai-example.mp4",message:"本地成片已清理。<script>"});
+  assert.match(result,/href="https:\/\/www.bilibili.com\/video\/BV1234567890"/);
+  assert.match(result,/本地成片已清理/);
+  assert.ok(!result.includes("<script>"));
+  assert.equal(context.autoPublishResultMarkup({}),"—");
+});
