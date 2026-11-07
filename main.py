@@ -161,6 +161,7 @@ class BiliScrollPlugin(Star):
             self._select_auto_video_category,
             self._auto_publish_preflight,
             self._verify_auto_publication,
+            self._plan_auto_storyboard,
         )
         # 投稿：同一时间只跑一个
         self._upload: dict = {
@@ -242,6 +243,7 @@ class BiliScrollPlugin(Star):
             ("upload/auto/models", self._api_auto_publish_models, ["POST"], "读取可选视频模型"),
             ("upload/auto/save", self._api_auto_publish_save, ["POST"], "保存自主投稿设置"),
             ("upload/auto/start", self._api_auto_publish_start, ["POST"], "立即自主生成并投稿"),
+            ("upload/auto/resume", self._api_auto_publish_resume, ["POST"], "继续失败分镜或重新合成"),
             ("rhythm/state", self._api_rhythm_state, ["GET"], "作息状态"),
             ("rhythm/runs", self._api_rhythm_runs, ["GET"], "最近醒来记录"),
             ("reply/summary", self._api_reply_summary, ["GET"], "回复状态"),
@@ -1436,15 +1438,17 @@ class BiliScrollPlugin(Star):
             and all(isinstance(page, dict) and type(page.get("cid")) is int and page["cid"] > 0 for page in pages)
         )
 
-    async def _auto_publish_preflight(self, account: str) -> None:
+    async def _auto_publish_preflight(self, account: str, *, storyboard: bool = False, required_bytes: int = 2 * MAX_VIDEO_BYTES) -> None:
         if self._auto_publish_account() != account:
             raise PublishError("请先登录任务绑定的 B站账号，任务将等待后重试。")
         credential = bili_api.load_credential()
         def check_storage():
             if not shutil.which("ffmpeg"):
                 raise PublishError("服务器缺少 ffmpeg，无法生成投稿封面；安装后任务会继续。")
-            if shutil.disk_usage(self._media_dir).free < 2 * MAX_VIDEO_BYTES:
-                raise PublishError("视频素材目录所在磁盘可用空间不足 200 MB，请清理后重试。")
+            if storyboard and not shutil.which("ffprobe"):
+                raise PublishError("分镜合成需要 ffprobe，请在服务器安装后重试。")
+            if shutil.disk_usage(self._media_dir).free < required_bytes:
+                raise PublishError(f"视频素材目录可用空间不足 {required_bytes // (1024 * 1024)} MB，请清理后重试。")
             try:
                 with tempfile.TemporaryFile(dir=self._media_dir) as stream:
                     stream.write(b"check")
@@ -1471,6 +1475,22 @@ class BiliScrollPlugin(Star):
                 "desc（中文简介），tags（逗号分隔的中文标签，最多九个，不必重复 AI生成）。"
             ),
             prompt=prompt,
+        ), timeout=90)
+        return result.completion_text or ""
+
+    async def _plan_auto_storyboard(self, direction: str, recent: list[str], durations: list[int]) -> str:
+        result = await asyncio.wait_for(self.context.llm_generate(
+            chat_provider_id=self._provider_id(),
+            system_prompt=(
+                "你负责策划一支原创 AI 短片，先写完整故事，再拆为前后连贯的连续镜头。"
+                "所有镜头共用同一主角外观、服装、场景与画风，动作承接前一段，有明确开始、发展和结尾。"
+                "选择虚构或自然题材，避免使用他人角色、真实人物、品牌或他人作品片段，避免重复近期标题。"
+                "只返回 JSON：title（中文标题）、prompt（全片故事概要）、desc（简介）、tags（逗号分隔，最多九个标签）、"
+                "continuity（全片统一的人物外观、场景和画风设定，最多300字）、shots（分镜数组）。"
+                "shots 必须严格按提供的时长列表逐一生成，不能增减数量或改变时长；每项包含 duration（整数秒数）和 prompt（当前镜头的具体动作与运镜，尽量简洁，最多200字）。"
+            ),
+            prompt=json.dumps({"创作方向": direction or "温和、有趣、适合公开投稿的原创短片", "近期标题": recent,
+                               "成片总时长": sum(durations), "各分镜时长": durations}, ensure_ascii=False),
         ), timeout=90)
         return result.completion_text or ""
 
@@ -1523,6 +1543,17 @@ class BiliScrollPlugin(Star):
             return error_response(str(exc))
         self._auto_publish_wake.set()
         return json_response({"started": True, "id": job["id"]})
+
+    async def _api_auto_publish_resume(self):
+        payload = await request.json(default={})
+        if not isinstance(payload, dict) or not isinstance(payload.get("id"), str) or not re.fullmatch(r"[0-9a-f]{32}", payload["id"]):
+            return error_response("分镜任务编号无效。")
+        try:
+            self._auto_publish.resume(payload["id"])
+        except PublishError as exc:
+            return error_response(str(exc))
+        self._auto_publish_wake.set()
+        return json_response({"resumed": True})
 
     async def _auto_publish_loop(self) -> None:
         while True:

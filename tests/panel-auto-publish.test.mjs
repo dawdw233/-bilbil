@@ -9,7 +9,7 @@ const modelOptions = html.slice(html.indexOf("function setAutoPublishModelOption
 
 function form() {
   const nodes = {};
-  for (const name of ["provider", "region", "model", "key", "time", "limit", "direction", "tid", "workspace", "duration", "enabled", "category", "draft-hint", "tid-label", "tid-tip", "key-state", "clear", "start"]) nodes["u-auto-" + name] = {};
+  for (const name of ["provider", "region", "model", "key", "time", "limit", "direction", "tid", "workspace", "duration", "mode", "total", "duration-field", "total-field", "storyboard-tip", "enabled", "category", "draft-hint", "tid-label", "tid-tip", "key-state", "clear", "start"]) nodes["u-auto-" + name] = {};
   const settings = {provider:"minimax",region:"cn",enabled:true,auto_category:false,tid:21,direction:"鱼吃饭",time:"20:00",limit:1};
   for (const key of ["provider", "region", "tid", "time", "direction"]) nodes["u-auto-" + key].value = String(settings[key]);
   for (const key of ["key", "model", "workspace"]) nodes["u-auto-" + key].value = "";
@@ -17,6 +17,9 @@ function form() {
   nodes["u-auto-category"].checked = false;
   nodes["u-auto-limit"].valueAsNumber = 1;
   nodes["u-auto-duration"].value = "6";
+  nodes["u-auto-mode"].value = "single";
+  nodes["u-auto-total"].value = "30";
+  for (const key of ["duration-field","total-field","storyboard-tip"]) nodes["u-auto-"+key].classList={toggle(){}};
   const context = {$:id=>nodes[id],autoPublishState:{settings,jobs:[],logged_in:true,profiles:{"minimax:cn":{key_configured:true,model:"",duration:6}},providers:{minimax:{duration:6}}},autoPublishActive:["queued","requesting","generating","ready","uploading"]};
   vm.runInNewContext(sync, context);
   return {nodes,context};
@@ -28,6 +31,7 @@ test("自主投稿的全部可编辑设置有改动时，禁止立即生成并�
     ["workspace","value","workspace-1"],["key","value","new-key"],["model","value","T2V-01"],
     ["category","checked",true],["tid","value","17"],["enabled","checked",false],
     ["duration","value","10"],
+    ["mode","value","storyboard"],["total","value","60"],
   ]) {
     const {nodes,context} = form();
     context.syncAutoPublishActions();
@@ -41,6 +45,18 @@ test("自主投稿的全部可编辑设置有改动时，禁止立即生成并�
     context.syncAutoPublishActions();
     assert.equal(nodes["u-auto-start"].disabled,false,name);
   }
+});
+
+test("分镜估算按模型合法时长组合 30/60 秒，并显示分别生成和计费", () => {
+  const {nodes,context}=form();
+  context.autoPublishState.providers.minimax.duration_rules=[{prefix:"MiniMax-Hailuo-",options:[6,10]}];
+  context.autoPublishState.providers.minimax.model="MiniMax-Hailuo-2.3";
+  nodes["u-auto-mode"].value="storyboard";
+  context.syncAutoPublishActions();
+  assert.match(nodes["u-auto-storyboard-tip"].textContent,/3 个分镜/);
+  assert.match(nodes["u-auto-storyboard-tip"].textContent,/分别生成和计费/);
+  assert.deepEqual(Array.from(context.storyboardLengths([6,10],60)),[10,10,10,10,10,10]);
+  assert.deepEqual(Array.from(context.storyboardLengths([5,10,15],30)),[15,15]);
 });
 
 test("接口没有返回视频模型时，保留已适配选项并明确权限未验证", () => {

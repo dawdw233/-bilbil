@@ -1061,13 +1061,16 @@
                 <input id="u-auto-workspace" maxlength="63" autocomplete="off" placeholder="填写控制台的业务空间 ID" aria-describedby="u-auto-workspace-tip" />
                 <span class="tip" id="u-auto-workspace-tip">无需填写网址；留空也可选择已适配模型，实际可用性取决于 Key 的权限。</span>
               </label>
-              <label class="field"><span class="lbl">视频时长</span><select id="u-auto-duration" aria-describedby="u-auto-duration-tip"></select>
+              <label class="field"><span class="lbl">生成方式</span><select id="u-auto-mode"><option value="single">单段生成</option><option value="storyboard">分镜合成</option></select></label>
+              <label class="field" id="u-auto-duration-field"><span class="lbl">视频时长</span><select id="u-auto-duration" aria-describedby="u-auto-duration-tip"></select>
                 <span class="tip" id="u-auto-duration-tip">根据所选模型显示可用时长，机器人会按此时长策划视频。</span>
               </label>
+              <label class="field hide" id="u-auto-total-field"><span class="lbl">成片总时长</span><select id="u-auto-total"><option value="30">30 秒</option><option value="60">60 秒</option></select></label>
+              <p id="u-auto-storyboard-tip" class="sub span-all hide" role="status"></p>
               <label class="field"><span class="lbl">自动运行时间（北京时间）</span><input id="u-auto-time" type="time" required /></label>
               <label class="field"><span class="lbl">每日生成上限（支）</span>
                 <input id="u-auto-limit" type="number" min="1" max="5" step="1" required />
-                <span class="tip">每天安排一次自动运行，手动立即运行也计入上限。</span>
+                <span class="tip">按成片任务计数；分镜合成的每段会分别调用生成服务。手动立即运行也计入上限。</span>
               </label>
               <label class="check">
                 <input id="u-auto-category" type="checkbox" />
@@ -1092,6 +1095,7 @@
         </form>
         <div class="panel">
           <div class="panel-title">最近自主投稿</div>
+          <p class="sub">分镜失败后可单独重试，已完成的片段保留；重试生成会再次消耗服务额度，下载和本地重新合成不重新生成视频。</p>
           <div class="tbl-wrap">
             <table id="u-auto-jobs"><thead><tr><th>时间</th><th>稿件</th><th>状态</th><th>成片／结果</th></tr></thead>
               <tbody><tr><td colspan="4" class="empty">正在读取任务记录…</td></tr></tbody>
@@ -3029,8 +3033,9 @@ function stopUploadPoll() {
 const autoPublishPhases = {
   queued: "待选题", requesting: "提交生成任务", generating: "生成成片中", ready: "成片已保存，等待投稿",
   uploading: "正在投稿", published: "已提交 B站", failed: "失败", review: "待核对",
+  storyboard: "分镜生成中", assembling: "正在合成视频",
 };
-const autoPublishActive = ["queued", "requesting", "generating", "ready", "uploading"];
+const autoPublishActive = ["queued", "requesting", "generating", "storyboard", "assembling", "ready", "uploading"];
 let autoPublishTimer = null;
 let autoPublishFile = "";
 let autoPublishRequest = 0;
@@ -3136,7 +3141,8 @@ function syncAutoPublishActions() {
     || $("u-auto-enabled").checked !== settings.enabled || !!$("u-auto-key").value || $("u-auto-model").value !== (profile?.model || "")
     || $("u-auto-category").checked !== (settings.auto_category === true) || Number($("u-auto-tid").value) !== settings.tid
     || $("u-auto-direction").value.trim() !== settings.direction || $("u-auto-time").value !== settings.time
-    || $("u-auto-limit").valueAsNumber !== settings.limit || $("u-auto-workspace").value.trim() !== (profile?.workspace || "");
+    || $("u-auto-limit").valueAsNumber !== settings.limit || $("u-auto-workspace").value.trim() !== (profile?.workspace || "")
+    || $("u-auto-mode").value !== (settings.mode || "single") || Number($("u-auto-total").value) !== (settings.total_duration || 30);
   const durationChanged = Number($("u-auto-duration").value) !== (profile?.duration || autoPublishState.providers[provider].duration);
   $("u-auto-draft-hint").textContent = changed || durationChanged ? "设置有未保存的修改，请先保存，再立即生成。" : "";
   const autoCategory = $("u-auto-category").checked;
@@ -3150,6 +3156,30 @@ function syncAutoPublishActions() {
   const active = jobs.some(job => autoPublishActive.includes(job.phase));
   $("u-auto-start").disabled = !settings.enabled || !configured || !logged_in || active || changed || durationChanged;
   $("u-auto-start").title = changed || durationChanged ? "请先保存自主投稿设置" : logged_in ? "" : "请先在「刷视频」页登录 B站";
+  syncAutoPublishStoryboardForm();
+}
+
+function storyboardLengths(options, total) {
+  const plans = new Map([[0,[]]]);
+  const durations = [...options].filter(value => value <= 15).sort((a,b)=>b-a);
+  for (let seconds=1;seconds<=total;seconds++) {
+    const choices=durations.filter(value=>plans.has(seconds-value)).map(value=>[...plans.get(seconds-value),value]);
+    if (choices.length) plans.set(seconds,choices.sort((a,b)=>a.length-b.length)[0]);
+  }
+  return (plans.get(total)||[]).sort((a,b)=>b-a);
+}
+
+function syncAutoPublishStoryboardForm() {
+  const enabled = $("u-auto-mode").value === "storyboard";
+  $("u-auto-duration-field").classList.toggle("hide",enabled);
+  $("u-auto-total-field").classList.toggle("hide",!enabled);
+  $("u-auto-storyboard-tip").classList.toggle("hide",!enabled);
+  if (!enabled) return;
+  const spec=autoPublishState.providers[$("u-auto-provider").value];
+  const model=$("u-auto-model").value||spec.model;
+  const options=spec.duration_rules?.find(rule=>model.startsWith(rule.prefix))?.options||spec.duration_fallback||[spec.duration];
+  const lengths=storyboardLengths(options,Number($("u-auto-total").value));
+  $("u-auto-storyboard-tip").textContent = `将生成 ${lengths.length} 个分镜（${lengths.join(" + ")} 秒），再合成为一条视频。使用统一人物与画风设定；各片段分别生成和计费。`;
 }
 
 function autoPublishResultMarkup(job) {
@@ -3165,6 +3195,8 @@ function renderAutoPublish(data, fill) {
     $("u-auto-provider").replaceChildren(...Object.entries(providers).map(([id, spec]) => new Option(spec.name, id)));
     $("u-auto-provider").value = settings.provider;
     $("u-auto-enabled").checked = settings.enabled;
+    $("u-auto-mode").value = settings.mode || "single";
+    $("u-auto-total").value = String(settings.total_duration || 30);
     setAutoPublishRegions(settings.region);
     for (const key of ["time", "limit", "tid", "direction"]) {
       $("u-auto-" + key).value = settings[key];
@@ -3182,7 +3214,13 @@ function renderAutoPublish(data, fill) {
     const categoryName = job.category_name || Array.from($("u-auto-tid").options).find(option => Number(option.value) === job.tid)?.textContent || `分区 ${job.tid}`;
     const category = categoryMode ? `<div class="sub">${esc(categoryMode + " · " + categoryName)}</div><div class="sub">${esc(job.category_reason || "")}</div>` : "";
     const task = job.task_id ? `<div class="sub">服务商任务：${esc(job.task_id)}</div>` : "";
-    return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc([providerName, job.model, job.duration ? "计划 " + job.duration + " 秒" : ""].filter(Boolean).join(" · "))}</div>${category}${task}</td><td>${esc(status)}</td><td>${autoPublishResultMarkup(job)}</td></tr>`;
+    const progress=job.mode === "storyboard" ? `<div class="sub">分镜 ${job.shots?.filter(shot=>shot.phase==="done").length||0} / ${job.shot_count||job.shots?.length||0}</div>` : "";
+    const retryLabel={shot:"重试失败片段",download:"重试下载",assemble:"重新合成"}[job.retry_stage];
+    const retry=job.phase === "failed" && job.recoverable && retryLabel && /^[0-9a-f]{32}$/.test(job.id)
+      ? `<button type="button" data-auto-resume="${job.id}" ${!settings.enabled||!data.logged_in||jobs.some(row=>autoPublishActive.includes(row.phase))?"disabled":""}>${retryLabel}</button>` : "";
+    const shotPhases={queued:"等待生成",requesting:"提交中",generating:"生成中",done:"已完成",failed:"失败",download_failed:"下载失败",review:"待核对"};
+    const clips=job.shots?.length ? `<details class="sub"><summary>分镜详情</summary>${job.shots.map(shot=>`<div class="sub">${esc(`第 ${shot.number} 段 · ${shot.duration} 秒 · ${shotPhases[shot.phase]||"待核对"}`)}${shot.task_id?`<br>${esc(shot.task_id)}`:""}</div>`).join("")}</details>` : "";
+    return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc([providerName, job.model, job.duration ? "计划 " + job.duration + " 秒" : ""].filter(Boolean).join(" · "))}</div>${category}${task}</td><td>${esc(status)}${progress}</td><td>${autoPublishResultMarkup(job)}${clips}${retry}</td></tr>`;
   }).join("") : '<tr><td colspan="4" class="empty">还没有自主投稿任务</td></tr>';
   const filesState = jobs.filter(job => job.file).map(job => job.file + ":" + (job.cleanup_state || "")).join("|");
   if (!fill && filesState !== autoPublishFile) loadUploadFiles();
@@ -3230,6 +3268,8 @@ $("u-auto-form").onsubmit = (event) => {
     region: $("u-auto-region").value,
     model: $("u-auto-model").value.trim(),
     duration: Number($("u-auto-duration").value),
+    mode: $("u-auto-mode").value,
+    total_duration: Number($("u-auto-total").value),
     workspace: $("u-auto-workspace").value.trim(),
     time: $("u-auto-time").value,
     limit: $("u-auto-limit").valueAsNumber,
@@ -3261,6 +3301,8 @@ $("u-auto-model").onchange = () => {
   syncAutoPublishActions();
 };
 $("u-auto-duration").onchange = syncAutoPublishActions;
+$("u-auto-mode").onchange = syncAutoPublishActions;
+$("u-auto-total").onchange = syncAutoPublishActions;
 $("u-auto-form").addEventListener("input", syncAutoPublishActions);
 $("u-auto-workspace").oninput = () => {
   ++autoModelRequest;
@@ -3284,6 +3326,17 @@ $("u-auto-start").onclick = async () => {
     await loadAutoPublish();
   }
 };
+$("u-auto-jobs").addEventListener("click", async event => {
+  const button=event.target.closest("[data-auto-resume]");
+  if (!button || button.disabled) return;
+  button.disabled=true;
+  try {
+    await api("upload/auto/resume",{id:button.dataset.autoResume});
+    setHint("u-auto-feedback","已继续处理，已完成片段保留。","ok");
+  } catch(error) {
+    setHint("u-auto-feedback","未能继续："+(error?.message||error),"bad");
+  } finally { await loadAutoPublish(); }
+});
 window.addEventListener("bili:view", (event) => {
   clearInterval(autoPublishTimer);
   autoPublishTimer = event.detail === "upload" ? setInterval(() => {

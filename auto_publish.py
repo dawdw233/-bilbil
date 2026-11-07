@@ -16,6 +16,8 @@ from urllib.parse import quote, urlsplit
 
 import aiohttp
 
+from .video_compose import CompositionError, compose_video
+
 VIDEO_PROVIDERS = {
     "minimax": {
         "name": "MiniMax 海螺", "model": "MiniMax-Hailuo-2.3", "duration": 6,
@@ -39,8 +41,9 @@ VIDEO_PROVIDERS = {
 DEFAULTS = {
     "enabled": False, "provider": "minimax", "region": "cn", "time": "20:00",
     "limit": 1, "direction": "", "tid": 21, "auto_category": False, "schedule_after": "",
+    "mode": "single", "total_duration": 30,
 }
-ACTIVE_PHASES = {"queued", "requesting", "generating", "ready", "uploading"}
+ACTIVE_PHASES = {"queued", "requesting", "generating", "storyboard", "assembling", "ready", "uploading"}
 MAX_VIDEO_BYTES = 100 * 1024 * 1024
 VIDEO_MODELS = {
     "minimax": ("MiniMax-Hailuo-2.3", "MiniMax-Hailuo-02", "T2V-01", "T2V-01-Director"),
@@ -72,8 +75,27 @@ def video_duration(provider: str, model: str, value) -> int:
     return value
 
 
+def storyboard_lengths(provider: str, model: str, total: int) -> list[int]:
+    if type(total) is not int or total not in (30, 60):
+        raise PublishError("分镜成片时长请选择 30 秒或 60 秒。")
+    options = sorted((value for value in duration_options(provider, model) if value <= 15), reverse=True)
+    plans = {0: []}
+    for seconds in range(1, total + 1):
+        choices = [[*plans[seconds - value], value] for value in options if seconds - value in plans]
+        if choices:
+            plans[seconds] = min(choices, key=len)
+    result = sorted(plans.get(total, []), reverse=True)
+    if not 2 <= len(result) <= 12:
+        raise PublishError("这个模型暂时无法组成所选成片时长。")
+    return result
+
+
 class PublishError(Exception):
     """An error safe to display in the dashboard."""
+
+
+class GenerationFailed(PublishError):
+    """The provider explicitly confirmed that an existing task failed."""
 
 
 def supported_video_model(provider: str, model: str) -> bool:
@@ -158,6 +180,24 @@ def parse_plan(text: str) -> dict:
         fields[name] = value.strip()[:size]
     fields["tags"] = publication_tags(fields["tags"])
     return fields
+
+
+def parse_storyboard(text: str, durations: list[int]) -> dict:
+    fields = parse_plan(text)
+    raw = text.strip()
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.I)
+    data = json.loads(raw)
+    continuity, shots = data.get("continuity"), data.get("shots")
+    if not isinstance(continuity, str) or not continuity.strip() or not isinstance(shots, list) or len(shots) != len(durations):
+        raise PublishError("分镜选题缺少统一设定，或镜头数量不符合要求。")
+    parsed = []
+    for shot, duration in zip(shots, durations):
+        if (not isinstance(shot, dict) or not isinstance(shot.get("prompt"), str) or not shot["prompt"].strip()
+                or type(shot.get("duration", duration)) is not int or shot.get("duration", duration) != duration):
+            raise PublishError("分镜描述或时长无效，尚未开始付费生成。")
+        parsed.append({"prompt": shot["prompt"].strip()[:1200], "duration": duration, "phase": "queued"})
+    return {**fields, "continuity": continuity.strip()[:400], "shots": parsed}
 
 
 def parse_category(text: str, categories: list[dict]) -> dict:
@@ -290,7 +330,7 @@ class MiniMaxVideo(VideoClient):
     async def query(self, task_id: str) -> str | None:
         data = await self._request("GET", "/query/video_generation", params={"task_id": task_id})
         if data.get("status") == "Fail":
-            raise PublishError("MiniMax 生成失败。")
+            raise GenerationFailed("MiniMax 生成失败。")
         if data.get("status") == "Success":
             return self._task_id(data.get("file_id"))
         return None
@@ -312,7 +352,7 @@ class ArkVideo(VideoClient):
         data = await self._request("GET", "/contents/generations/tasks/" + quote(task_id, safe=""))
         status = data.get("status")
         if status in ("failed", "cancelled", "expired"):
-            raise PublishError(f"火山方舟任务未完成（{status}）。")
+            raise GenerationFailed(f"火山方舟任务未完成（{status}）。")
         if status == "succeeded":
             return self._task_id(data.get("content", {}).get("video_url"))
         return None
@@ -337,7 +377,7 @@ class WanVideo(VideoClient):
         output = data.get("output", {})
         status = output.get("task_status")
         if status in ("FAILED", "CANCELED"):
-            raise PublishError(f"阿里云百炼任务未完成（{status}）。")
+            raise GenerationFailed(f"阿里云百炼任务未完成（{status}）。")
         if status == "SUCCEEDED":
             return self._task_id(output.get("video_url"))
         return None
@@ -347,7 +387,7 @@ VIDEO_CLIENTS = {"minimax": MiniMaxVideo, "ark": ArkVideo, "wan": WanVideo}
 
 
 class AutoPublisher:
-    def __init__(self, data_dir: Path, plan, publish, account, upload_busy, select_category=None, preflight=None, verify_publication=None):
+    def __init__(self, data_dir: Path, plan, publish, account, upload_busy, select_category=None, preflight=None, verify_publication=None, plan_storyboard=None, compose=None):
         self.data_dir = data_dir
         self.settings_path = data_dir / "auto_publish_settings.json"
         self.jobs_path = data_dir / "auto_publish_jobs.json"
@@ -358,6 +398,8 @@ class AutoPublisher:
         self.select_category = select_category
         self.preflight = preflight
         self.verify_publication = verify_publication
+        self.plan_storyboard = plan_storyboard
+        self.compose = compose or compose_video
 
     def settings(self) -> dict:
         stored = _read(self.settings_path, {})
@@ -413,6 +455,11 @@ class AutoPublisher:
                     **{key: row.get(key, "") for key in ("id", "phase", "title", "created_at", "file", "bvid", "message", "model", "tid", "category_mode", "category_name", "category_reason", "task_id", "cleanup_state")},
                     "duration": row.get("duration", VIDEO_PROVIDERS[row.get("provider", "minimax")]["duration"]),
                     "provider": row.get("provider", "minimax"),
+                    "mode": row.get("mode", "single"), "recoverable": row.get("recoverable", False),
+                    "retry_stage": row.get("retry_stage", ""),
+                    "shot_count": len(row.get("shot_durations", [])),
+                    "shots": [{"number": index + 1, "duration": shot["duration"], "phase": shot["phase"],
+                               "task_id": shot.get("task_id", "")} for index, shot in enumerate(row.get("shots", []))],
                 }
                 for row in reversed(rows[-10:])
             ],
@@ -449,6 +496,10 @@ class AutoPublisher:
             raise PublishError("自主投稿开关格式不正确。")
         if type(settings["auto_category"]) is not bool:
             raise PublishError("自动选择投稿分区开关格式不正确。")
+        if settings["mode"] not in ("single", "storyboard"):
+            raise PublishError("请选择单段生成或分镜合成。")
+        if type(settings["total_duration"]) is not int or settings["total_duration"] not in (30, 60):
+            raise PublishError("分镜成片时长请选择 30 秒或 60 秒。")
         provider, region = settings["provider"], settings["region"]
         if not isinstance(provider, str) or provider not in VIDEO_PROVIDERS:
             raise PublishError("请选择支持的视频生成服务。")
@@ -545,6 +596,7 @@ class AutoPublisher:
 
         model = profile.get("model") or VIDEO_PROVIDERS[provider]["model"]
         duration = video_duration(provider, model, profile.get("duration", VIDEO_PROVIDERS[provider]["duration"]))
+        lengths = storyboard_lengths(provider, model, settings["total_duration"]) if settings["mode"] == "storyboard" else []
         job = {
             "id": uuid.uuid4().hex, "phase": "queued", "created_at": now.isoformat(timespec="seconds"),
             "day": today, "scheduled": not manual, "account": account, "tid": settings["tid"],
@@ -552,9 +604,33 @@ class AutoPublisher:
             "direction": settings["direction"], "key_revision": key_revision(profile["key"]),
             "provider": provider, "region": region, "model": model, "duration": duration,
             "cleanup_after_publish": True,
+            "mode": settings["mode"], "shot_durations": lengths,
         }
+        if lengths:
+            job["duration"] = sum(lengths)
         _write(self.jobs_path, [*rows, job][-60:])
         return job
+
+    def resume(self, job_id: str) -> None:
+        settings, rows = self.settings(), self.jobs()
+        job = next((row for row in rows if row["id"] == job_id), None)
+        if job is None or job.get("mode") != "storyboard" or job["phase"] != "failed" or job.get("recoverable") is not True:
+            raise PublishError("此任务不能直接重试，请先核对服务商或 B站记录。")
+        if not settings["enabled"] or self.account() != job["account"]:
+            raise PublishError("请开启自主投稿并登录任务原来的 B站账号。")
+        if any(row["phase"] in ACTIVE_PHASES for row in rows):
+            raise PublishError("已有自主投稿任务，请等它处理完。")
+        if job.get("retry_stage") in ("shot", "download"):
+            profile = settings["profiles"].get(f"{job['provider']}:{job['region']}", {})
+            if not profile.get("key") or key_revision(profile["key"]) != job.get("key_revision"):
+                raise PublishError("请恢复任务原来的服务 Key，再重试失败片段。")
+            for shot in job["shots"]:
+                if shot["phase"] == "failed":
+                    shot.update(phase="queued")
+                elif shot["phase"] == "download_failed":
+                    shot.update(phase="generating")
+        phase = "assembling" if job.get("retry_stage") == "assemble" else "storyboard"
+        self._update(rows, job, phase, recoverable=False, retry_after="", message="已加入继续处理队列，已完成的片段将保留。")
 
     @staticmethod
     def _file_identity(path: Path) -> list[int]:
@@ -563,11 +639,12 @@ class AutoPublisher:
             raise PublishError("本地成片不是普通文件，已保留供核对。")
         return [info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns]
 
-    def _cleanup_path(self, job: dict) -> Path:
+    def _cleanup_path(self, job: dict, shot_index: int | None = None) -> Path:
         folder = self.data_dir / "media"
-        name = f"ai-{job['id']}.mp4"
+        name = f"ai-{job['id']}.mp4" if shot_index is None else f"ai-{job['id']}-shot-{shot_index + 1:02d}.mp4"
+        recorded = job.get("file") if shot_index is None else job["shots"][shot_index].get("file")
         target = folder / name
-        if (job.get("file") != name or folder.is_symlink()
+        if (recorded != name or folder.is_symlink()
                 or folder.resolve() != self.data_dir.resolve() / "media"
                 or target.is_symlink() or target.resolve() != folder.resolve() / name):
             raise PublishError("本地成片路径已变化，已保留供核对。")
@@ -605,11 +682,17 @@ class AutoPublisher:
                          message="投稿已提交，等待 B站确认视频正常可访问后清理本地成片。")
             return
         try:
-            target = self._cleanup_path(job)
-            if target.exists():
-                if self._file_identity(target) != job.get("cleanup_identity"):
+            targets = [(self._cleanup_path(job), job.get("cleanup_identity"))]
+            if job.get("mode") == "storyboard":
+                for index, shot in enumerate(job["shots"]):
+                    if shot["phase"] != "done":
+                        raise PublishError("分镜记录不完整，已保留本地文件供核对。")
+                    targets.append((self._cleanup_path(job, index), shot.get("identity")))
+            for target, identity in targets:
+                if target.exists() and self._file_identity(target) != identity:
                     raise PublishError("本地成片已被修改，已保留供核对。")
-                target.unlink()
+            for target, _identity in targets:
+                target.unlink(missing_ok=True)
         except PublishError as exc:
             self._update(rows, job, "published", cleanup_state="kept", message=str(exc))
             return
@@ -618,7 +701,106 @@ class AutoPublisher:
                          message="B站视频已确认正常，本地清理暂时失败，稍后自动重试。")
             return
         self._update(rows, job, "published", cleanup_state="deleted", cleanup_retry_after="",
-                     cleaned_at=now.isoformat(), message="B站视频已确认正常，本地成片已清理。")
+                     cleaned_at=now.isoformat(), message="B站视频已确认正常，本地成片及生成片段已清理。" if job.get("mode") == "storyboard" else "B站视频已确认正常，本地成片已清理。")
+
+    async def _preflight_job(self, rows: list[dict], job: dict, now: datetime) -> bool:
+        if job.get("retry_after") and now < datetime.fromisoformat(job["retry_after"]):
+            return False
+        try:
+            if self.preflight is not None:
+                kwargs = {}
+                if job.get("mode") == "storyboard":
+                    remaining = sum(shot["phase"] != "done" for shot in job.get("shots", [])) if job.get("shots") else len(job["shot_durations"])
+                    kwargs = {"storyboard": True, "required_bytes": (remaining + 2) * MAX_VIDEO_BYTES}
+                await asyncio.wait_for(self.preflight(job["account"], **kwargs), timeout=25)
+        except Exception as exc:
+            reason = str(exc) if isinstance(exc, PublishError) else "暂时无法完成运行前检查，请稍后重试。"
+            self._update(rows, job, job["phase"], message=reason, retry_after=(now + timedelta(minutes=1)).isoformat())
+            return False
+        return self.settings()["enabled"] and self.account() == job["account"]
+
+    async def _tick_storyboard(self, rows: list[dict], job: dict, now: datetime, key: str | None) -> None:
+        shots = job["shots"]
+        if job["phase"] == "assembling":
+            try:
+                for index, shot in enumerate(shots):
+                    if self._file_identity(self._cleanup_path(job, index)) != shot.get("identity"):
+                        raise CompositionError("原始分镜已被修改，请核对或恢复后重新合成。")
+                destination = await self.compose(self.data_dir, job["id"], job["shot_durations"], MAX_VIDEO_BYTES)
+                expected = self.data_dir / "media" / f"ai-{job['id']}.mp4"
+                if destination.is_symlink() or destination.resolve() != expected.resolve():
+                    raise CompositionError("合成结果路径无效。")
+                identity = self._file_identity(destination)
+            except Exception as exc:
+                message = str(exc) if isinstance(exc, (CompositionError, PublishError)) else "分镜合成失败，请检查 FFmpeg 和原始片段后重试。"
+                self._update(rows, job, "failed", recoverable=True, retry_stage="assemble", message=message)
+                return
+            self._update(rows, job, "ready", file=destination.name, cleanup_identity=identity,
+                         recoverable=False, retry_after="", message="分镜合成完成，等待投稿。")
+            return
+        index = next((index for index, shot in enumerate(shots) if shot["phase"] != "done"), None)
+        if index is None:
+            self._update(rows, job, "assembling", message="所有分镜已生成，正在准备合成。", retry_after="")
+            return
+        shot = shots[index]
+        label = f"第 {index + 1}/{len(shots)} 段"
+        if shot["phase"] == "requesting":
+            self._update(rows, job, "review", recoverable=False, message=f"{label}受理状态不明，请到服务商核对，不会重复创建。")
+            return
+        provider, region, model = job["provider"], job["region"], job["model"]
+        if shot["phase"] == "queued":
+            if not await self._preflight_job(rows, job, now):
+                return
+            profile = self.settings()["profiles"].get(f"{provider}:{region}", {})
+            key = profile.get("key")
+            if not key or key_revision(key) != job["key_revision"]:
+                self._update(rows, job, "review", recoverable=False, message="视频服务 Key 已更换，分镜任务保留待核对。")
+                return
+            budget = 1500 if provider == "wan" and model.startswith(("wan2.6-", "wan2.5-")) else 800 if provider == "wan" else 2000
+            common = f"统一人物、场景与画风：{job['continuity']}\n{label}，时长 {shot['duration']} 秒："
+            prompt = common + shot["prompt"][:max(1, budget - len(common))]
+            shot.update(phase="requesting", submitted_at=now.isoformat())
+            self._update(rows, job, "storyboard", message=f"正在提交{label}。", retry_after="")
+            try:
+                task_id = await VIDEO_CLIENTS[provider](provider, region, key, model, duration=shot["duration"]).create(prompt)
+            except PublishError as exc:
+                shot["phase"] = "failed"
+                self._update(rows, job, "failed", recoverable=True, retry_stage="shot", message=f"{label}提交被拒绝：{exc} 已完成片段保留。")
+            except Exception:
+                shot["phase"] = "review"
+                self._update(rows, job, "review", recoverable=False, message=f"{label}受理结果不明，请到服务商核对。")
+            else:
+                shot.update(phase="generating", task_id=task_id)
+                self._update(rows, job, "storyboard", message=f"正在生成{label}。")
+            return
+        client = VIDEO_CLIENTS[provider](provider, region, key, model, duration=shot["duration"])
+        try:
+            artifact = await client.query(shot["task_id"])
+        except GenerationFailed as exc:
+            shot["phase"] = "failed"
+            self._update(rows, job, "failed", recoverable=True, retry_stage="shot", message=f"{label}生成失败：{exc} 可单独重试，已完成片段保留。")
+            return
+        except PublishError as exc:
+            self._update(rows, job, "review", recoverable=False, message=f"{label}查询受阻：{exc} 请先到服务商核对。")
+            return
+        except Exception:
+            artifact = None
+        if not artifact:
+            if now - datetime.fromisoformat(shot["submitted_at"]) >= timedelta(minutes=30):
+                self._update(rows, job, "review", recoverable=False, message=f"{label}等待超时，请到服务商核对，已完成片段保留。")
+            return
+        name = f"ai-{job['id']}-shot-{index + 1:02d}.mp4"
+        destination = self.data_dir / "media" / name
+        try:
+            if not destination.is_file():
+                await client.download(artifact, self.data_dir / f".ai-{job['id']}-shot-{index + 1:02d}.part", destination)
+            identity = self._file_identity(destination)
+        except Exception:
+            shot["phase"] = "download_failed"
+            self._update(rows, job, "failed", recoverable=True, retry_stage="download", message=f"{label}下载失败，可重新下载原任务的成片，不会重新生成。")
+            return
+        shot.update(phase="done", file=name, identity=identity)
+        self._update(rows, job, "storyboard", message=f"已完成 {index + 1}/{len(shots)} 段。")
 
     async def tick(self, now: datetime) -> None:
         await self._cleanup_published(now)
@@ -651,34 +833,29 @@ class AutoPublisher:
             self._update(rows, job, "review", message="B站账号已切换，任务暂停待核对。")
             return
         key = settings["profiles"].get(profile_name, {}).get("key")
-        if phase in ("queued", "generating") and not key:
+        needs_key = phase in ("queued", "generating") or (phase == "storyboard" and any(shot["phase"] != "done" for shot in job["shots"]))
+        if needs_key and not key:
             self._update(rows, job, "review", message=f"{spec['name']} 的 Key 已清除，请到服务商核对任务。")
             return
-        if phase in ("queued", "generating"):
+        if needs_key:
             if job.get("key_revision") and job["key_revision"] != key_revision(key):
                 self._update(rows, job, "review", message="视频服务的 Key 已更换，旧任务保留待核对；不会用新 Key 查询或重新生成。")
                 return
             if "key_revision" not in job:
                 self._update(rows, job, phase, key_revision=key_revision(key))
-        if phase in ("queued", "ready") and self.preflight is not None:
-            if job.get("retry_after") and now < datetime.fromisoformat(job["retry_after"]):
-                return
-            try:
-                await asyncio.wait_for(self.preflight(job["account"]), timeout=25)
-            except Exception as exc:
-                reason = str(exc) if isinstance(exc, PublishError) else "暂时无法完成运行前检查，请稍后重试。"
-                self._update(rows, job, phase, message=reason, retry_after=(now + timedelta(minutes=1)).isoformat())
-                return
-            latest = self.settings()
-            if not latest["enabled"] or self.account() != job["account"]:
+        if phase in ("queued", "assembling", "ready"):
+            if not await self._preflight_job(rows, job, now):
                 return
             if phase == "ready" and self.upload_busy():
                 return
         if phase == "queued":
             try:
                 recent = [row["title"] for row in rows[-13:-1] if row.get("title")]
-                duration = video_duration(provider, model, duration)
-                plan = parse_plan(await self.plan(job.get("direction", settings["direction"]), recent, duration))
+                if job.get("mode") == "storyboard":
+                    plan = parse_storyboard(await self.plan_storyboard(job["direction"], recent, job["shot_durations"]), job["shot_durations"])
+                else:
+                    duration = video_duration(provider, model, duration)
+                    plan = parse_plan(await self.plan(job.get("direction", settings["direction"]), recent, duration))
                 if plan["title"] in recent:
                     raise PublishError("选题与近期稿件重复。")
             except PublishError as exc:
@@ -709,6 +886,11 @@ class AutoPublisher:
             if key_revision(key) != job["key_revision"]:
                 self._update(rows, job, "review", message="选题期间视频服务的 Key 已更换，任务已停止，未提交视频生成。")
                 return
+            if job.get("mode") == "storyboard":
+                self._update(rows, job, "storyboard", title=plan["title"], desc=plan["desc"], tags=plan["tags"],
+                             prompt=plan["prompt"], continuity=plan["continuity"], shots=plan["shots"], recoverable=False,
+                             retry_after="", message=f"已规划 {len(plan['shots'])} 个分镜，等待逐段生成。", **category)
+                return
             self._update(
                 rows, job, "requesting", title=plan["title"], desc=plan["desc"], tags=plan["tags"],
                 provider=provider, region=region, model=model, submitted_at=now.isoformat(),
@@ -723,6 +905,10 @@ class AutoPublisher:
                 self._update(rows, job, "review", message=f"{spec['name']} 受理状态不明，请核对生成记录。")
             else:
                 self._update(rows, job, "generating", task_id=task_id)
+            return
+
+        if phase in ("storyboard", "assembling"):
+            await self._tick_storyboard(rows, job, now, key)
             return
 
         if phase == "generating":
