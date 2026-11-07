@@ -261,8 +261,14 @@ class VideoClient:
         results = {}
         for page in range(1, 11):
             params = {"capabilities": "VG", "page_no": page, "page_size": 100} if self.provider == "wan" else {}
-            # MiniMax's OpenAI-compatible listing does not return base_resp.
+            # OpenAI-compatible responses may omit base_resp, but explicit
+            # MiniMax errors (including HTTP 200 errors) must still be rejected.
             data = await VideoClient._request(self, "GET", "/models", params=params)
+            if self.provider == "minimax" and "base_resp" in data:
+                result = data["base_resp"]
+                status = result.get("status_code") if isinstance(result, dict) else None
+                if type(status) is not int or status != 0:
+                    raise PublishError("MiniMax 未能返回模型列表，请检查 Key 与地区。")
             if data.get("code") or data.get("success") is False or data.get("error"):
                 raise PublishError(f"{self.name} 未能返回模型列表，请检查 Key 与地区。")
             output = data.get("output", {})
@@ -487,7 +493,10 @@ class AutoPublisher:
             raise
         except Exception as exc:
             raise PublishError("读取模型列表失败，请检查服务商连接后重试。") from exc
-        return {"models": models}
+        result = {"models": models}
+        if provider == "minimax" and not models:
+            result["message"] = "MiniMax 列表接口已响应，但未列出海螺视频模型。可直接选择已适配模型并保存；视频生成权限尚未验证。"
+        return result
 
     def save_settings(self, payload: dict, now: datetime) -> None:
         current = self.settings()

@@ -167,6 +167,18 @@ class AutoPublishTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((job["provider"], job["task_id"]), ("ark", "ark-task"))
         self.create.assert_awaited_once()
 
+    async def test_minimax_text_only_listing_explains_video_permission_is_unverified(self):
+        self.configure()
+        before = self.worker.settings_path.read_bytes()
+        with patch.object(auto_publish.VideoClient, "_request", AsyncMock(return_value={"data": [{"id": "MiniMax-M3"}]})) as request:
+            result = await self.worker.models({"provider": "minimax", "region": "cn"})
+        self.assertEqual(result["models"], [])
+        self.assertIn("未列出海螺", result["message"])
+        self.assertIn("权限尚未验证", result["message"])
+        self.assertEqual(request.await_args.args[1:], ("GET", "/models"))
+        self.assertEqual(self.worker.settings_path.read_bytes(), before)
+        self.create.assert_not_awaited()
+
     async def test_region_switch_does_not_reuse_a_different_regions_key(self):
         self.configure(region="cn")
         with self.assertRaises(auto_publish.PublishError):
@@ -724,6 +736,21 @@ class ProviderContractTests(unittest.IsolatedAsyncioTestCase):
             await client.create("鱼吃饭")
         self.assertEqual(submit.await_args.kwargs["json"]["model"], "T2V-01")
         self.assertEqual(submit.await_args.kwargs["json"]["resolution"], "720P")
+
+    async def test_minimax_listing_rejects_http_200_api_errors_without_exposing_response(self):
+        client = auto_publish.MiniMaxVideo("minimax", "cn", "fake-key", "T2V-01")
+        for response in (
+            {"base_resp": {"status_code": 1004, "status_msg": "sensitive-response"}, "data": []},
+            {"error": {"message": "sensitive-response"}, "data": []},
+            {"base_resp": None, "data": []},
+            {"base_resp": {"status_code": False}, "data": []},
+        ):
+            with self.subTest(response=response), patch.object(auto_publish.VideoClient, "_request", AsyncMock(return_value=response)):
+                with self.assertRaises(auto_publish.PublishError) as error:
+                    await client.models()
+                self.assertNotIn("sensitive-response", str(error.exception))
+        with patch.object(auto_publish.VideoClient, "_request", AsyncMock(return_value={"base_resp": {"status_code": 0}, "data": []})):
+            self.assertEqual(await client.models(), [])
 
     async def test_wan_model_listing_reads_all_pages_and_filters_unsupported_protocols(self):
         client = auto_publish.WanVideo("wan", "cn", "fake-key", "wan2.6-t2v", "workspace-123")

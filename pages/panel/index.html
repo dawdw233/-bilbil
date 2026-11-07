@@ -3059,7 +3059,10 @@ function resetAutoPublishModels() {
   const profile = autoPublishState.profiles[provider + ":" + region];
   const model = profile?.model || "";
   setAutoPublishModelOptions(model, []);
-  $("u-auto-model-tip").textContent = "可直接选择已适配模型，或读取接口列表；模型选项不代表当前 Key 已开通权限。";
+  $("u-auto-model-tip").textContent = provider === "minimax"
+    ? "MiniMax 列表接口可能不包含海螺视频模型；可直接选择已适配模型。检查连接不会生成视频，也不验证视频权限。"
+    : "可直接选择已适配模型，或读取接口列表；模型选项不代表当前 Key 已开通权限。";
+  $("u-auto-model-read").textContent = provider === "minimax" ? "检查连接" : "读取模型";
   $("u-auto-model-read").disabled = false;
 }
 
@@ -3111,7 +3114,9 @@ async function readAutoPublishModels() {
   const provider = $("u-auto-provider").value;
   const region = $("u-auto-region").value;
   $("u-auto-model-read").disabled = true;
-  $("u-auto-model-tip").textContent = "正在读取服务商的文生视频模型…";
+  $("u-auto-model-tip").textContent = provider === "minimax"
+    ? "正在检查 MiniMax 模型列表接口连接，不会生成视频…"
+    : "正在读取服务商的文生视频模型…";
   try {
     const data = await api("upload/auto/models", {
       provider, region, api_key: $("u-auto-key").value.trim(),
@@ -3122,10 +3127,10 @@ async function readAutoPublishModels() {
     setAutoPublishModelOptions($("u-auto-model").value, data.models);
     $("u-auto-model-tip").textContent = data.models.length
       ? `从接口读到 ${data.models.length} 个已适配的文生视频模型，选择后保存生效；仍需对应模型权限。`
-      : "接口没有列出已适配的视频模型；可直接选择标注「已适配」的模型，实际可用性取决于 Key 权限。";
+      : data.message || "接口没有列出已适配的视频模型；可直接选择标注「已适配」的模型，实际可用性取决于 Key 权限。";
     syncAutoPublishActions();
   } catch (error) {
-    if (requestId === autoModelRequest) $("u-auto-model-tip").textContent = "读取失败：" + (error?.message || error);
+    if (requestId === autoModelRequest) $("u-auto-model-tip").textContent = (provider === "minimax" ? "连接检查失败：" : "读取失败：") + (error?.message || error);
   } finally {
     if (requestId === autoModelRequest) $("u-auto-model-read").disabled = false;
   }

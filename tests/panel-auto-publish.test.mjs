@@ -71,6 +71,31 @@ test("接口没有返回视频模型时，保留已适配选项并明确权限�
   assert.equal(nodes["u-auto-model"].value,"T2V-01");
 });
 
+test("MiniMax 连接检查区分未列出视频模型和接口拒绝，不把其他服务改为连接检查", async () => {
+  const nodes = Object.fromEntries(["provider", "region", "model", "model-tip", "model-read", "key", "workspace"].map(name => ["u-auto-" + name, {value:""}]));
+  nodes["u-auto-provider"].value = "minimax";
+  nodes["u-auto-region"].value = "cn";
+  let calls = 0;
+  const message = "MiniMax 列表接口已响应，但未列出海螺视频模型。视频生成权限尚未验证。";
+  const context = {$:id=>nodes[id], autoModelRequest:0,
+    autoPublishState:{profiles:{}}, setAutoPublishModelOptions(){}, syncAutoPublishActions(){},
+    api:async path=>{assert.equal(path,"upload/auto/models");calls++;return {models:[],message};}};
+  vm.runInNewContext(html.slice(html.indexOf("function resetAutoPublishModels()"), html.indexOf("function setAutoPublishModelOptions("))
+    + html.slice(html.indexOf("async function readAutoPublishModels()"), html.indexOf("function syncAutoPublishActions()")), context);
+  context.resetAutoPublishModels();
+  assert.equal(nodes["u-auto-model-read"].textContent,"检查连接");
+  await context.readAutoPublishModels();
+  assert.equal(calls,1);
+  assert.equal(nodes["u-auto-model-tip"].textContent,message);
+  assert.equal(nodes["u-auto-model-read"].disabled,false);
+  context.api = async()=>{throw new Error("请检查 Key 与地区");};
+  await context.readAutoPublishModels();
+  assert.match(nodes["u-auto-model-tip"].textContent,/连接检查失败：请检查 Key 与地区/);
+  nodes["u-auto-provider"].value="wan";
+  context.resetAutoPublishModels();
+  assert.equal(nodes["u-auto-model-read"].textContent,"读取模型");
+});
+
 test("切换到短时长模型时收回不支持的选项，不把较长时长带入新模型", () => {
   let actual=[];
   const nodes={"u-auto-provider":{value:"minimax"},"u-auto-model":{value:"MiniMax-Hailuo-2.3"},"u-auto-duration":{value:"10",replaceChildren:(...items)=>actual=items},"u-auto-duration-tip":{}};
