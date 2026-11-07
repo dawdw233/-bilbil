@@ -574,8 +574,12 @@ class AutoPublisher:
         return target
 
     async def _cleanup_published(self, now: datetime) -> None:
+        account = self.account()
+        if not account:
+            return
         rows = self.jobs()
         job = next((row for row in rows if row["phase"] == "published"
+                    and row.get("account") == account
                     and row.get("cleanup_after_publish") is True and row.get("cleanup_state") == "pending"
                     and (not row.get("cleanup_retry_after") or now >= datetime.fromisoformat(row["cleanup_retry_after"]))), None)
         if job is None or self.verify_publication is None or self.upload_busy():

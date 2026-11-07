@@ -550,6 +550,21 @@ class AutoPublishTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(media.exists())
         self.assertEqual(self.worker.jobs()[0]["cleanup_state"], "pending")
 
+    async def test_other_accounts_pending_video_does_not_block_current_accounts_cleanup(self):
+        original = await self.prepare_cleanup()
+        rows = self.worker.jobs()
+        other_id = "f" * 32
+        current_video = self.path / "media" / f"ai-{other_id}.mp4"
+        current_video.write_bytes(b"another generated video")
+        rows.append({**rows[0], "id": other_id, "account": "88", "file": current_video.name,
+                     "bvid": "BV0987654321", "cleanup_identity": self.worker._file_identity(current_video)})
+        self.worker.jobs_path.write_text(json.dumps(rows), encoding="utf-8")
+        self.account = "88"
+        await self.worker.tick(self.now)
+        self.assertTrue(original.exists())
+        self.assertFalse(current_video.exists())
+        self.assertEqual(self.worker.verify_publication.await_args.args[0]["account"], "88")
+
 
 class PreflightContractTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
