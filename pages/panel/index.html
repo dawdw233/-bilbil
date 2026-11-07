@@ -1061,6 +1061,9 @@
                 <input id="u-auto-workspace" maxlength="63" autocomplete="off" placeholder="填写控制台的业务空间 ID" aria-describedby="u-auto-workspace-tip" />
                 <span class="tip" id="u-auto-workspace-tip">无需填写网址；留空也可选择已适配模型，实际可用性取决于 Key 的权限。</span>
               </label>
+              <label class="field"><span class="lbl">视频时长</span><select id="u-auto-duration" aria-describedby="u-auto-duration-tip"></select>
+                <span class="tip" id="u-auto-duration-tip">根据所选模型显示可用时长，机器人会按此时长策划视频。</span>
+              </label>
               <label class="field"><span class="lbl">自动运行时间（北京时间）</span><input id="u-auto-time" type="time" required /></label>
               <label class="field"><span class="lbl">每日生成上限（支）</span>
                 <input id="u-auto-limit" type="number" min="1" max="5" step="1" required />
@@ -3069,6 +3072,20 @@ function setAutoPublishModelOptions(selected, discovered) {
   }
   $("u-auto-model").replaceChildren(...options);
   $("u-auto-model").value = selected;
+  syncAutoPublishDuration();
+}
+
+function syncAutoPublishDuration(preferred = Number($("u-auto-duration").value)) {
+  const spec = autoPublishState.providers[$("u-auto-provider").value];
+  const model = $("u-auto-model").value || spec.model;
+  const options = spec.duration_rules?.find(rule => model.startsWith(rule.prefix))?.options
+    || spec.duration_fallback || [spec.duration];
+  const selected = options.includes(preferred) ? preferred : spec.duration;
+  $("u-auto-duration").replaceChildren(...options.map(seconds => new Option(seconds + " 秒", String(seconds))));
+  $("u-auto-duration").value = String(selected);
+  $("u-auto-duration-tip").textContent = options.length === 1
+    ? `当前模型仅支持 ${selected} 秒。切换模型可选择其他时长。`
+    : `机器人会按所选时长策划视频；计费以服务商规则为准。`;
 }
 
 function selectAutoPublishProfile() {
@@ -3079,6 +3096,7 @@ function selectAutoPublishProfile() {
   $("u-auto-workspace").value = profile?.workspace || "";
   $("u-auto-workspace-field").classList.toggle("hide", provider !== "wan");
   resetAutoPublishModels();
+  syncAutoPublishDuration(profile?.duration || autoPublishState.providers[provider].duration);
   syncAutoPublishActions();
   if (profile?.key_configured && (provider !== "wan" || $("u-auto-workspace").value)) readAutoPublishModels();
 }
@@ -3119,7 +3137,8 @@ function syncAutoPublishActions() {
     || $("u-auto-category").checked !== (settings.auto_category === true) || Number($("u-auto-tid").value) !== settings.tid
     || $("u-auto-direction").value.trim() !== settings.direction || $("u-auto-time").value !== settings.time
     || $("u-auto-limit").valueAsNumber !== settings.limit || $("u-auto-workspace").value.trim() !== (profile?.workspace || "");
-  $("u-auto-draft-hint").textContent = changed ? "设置有未保存的修改，请先保存，再立即生成。" : "";
+  const durationChanged = Number($("u-auto-duration").value) !== (profile?.duration || autoPublishState.providers[provider].duration);
+  $("u-auto-draft-hint").textContent = changed || durationChanged ? "设置有未保存的修改，请先保存，再立即生成。" : "";
   const autoCategory = $("u-auto-category").checked;
   $("u-auto-tid-label").textContent = autoCategory ? "备用投稿分区" : "投稿分区";
   $("u-auto-tid-tip").textContent = autoCategory
@@ -3129,8 +3148,8 @@ function syncAutoPublishActions() {
     : "填写该服务和地区的 Key。密钥仅保存在服务器。";
   $("u-auto-clear").disabled = !configured;
   const active = jobs.some(job => autoPublishActive.includes(job.phase));
-  $("u-auto-start").disabled = !settings.enabled || !configured || !logged_in || active || changed;
-  $("u-auto-start").title = changed ? "请先保存自主投稿设置" : logged_in ? "" : "请先在「刷视频」页登录 B站";
+  $("u-auto-start").disabled = !settings.enabled || !configured || !logged_in || active || changed || durationChanged;
+  $("u-auto-start").title = changed || durationChanged ? "请先保存自主投稿设置" : logged_in ? "" : "请先在「刷视频」页登录 B站";
 }
 
 function renderAutoPublish(data, fill) {
@@ -3158,7 +3177,7 @@ function renderAutoPublish(data, fill) {
     const categoryName = job.category_name || Array.from($("u-auto-tid").options).find(option => Number(option.value) === job.tid)?.textContent || `分区 ${job.tid}`;
     const category = categoryMode ? `<div class="sub">${esc(categoryMode + " · " + categoryName)}</div><div class="sub">${esc(job.category_reason || "")}</div>` : "";
     const task = job.task_id ? `<div class="sub">服务商任务：${esc(job.task_id)}</div>` : "";
-    return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc([providerName, job.model].filter(Boolean).join(" · "))}</div>${category}${task}</td><td>${esc(status)}</td><td>${video || esc([job.file, job.message].filter(Boolean).join(" · ") || "—")}</td></tr>`;
+    return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc([providerName, job.model, job.duration ? "计划 " + job.duration + " 秒" : ""].filter(Boolean).join(" · "))}</div>${category}${task}</td><td>${esc(status)}</td><td>${video || esc([job.file, job.message].filter(Boolean).join(" · ") || "—")}</td></tr>`;
   }).join("") : '<tr><td colspan="4" class="empty">还没有自主投稿任务</td></tr>';
   const newest = jobs.find(job => job.file)?.file || "";
   if (!fill && newest !== autoPublishFile) loadUploadFiles();
@@ -3205,6 +3224,7 @@ $("u-auto-form").onsubmit = (event) => {
     provider: $("u-auto-provider").value,
     region: $("u-auto-region").value,
     model: $("u-auto-model").value.trim(),
+    duration: Number($("u-auto-duration").value),
     workspace: $("u-auto-workspace").value.trim(),
     time: $("u-auto-time").value,
     limit: $("u-auto-limit").valueAsNumber,
@@ -3231,7 +3251,11 @@ $("u-auto-key").oninput = () => {
 };
 $("u-auto-key").onchange = readAutoPublishModels;
 $("u-auto-model-read").onclick = readAutoPublishModels;
-$("u-auto-model").onchange = syncAutoPublishActions;
+$("u-auto-model").onchange = () => {
+  syncAutoPublishDuration();
+  syncAutoPublishActions();
+};
+$("u-auto-duration").onchange = syncAutoPublishActions;
 $("u-auto-form").addEventListener("input", syncAutoPublishActions);
 $("u-auto-workspace").oninput = () => {
   ++autoModelRequest;

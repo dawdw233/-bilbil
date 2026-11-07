@@ -282,6 +282,41 @@ class AutoPublishTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(profiles["minimax:cn"]["workspace"], "")
         self.assertNotIn("minimax-key", json.dumps(profiles))
 
+    async def test_duration_is_saved_pinned_and_used_for_planning(self):
+        self.configure(duration=10)
+        self.worker.enqueue(self.now, manual=True)
+        self.worker.save_settings({"duration": 6}, self.now)
+        await self.worker.tick(self.now)
+        self.assertEqual(self.plan.await_args.args[2], 10)
+        self.assertEqual(self.worker.state()["jobs"][0]["duration"], 10)
+        self.assertEqual(self.new_worker().jobs()[0]["duration"], 10)
+
+    async def test_unsupported_duration_is_rejected_before_creating_a_job(self):
+        for duration in (True, "10", 0, 7, 30):
+            with self.subTest(duration=duration), self.assertRaises(auto_publish.PublishError):
+                self.configure(duration=duration)
+        self.create.assert_not_awaited()
+        self.assertEqual(self.worker.jobs(), [])
+
+    async def test_duration_profiles_and_legacy_jobs_keep_their_own_defaults(self):
+        self.configure(duration=10)
+        self.worker.enqueue(self.now, manual=True)
+        rows = self.worker.jobs()
+        rows[0].pop("duration")
+        self.worker.jobs_path.write_text(json.dumps(rows), encoding="utf-8")
+        self.worker.save_settings({"provider": "wan", "api_key": "wan-key", "duration": 15}, self.now)
+        self.assertEqual(self.worker.state()["profiles"]["minimax:cn"]["duration"], 10)
+        self.assertEqual(self.worker.state()["profiles"]["wan:cn"]["duration"], 15)
+        await self.worker.tick(self.now)
+        self.assertEqual(self.plan.await_args.args[2], 6)
+
+    async def test_model_change_does_not_keep_an_incompatible_duration(self):
+        self.configure(duration=10)
+        with self.assertRaises(auto_publish.PublishError):
+            self.worker.save_settings({"model": "T2V-01", "duration": 10}, self.now)
+        self.worker.save_settings({"model": "T2V-01"}, self.now)
+        self.assertEqual(self.worker.state()["profiles"]["minimax:cn"]["duration"], 6)
+
     async def test_legacy_key_binding_happens_before_key_is_overwritten(self):
         self.configure()
         self.worker.enqueue(self.now, manual=True)
@@ -463,6 +498,21 @@ class CategoryContractTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ProviderContractTests(unittest.IsolatedAsyncioTestCase):
+    async def test_selected_duration_reaches_all_provider_requests(self):
+        for provider, model, duration in (("minimax", "MiniMax-Hailuo-2.3", 10), ("ark", "doubao-seedance-2-5-260628", 30), ("wan", "wan2.6-t2v", 15)):
+            with self.subTest(provider=provider):
+                client = auto_publish.VIDEO_CLIENTS[provider](provider, "cn", "fake-key", model, duration=duration)
+                request = AsyncMock(return_value={"task_id": "task", "id": "task", "output": {"task_id": "task"}})
+                with patch.object(client, "_request", request):
+                    await client.create("鱼吃饭")
+                body = request.await_args.kwargs["json"]
+                self.assertEqual((body["parameters"] if provider == "wan" else body)["duration"], duration)
+
+    async def test_model_specific_duration_limits(self):
+        for provider, model, duration in (("minimax", "T2V-01", 10), ("wan", "wan2.5-t2v-preview", 15), ("wan", "wan2.2-t2v-plus", 10), ("ark", "doubao-seedance-2-0-260128", 30)):
+            with self.subTest(model=model), self.assertRaises(auto_publish.PublishError):
+                auto_publish.VIDEO_CLIENTS[provider](provider, "cn", "fake-key", model, duration=duration)
+
     async def test_ark_submits_configured_model_and_reads_result_url(self):
         client = auto_publish.ArkVideo("ark", "cn", "fake-key", "ep-custom")
         request = AsyncMock(side_effect=[

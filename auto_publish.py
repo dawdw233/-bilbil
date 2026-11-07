@@ -46,6 +46,29 @@ VIDEO_MODELS = {
     "wan": ("wan2.6-t2v", "wan2.5-t2v-preview", "wan2.2-t2v-plus", "wanx2.1-t2v-turbo", "wanx2.1-t2v-plus"),
     "ark": (VIDEO_PROVIDERS["ark"]["model"],),
 }
+DURATION_RULES = {
+    "minimax": [("MiniMax-Hailuo-", [6, 10]), ("T2V-", [6])],
+    "wan": [("wan2.6-", [5, 10, 15]), ("wan2.5-", [5, 10])],
+    "ark": [
+        ("doubao-seedance-2-5-", list(range(4, 31))),
+        ("doubao-seedance-2-0-", list(range(4, 16))),
+        ("doubao-seedance-1-0-", list(range(2, 13))),
+    ],
+}
+
+
+def duration_options(provider: str, model: str) -> list[int]:
+    for prefix, options in DURATION_RULES[provider]:
+        if model.startswith(prefix):
+            return list(options)
+    # Opaque Ark endpoint IDs do not disclose their underlying model.
+    return [5, 10] if provider == "ark" else [VIDEO_PROVIDERS[provider]["duration"]]
+
+
+def video_duration(provider: str, model: str, value) -> int:
+    if type(value) is not int or value not in duration_options(provider, model):
+        raise PublishError("所选视频模型不支持这个时长，请重新选择。")
+    return value
 
 
 class PublishError(Exception):
@@ -155,11 +178,11 @@ def parse_category(text: str, categories: list[dict]) -> dict:
 
 
 class VideoClient:
-    def __init__(self, provider: str, region: str, key: str, model: str, workspace: str = ""):
+    def __init__(self, provider: str, region: str, key: str, model: str, workspace: str = "", duration: int | None = None):
         spec = VIDEO_PROVIDERS[provider]
         self.name = spec["name"]
         self.provider = provider
-        self.duration = spec["duration"]
+        self.duration = video_duration(provider, model, spec["duration"] if duration is None else duration)
         self.model = model
         self.base_url = spec["regions"][region][1]
         self.headers = {"Authorization": f"Bearer {key}"}
@@ -367,12 +390,18 @@ class AutoPublisher:
                 name: {
                     "name": spec["name"], "model": spec["model"], "duration": spec["duration"],
                     "models": list(VIDEO_MODELS[name]),
+                    "duration_rules": [{"prefix": prefix, "options": options} for prefix, options in DURATION_RULES[name]],
+                    "duration_fallback": duration_options(name, ""),
                     "regions": {region: label for region, (label, _) in spec["regions"].items()},
                 }
                 for name, spec in VIDEO_PROVIDERS.items()
             },
             "profiles": {
-                name: {"key_configured": bool(profile.get("key")), "model": profile.get("model", ""), "workspace": profile.get("workspace", "")}
+                name: {
+                    "key_configured": bool(profile.get("key")), "model": profile.get("model", ""),
+                    "workspace": profile.get("workspace", ""),
+                    "duration": profile.get("duration", VIDEO_PROVIDERS[name.split(":")[0]]["duration"]),
+                }
                 for name, profile in settings["profiles"].items()
             },
             "key_configured": bool(settings["profiles"].get(f"{settings['provider']}:{settings['region']}", {}).get("key")),
@@ -380,6 +409,7 @@ class AutoPublisher:
             "jobs": [
                 {
                     **{key: row.get(key, "") for key in ("id", "phase", "title", "created_at", "file", "bvid", "message", "model", "tid", "category_mode", "category_name", "category_reason", "task_id")},
+                    "duration": row.get("duration", VIDEO_PROVIDERS[row.get("provider", "minimax")]["duration"]),
                     "provider": row.get("provider", "minimax"),
                 }
                 for row in reversed(rows[-10:])
@@ -443,11 +473,16 @@ class AutoPublisher:
             raise PublishError("请选择有效的视频模型。")
         if model and not supported_video_model(provider, model):
             raise PublishError("该模型尚未适配当前文生视频接口，请从读取结果中选择。")
+        effective_model = model or spec["model"]
+        duration = payload.get("duration", profile.get("duration", spec["duration"]))
+        if "duration" not in payload and duration not in duration_options(provider, effective_model):
+            duration = spec["duration"]
+        duration = video_duration(provider, effective_model, duration)
         key = "" if remove else supplied or profile.get("key", "")
         if settings["enabled"] and not key:
             raise PublishError("先填写所选服务的 API Key，再开启自主投稿。")
         workspace = workspace_id(payload.get("workspace", profile.get("workspace", ""))) if provider == "wan" else ""
-        profiles[profile_name] = {"key": key, "model": model, "workspace": workspace}
+        profiles[profile_name] = {"key": key, "model": model, "workspace": workspace, "duration": duration}
         settings["profiles"] = profiles
         settings["schedule_after"] = current["schedule_after"]
         if settings["enabled"] and (
@@ -506,12 +541,14 @@ class AutoPublisher:
             ):
                 return None
 
+        model = profile.get("model") or VIDEO_PROVIDERS[provider]["model"]
+        duration = video_duration(provider, model, profile.get("duration", VIDEO_PROVIDERS[provider]["duration"]))
         job = {
             "id": uuid.uuid4().hex, "phase": "queued", "created_at": now.isoformat(timespec="seconds"),
             "day": today, "scheduled": not manual, "account": account, "tid": settings["tid"],
             "auto_category": settings["auto_category"],
             "direction": settings["direction"], "key_revision": key_revision(profile["key"]),
-            "provider": provider, "region": region, "model": profile.get("model") or VIDEO_PROVIDERS[provider]["model"],
+            "provider": provider, "region": region, "model": model, "duration": duration,
         }
         _write(self.jobs_path, [*rows, job][-60:])
         return job
@@ -534,6 +571,7 @@ class AutoPublisher:
         region = job.get("region", settings["region"] if settings["provider"] == provider else "cn")
         profile_name = f"{provider}:{region}"
         model = job.get("model") or spec["model"]
+        duration = job.get("duration", spec["duration"])
         if phase in ("requesting", "uploading"):
             service = spec["name"] if phase == "requesting" else "B站"
             self._update(rows, job, "review", message=f"上次提交未能确认，请到{service}核对。")
@@ -571,7 +609,8 @@ class AutoPublisher:
         if phase == "queued":
             try:
                 recent = [row["title"] for row in rows[-13:-1] if row.get("title")]
-                plan = parse_plan(await self.plan(job.get("direction", settings["direction"]), recent, spec["duration"]))
+                duration = video_duration(provider, model, duration)
+                plan = parse_plan(await self.plan(job.get("direction", settings["direction"]), recent, duration))
                 if plan["title"] in recent:
                     raise PublishError("选题与近期稿件重复。")
             except PublishError as exc:
@@ -609,7 +648,7 @@ class AutoPublisher:
                 **category,
             )
             try:
-                task_id = await VIDEO_CLIENTS[provider](provider, region, key, model).create(plan["prompt"])
+                task_id = await VIDEO_CLIENTS[provider](provider, region, key, model, duration=duration).create(plan["prompt"])
             except PublishError as exc:
                 self._update(rows, job, "failed", message=str(exc))
             except Exception:
