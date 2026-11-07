@@ -234,6 +234,7 @@ class BiliScrollPlugin(Star):
             ("upload/start", self._api_upload_start, ["POST"], "开始投稿"),
             ("upload/status", self._api_upload_status, ["GET"], "投稿进度"),
             ("upload/auto/state", self._api_auto_publish_state, ["GET"], "自主投稿设置与记录"),
+            ("upload/auto/models", self._api_auto_publish_models, ["POST"], "读取可选视频模型"),
             ("upload/auto/save", self._api_auto_publish_save, ["POST"], "保存自主投稿设置"),
             ("upload/auto/start", self._api_auto_publish_start, ["POST"], "立即自主生成并投稿"),
             ("rhythm/state", self._api_rhythm_state, ["GET"], "作息状态"),
@@ -1437,6 +1438,15 @@ class BiliScrollPlugin(Star):
     async def _api_auto_publish_state(self):
         try:
             return json_response(self._auto_publish.state())
+        except PublishError as exc:
+            return error_response(str(exc))
+
+    async def _api_auto_publish_models(self):
+        payload = await request.json(default={})
+        if not isinstance(payload, dict):
+            return error_response("请求体必须为 JSON 对象")
+        try:
+            return json_response(await self._auto_publish.models(payload))
         except PublishError as exc:
             return error_response(str(exc))
 

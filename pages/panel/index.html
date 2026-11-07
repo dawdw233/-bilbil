@@ -136,6 +136,9 @@
   .sec.collapsible > .sec-head:hover h2 { color: var(--accent); }
   .caret { display: inline-block; width: 10px; font-size: 10px; color: #88a3b7; transform: rotate(0deg); transition: transform var(--ease); }
   .sec.collapsible:not(.collapsed) > .sec-head .caret { transform: rotate(90deg); }
+  .video-model-picker { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .video-model-picker select { flex: 1; width: 0; }
+  .video-model-picker button { flex-shrink: 0; padding: 8px 12px; }
   #sec-auto-publish .panel + .panel { margin-top: 12px; }
   .sec.collapsible.collapsed > .sec-body { display: none; }
   .panel { border: 1px solid #ffffffcf; border-radius: var(--r); background: var(--surface); box-shadow: var(--shadow); padding: 22px 24px; }
@@ -1046,10 +1049,14 @@
                 <input id="u-auto-key" type="password" autocomplete="off" maxlength="512" aria-describedby="u-auto-key-state" />
                 <span class="tip" id="u-auto-key-state">正在读取配置…</span>
               </label>
-              <label class="field"><span class="lbl">视频模型</span>
-                <input id="u-auto-model" maxlength="128" aria-describedby="u-auto-model-tip" />
-                <span class="tip" id="u-auto-model-tip"></span>
-              </label>
+              <div class="field">
+                <label class="lbl" for="u-auto-model">视频模型</label>
+                <div class="video-model-picker">
+                  <select id="u-auto-model" aria-describedby="u-auto-model-tip"></select>
+                  <button id="u-auto-model-read" type="button">读取模型</button>
+                </div>
+                <span class="tip" id="u-auto-model-tip" role="status"></span>
+              </div>
               <label class="field"><span class="lbl">自动运行时间（北京时间）</span><input id="u-auto-time" type="time" required /></label>
               <label class="field"><span class="lbl">每日生成上限（支）</span>
                 <input id="u-auto-limit" type="number" min="1" max="5" step="1" required />
@@ -3016,6 +3023,7 @@ let autoPublishRequest = 0;
 let autoPublishReading = false;
 let autoPublishSaving = false;
 let autoPublishState = null;
+let autoModelRequest = 0;
 $("u-auto-tid").innerHTML = $("u-tid").innerHTML;
 
 function setAutoPublishRegions(region) {
@@ -3026,16 +3034,58 @@ function setAutoPublishRegions(region) {
   selectAutoPublishProfile();
 }
 
-function selectAutoPublishProfile() {
+function resetAutoPublishModels() {
   const provider = $("u-auto-provider").value;
+  const region = $("u-auto-region").value;
   const spec = autoPublishState.providers[provider];
-  const profile = autoPublishState.profiles[provider + ":" + $("u-auto-region").value];
+  const profile = autoPublishState.profiles[provider + ":" + region];
+  const model = profile?.model || "";
+  const label = model ? "当前保存 · " + model : "默认配置 · " + spec.model;
+  $("u-auto-model").replaceChildren(new Option(label, model));
+  $("u-auto-model-tip").textContent = "读取接口返回的模型列表后，可以在这里选择。";
+  $("u-auto-model-read").disabled = false;
+}
+
+function selectAutoPublishProfile() {
+  ++autoModelRequest;
   $("u-auto-key").value = "";
-  $("u-auto-model").value = profile?.model || "";
-  $("u-auto-model").placeholder = spec.model;
-  $("u-auto-model").readOnly = provider !== "ark";
-  $("u-auto-model-tip").textContent = provider === "ark" ? "留空使用默认模型，也可填写方舟的文生视频模型或推理接入点 ID。" : `使用 ${spec.model}，生成 ${spec.duration} 秒视频。`;
+  resetAutoPublishModels();
   syncAutoPublishActions();
+  const profile = autoPublishState.profiles[$("u-auto-provider").value + ":" + $("u-auto-region").value];
+  if (profile?.key_configured) readAutoPublishModels();
+}
+
+async function readAutoPublishModels() {
+  const requestId = ++autoModelRequest;
+  const provider = $("u-auto-provider").value;
+  const region = $("u-auto-region").value;
+  const selected = $("u-auto-model").value;
+  $("u-auto-model-read").disabled = true;
+  $("u-auto-model-tip").textContent = "正在读取服务商的文生视频模型…";
+  try {
+    const data = await api("upload/auto/models", {
+      provider, region, api_key: $("u-auto-key").value.trim(),
+    });
+    if (requestId !== autoModelRequest) return;
+    if (!Array.isArray(data.models)) throw new Error("服务商未返回有效模型列表");
+    const options = data.models.map(model => new Option(
+      model.name && model.name !== model.id ? model.name + " · " + model.id : model.id, model.id,
+    ));
+    if (!data.models.some(model => model.id === selected)) {
+      const spec = autoPublishState.providers[provider];
+      options.unshift(new Option(selected ? "当前保存 · " + selected : "默认配置 · " + spec.model, selected));
+    }
+    $("u-auto-model").replaceChildren(...options);
+    $("u-auto-model").value = selected;
+    $("u-auto-model-tip").textContent = data.models.length
+      ? `从接口读到 ${data.models.length} 个已适配的文生视频模型，选择后保存生效。`
+      : "接口未返回已适配的文生视频模型。请核对服务商的模型列表和权限。";
+    syncAutoPublishActions();
+  } catch (error) {
+    if (requestId === autoModelRequest) $("u-auto-model-tip").textContent = "读取失败：" + (error?.message || error);
+  } finally {
+    if (requestId === autoModelRequest) $("u-auto-model-read").disabled = false;
+  }
 }
 
 function syncAutoPublishActions() {
@@ -3074,7 +3124,7 @@ function renderAutoPublish(data, fill) {
     const status = (!settings.enabled && autoPublishActive.includes(job.phase) ? "已暂停 · " : "") + (autoPublishPhases[job.phase] || "未知");
     const video = /^BV[0-9A-Za-z]{10}$/.test(job.bvid) ? `<a href="https://www.bilibili.com/video/${job.bvid}" target="_blank" rel="noreferrer">${job.bvid}</a>` : "";
     const providerName = providers[job.provider]?.name || "";
-    return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc(providerName)}</div></td><td>${esc(status)}</td><td>${video || esc([job.file, job.message].filter(Boolean).join(" · ") || "—")}</td></tr>`;
+    return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc([providerName, job.model].filter(Boolean).join(" · "))}</div></td><td>${esc(status)}</td><td>${video || esc([job.file, job.message].filter(Boolean).join(" · ") || "—")}</td></tr>`;
   }).join("") : '<tr><td colspan="4" class="empty">还没有自主投稿任务</td></tr>';
   const newest = jobs.find(job => job.file)?.file || "";
   if (!fill && newest !== autoPublishFile) loadUploadFiles();
@@ -3136,8 +3186,14 @@ $("u-auto-provider").onchange = () => {
 };
 $("u-auto-region").onchange = selectAutoPublishProfile;
 $("u-auto-enabled").onchange = syncAutoPublishActions;
-$("u-auto-key").oninput = syncAutoPublishActions;
-$("u-auto-model").oninput = syncAutoPublishActions;
+$("u-auto-key").oninput = () => {
+  ++autoModelRequest;
+  resetAutoPublishModels();
+  syncAutoPublishActions();
+};
+$("u-auto-key").onchange = readAutoPublishModels;
+$("u-auto-model-read").onclick = readAutoPublishModels;
+$("u-auto-model").onchange = syncAutoPublishActions;
 $("u-auto-clear").onclick = () => saveAutoPublish({
   enabled: false, remove_key: true, provider: $("u-auto-provider").value, region: $("u-auto-region").value,
 });

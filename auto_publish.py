@@ -46,6 +46,17 @@ class PublishError(Exception):
     """An error safe to display in the dashboard."""
 
 
+def supported_video_model(provider: str, model: str) -> bool:
+    if provider == "minimax":
+        return model in {"MiniMax-Hailuo-2.3", "MiniMax-Hailuo-02", "T2V-01", "T2V-01-Director"}
+    if provider == "wan":
+        return model in {
+            "wanx2.1-t2v-turbo", "wanx2.1-t2v-plus", "wan2.2-t2v-plus",
+            "wan2.5-t2v-preview", "wan2.6-t2v",
+        }
+    return bool(re.fullmatch(r"(?:doubao-seedance-[A-Za-z0-9_.-]+|ep-[A-Za-z0-9-]+)", model)) and "-i2v" not in model
+
+
 def _read(path: Path, default):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -96,6 +107,7 @@ class VideoClient:
     def __init__(self, provider: str, region: str, key: str, model: str):
         spec = VIDEO_PROVIDERS[provider]
         self.name = spec["name"]
+        self.provider = provider
         self.duration = spec["duration"]
         self.model = model
         self.base_url = spec["regions"][region][1]
@@ -121,6 +133,35 @@ class VideoClient:
         if not isinstance(value, str) or not value:
             raise aiohttp.ClientError("Missing task id")
         return value
+
+    async def models(self) -> list[dict]:
+        results = {}
+        for page in range(1, 11):
+            params = {"capabilities": "VG", "page_no": page, "page_size": 100} if self.provider == "wan" else {}
+            # MiniMax's OpenAI-compatible listing does not return base_resp.
+            data = await VideoClient._request(self, "GET", "/models", params=params)
+            if data.get("code") or data.get("success") is False or data.get("error"):
+                raise PublishError(f"{self.name} 未能返回模型列表，请检查 Key 与地区。")
+            output = data.get("output", {})
+            rows = output.get("models") if self.provider == "wan" else data.get("data")
+            if not isinstance(rows, list):
+                raise PublishError(f"{self.name} 返回的模型列表格式无法识别。")
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                model = row.get("id") or row.get("model")
+                if not isinstance(model, str) or not supported_video_model(self.provider, model):
+                    continue
+                if row.get("status") in ("Offline", "offline", "Disabled", "disabled"):
+                    continue
+                label = row.get("name")
+                results[model] = {"id": model, "name": label if isinstance(label, str) else model}
+            if self.provider != "wan" or len(rows) < 100:
+                break
+            total = output.get("total")
+            if type(total) is int and page * 100 >= total:
+                break
+        return list(results.values())
 
     async def download(self, url: str, temporary: Path, destination: Path) -> None:
         parsed = urlsplit(url)
@@ -159,7 +200,7 @@ class MiniMaxVideo(VideoClient):
 
     async def create(self, prompt: str) -> str:
         data = await self._request("POST", "/video_generation", json={
-            "model": self.model, "prompt": prompt, "duration": self.duration, "resolution": "768P",
+            "model": self.model, "prompt": prompt, "duration": self.duration, "resolution": "720P" if self.model.startswith("T2V-") else "768P",
         })
         return self._task_id(data.get("task_id"))
 
@@ -276,12 +317,35 @@ class AutoPublisher:
             "logged_in": bool(self.account()),
             "jobs": [
                 {
-                    **{key: row.get(key, "") for key in ("id", "phase", "title", "created_at", "file", "bvid", "message")},
+                    **{key: row.get(key, "") for key in ("id", "phase", "title", "created_at", "file", "bvid", "message", "model")},
                     "provider": row.get("provider", "minimax"),
                 }
                 for row in reversed(rows[-10:])
             ],
         }
+
+    async def models(self, payload: dict) -> dict:
+        settings = self.settings()
+        provider = payload.get("provider", settings["provider"])
+        region = payload.get("region", settings["region"])
+        supplied = payload.get("api_key", "")
+        if not isinstance(provider, str) or provider not in VIDEO_PROVIDERS:
+            raise PublishError("请选择支持的视频生成服务。")
+        if not isinstance(region, str) or region not in VIDEO_PROVIDERS[provider]["regions"]:
+            raise PublishError("请选择该服务支持的地区。")
+        if not isinstance(supplied, str) or (supplied and not re.fullmatch(r"[!-~]{1,512}", supplied)):
+            raise PublishError("API Key 格式不正确。")
+        key = supplied or settings["profiles"].get(f"{provider}:{region}", {}).get("key")
+        if not key:
+            raise PublishError("先填写该服务的 Key，再读取模型。")
+        try:
+            client = VIDEO_CLIENTS[provider](provider, region, key, VIDEO_PROVIDERS[provider]["model"])
+            models = await client.models()
+        except PublishError:
+            raise
+        except Exception as exc:
+            raise PublishError("读取模型列表失败，请检查服务商连接后重试。") from exc
+        return {"models": models}
 
     def save_settings(self, payload: dict, now: datetime) -> None:
         current = self.settings()
@@ -309,9 +373,11 @@ class AutoPublisher:
         profile_name = f"{provider}:{region}"
         profiles = dict(current["profiles"])
         profile = profiles.get(profile_name, {})
-        model = payload.get("model", profile.get("model", "")) if provider == "ark" else ""
+        model = payload.get("model", profile.get("model", ""))
         if not isinstance(model, str) or (model and not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", model)):
-            raise PublishError("请输入有效的方舟模型或推理接入点 ID。")
+            raise PublishError("请选择有效的视频模型。")
+        if model and not supported_video_model(provider, model):
+            raise PublishError("该模型尚未适配当前文生视频接口，请从读取结果中选择。")
         key = "" if remove else supplied or profile.get("key", "")
         if settings["enabled"] and not key:
             raise PublishError("先填写所选服务的 API Key，再开启自主投稿。")

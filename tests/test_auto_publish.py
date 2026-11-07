@@ -170,6 +170,22 @@ class AutoPublishTests(unittest.IsolatedAsyncioTestCase):
         self.worker.save_settings({"region": "global", "api_key": "test-global-key"}, self.now)
         self.assertEqual(self.worker.settings()["profiles"]["minimax:cn"]["key"], "fake-secret")
 
+    async def test_model_lookup_uses_unsaved_key_without_persisting_it(self):
+        self.configure()
+        listing = AsyncMock(return_value=[{"id": "MiniMax-Hailuo-02", "name": "海螺 02"}])
+        with patch.object(auto_publish.MiniMaxVideo, "models", listing):
+            result = await self.worker.models({"provider": "minimax", "region": "cn", "api_key": "temporary-key"})
+        self.assertEqual(result["models"][0]["id"], "MiniMax-Hailuo-02")
+        self.assertNotIn("temporary-key", self.worker.settings_path.read_text(encoding="utf-8"))
+        self.worker.save_settings({"model": "MiniMax-Hailuo-02"}, self.now)
+        job = self.worker.enqueue(self.now, manual=True)
+        self.assertEqual(job["model"], "MiniMax-Hailuo-02")
+        await self.worker.tick(self.now)
+        self.assertEqual(self.worker.jobs()[0]["model"], "MiniMax-Hailuo-02")
+        with self.assertRaises(auto_publish.PublishError):
+            self.worker.save_settings({"model": "MiniMax-M3"}, self.now)
+
+
 
 class ProviderContractTests(unittest.IsolatedAsyncioTestCase):
     async def test_ark_submits_configured_model_and_reads_result_url(self):
@@ -199,3 +215,29 @@ class ProviderContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client.base_url, "https://dashscope-intl.aliyuncs.com/api/v1")
         self.assertEqual(request.await_args_list[0].kwargs["headers"], {"X-DashScope-Async": "enable"})
         self.assertEqual(request.await_args_list[1].args, ("GET", "/tasks/wan-task"))
+
+    async def test_minimax_listing_accepts_openai_shape_and_filters_non_video_models(self):
+        client = auto_publish.MiniMaxVideo("minimax", "cn", "fake-key", "T2V-01")
+        request = AsyncMock(return_value={"data": [
+            {"id": "MiniMax-M3"}, {"id": "MiniMax-Hailuo-02"}, {"id": "T2V-01"},
+            {"id": "I2V-01"}, {"id": "MiniMax-Hailuo-2.3-Fast"},
+        ]})
+        with patch.object(auto_publish.VideoClient, "_request", request):
+            models = await client.models()
+        self.assertEqual([item["id"] for item in models], ["MiniMax-Hailuo-02", "T2V-01"])
+        request.assert_awaited_once_with(client, "GET", "/models", params={})
+        with patch.object(client, "_request", AsyncMock(return_value={"task_id": "task"})) as submit:
+            await client.create("鱼吃饭")
+        self.assertEqual(submit.await_args.kwargs["json"]["model"], "T2V-01")
+        self.assertEqual(submit.await_args.kwargs["json"]["resolution"], "720P")
+
+    async def test_wan_model_listing_reads_all_pages_and_filters_unsupported_protocols(self):
+        client = auto_publish.WanVideo("wan", "cn", "fake-key", "wan2.6-t2v")
+        request = AsyncMock(side_effect=[
+            {"output": {"total": 101, "models": [{"model": "wan2.6-t2v"}] * 100}},
+            {"output": {"total": 101, "models": [{"model": "wan2.5-t2v-preview"}, {"model": "wan3.0-video"}]}},
+        ])
+        with patch.object(auto_publish.VideoClient, "_request", request):
+            models = await client.models()
+        self.assertEqual([item["id"] for item in models], ["wan2.6-t2v", "wan2.5-t2v-preview"])
+        self.assertEqual(request.await_args_list[1].kwargs["params"]["page_no"], 2)
