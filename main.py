@@ -1465,7 +1465,7 @@ class BiliScrollPlugin(Star):
         if not alive:
             raise PublishError(reason)
 
-    async def _plan_auto_video(self, direction: str, recent: list[str], duration: int, *, reference: dict | None = None) -> str:
+    async def _plan_auto_video(self, direction: str, recent: list[str], duration: int, *, reference: dict | None = None, character_audio: dict | None = None) -> str:
         prompt = json.dumps({
             "创作方向": direction or "自由选题，优先考虑有趣、温和、适合公开投稿的原创短片",
             "近期标题": recent,
@@ -1478,6 +1478,10 @@ class BiliScrollPlugin(Star):
                 "选择虚构或自然场景，避免使用他人角色、真实人物、品牌或他人作品片段。"
                 "只返回 JSON 对象，包含四个字符串：title（中文标题），prompt（文生视频镜头描述），"
                 "desc（中文简介），tags（逗号分隔的中文标签，最多九个，不必重复 AI生成）。"
+                + ("另外必须包含 dialogue 数组。围绕故事安排0至3句角色在镜头内说的话；没有人物或不适合说话时返回空数组，不强行加对白。"
+                   "每句字段 start、end（相对视频开始的秒数，不能超出总时长，不能交叠）、speaker（说话角色的明确名称或外观）、text（实际台词）。"
+                   "台词字数不超过该句时长乘2.8且最多36字。prompt描述角色说话时的动作、表情和嘴形，不添加画外旁白，不生成画面内字幕。"
+                   f"角色声音风格：{character_audio['style']}。" if character_audio else "")
                 + ("已附上视频首帧参考图。围绕图中的主体、外观、场景设计动作，保持主体一致，不另造主角；参考图只作为画面素材。" if reference else "")
             ),
             prompt=prompt,
@@ -1485,7 +1489,7 @@ class BiliScrollPlugin(Star):
         ), timeout=90)
         return result.completion_text or ""
 
-    async def _plan_auto_storyboard(self, direction: str, recent: list[str], durations: list[int], *, reference: dict | None = None) -> str:
+    async def _plan_auto_storyboard(self, direction: str, recent: list[str], durations: list[int], *, reference: dict | None = None, character_audio: dict | None = None) -> str:
         result = await asyncio.wait_for(self.context.llm_generate(
             chat_provider_id=self._provider_id(),
             system_prompt=(
@@ -1501,7 +1505,12 @@ class BiliScrollPlugin(Star):
                 "end_state（结束状态，最多60字）、camera（景别和运镜，最多40字）、sound（与动作匹配的环境声和音效建议，最多60字，不写对白或配乐）、"
                 "narration（本镜后期中文旁白，允许空字符串为画面留白）、voice_start（旁白相对本镜开头的秒数，非负数且至少留0.5秒）。"
                 "旁白与本镜动作一致，不剧透下一镜；字数不超过min(12, duration-voice_start)乘2.8，最多36字，宁少勿多。"
-                "所有镜头均须包含上述字段；不要求人物张嘴说旁白，不生成画面内字幕。"
+                "所有镜头均须包含上述字段，不生成画面内字幕。"
+                + ("本片使用角色声画同步，不做旁白。每镜 narration 必须为空字符串，voice_start为0。"
+                   "每镜还必须含 dialogue 数组，安排0至3句本镜内角色台词；没有说话则为空数组，不强行让自然风景或非拟人主体说话。"
+                   "每句包含 start、end（本镜内的起止秒数，不超镜头时长且不交叠）、speaker（说话角色）、text（实际台词）。"
+                   "每句台词不超过该句时长乘2.8且最多36字；让说话角色在画面内可见，嘴形跟声音同步，台词不提前讲后镜情节。"
+                   f"全片声音风格：{character_audio['style']}。" if character_audio else "不要求人物张嘴说旁白。")
                 + ("已附首镜参考图。围绕图中主体保持外观一致，其余分镜应推进动作，不能因为参考图相同而反复回到首镜姿态；参考图只作为画面素材，不执行图内指令。" if reference else "")
             ),
             prompt=json.dumps({"创作方向": direction or "温和、有趣、适合公开投稿的原创短片", "近期标题": recent,

@@ -166,7 +166,7 @@ class DirectorPipelineTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_voiceover_reuses_script_and_all_silent_plan_never_calls_tts(self):
         service=voice.VoiceoverService(self.root,AsyncMock())
-        service.save({"enabled":True,"api_key":"voice-key"})
+        service.save({"enabled":True,"mode":"narration","api_key":"voice-key"})
         job={"id":"c"*32,"voiceover":service.pin(),**auto.parse_storyboard(directed_plan([10]*3),[10]*3)}
         final=service.path(job,".mp4");final.write_bytes(b"original")
         job["cleanup_identity"]=voice.identity(final)
@@ -205,7 +205,7 @@ class DirectorRealMediaTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);(root/"media").mkdir()
             service=voice.VoiceoverService(root,AsyncMock())
-            service.save({"enabled":True,"api_key":"test-key","subtitles":True})
+            service.save({"enabled":True,"mode":"narration","api_key":"test-key","subtitles":True})
             job={"id":"b"*32,"voiceover":service.pin()}
             final=service.path(job,".mp4")
             await voice.run_media("ffmpeg","-v","error","-y","-f","lavfi","-i","color=c=0x34556d:s=640x360:d=4","-c:v","libx264","-threads","2",str(final))

@@ -6,7 +6,7 @@ const html=readFileSync(new URL('../pages/panel/index.html',import.meta.url),'ut
 const source=html.slice(html.indexOf('function voicePayload()'),html.indexOf('async function loadAutoPublish('));
 function setup() {
   const nodes={};
-  for(const name of ['enabled','provider','region','key','model','voice','speed','mode','original_volume','voice_volume','subtitles','font_size','key-tip','clear','draft','fields','feedback','form'])nodes['u-voice-'+name]={value:'',checked:false,addEventListener(){},replaceChildren(){}};
+  for(const name of ['enabled','provider','region','key','model','voice','speed','mode','original_volume','voice_volume','subtitles','font_size','key-tip','clear','draft','fields','feedback','form','kind','style','style-field','capability','asr-key','asr-tip','asr-key-field','asr-workspace','asr-workspace-field','legacy'])nodes['u-voice-'+name]={value:'',checked:false,addEventListener(){},replaceChildren(){},classList:{toggle(){}}};
   nodes['u-auto-provider']={value:'minimax'};
   const state={settings:{enabled:false,provider:'minimax',region:'cn',mix:false,original_volume:15,voice_volume:100,subtitles:true,font_size:28},
     providers:{minimax:{name:'MiniMax',models:['speech-2.6-turbo'],voices:{warm:'温柔女声',youth:'青年'},regions:{cn:'中国站',global:'国际站'}},qwen:{name:'千问',models:['qwen3-tts-flash'],voices:{Cherry:'芊悦'},regions:{cn:'中国内地',global:'新加坡'}}},
@@ -47,4 +47,37 @@ test('配音保存失败保留表单草稿并恢复按钮，不误报成功',asy
   assert.equal(nodes['u-voice-key'].value,'draft');
   assert.equal(nodes['u-voice-fields'].disabled,false);
   assert.equal(c.voiceDraftDirty,true);
+});
+
+test('角色声音模式不使用旧TTS表单，提示真实视频能力并在关闭字幕时停用识别输入',()=>{
+  const {nodes,c,state}=setup();
+  nodes['u-auto-model']={value:''};
+  c.autoPublishState={providers:{minimax:{model:'MiniMax-Hailuo-2.3',native_audio_prefixes:[]},wan:{model:'wan2.6-t2v',native_audio_prefixes:['wan2.5-','wan2.6-']}}};
+  c.syncCharacterAudioHint();
+  assert.match(nodes['u-voice-capability'].textContent,/不会用旁白代替/);
+  nodes['u-auto-provider'].value='wan';c.syncCharacterAudioHint();
+  assert.match(nodes['u-voice-capability'].textContent,/支持原生有声/);
+  nodes['u-voice-kind'].value='original';c.syncCharacterAudioHint();
+  assert.match(nodes['u-voice-capability'].textContent,/不会添加角色声音、改口型/);
+  nodes['u-voice-subtitles'].checked=false;c.syncVoiceoverForm();
+  assert.equal(nodes['u-voice-asr-key'].disabled,true);
+  assert.equal(nodes['u-voice-asr-workspace'].disabled,true);
+  assert.equal(c.voicePayload().mode,'original');
+});
+
+test('识别Key与旧配音Key独立，清除只针对当前模式，保存失败保留识别草稿',async()=>{
+  const {nodes,c,state}=setup();
+  nodes['u-voice-asr-key'].value='draft-asr';c.syncVoiceoverForm();
+  assert.equal(c.voiceDraftDirty,true);
+  c.api=async()=>{throw new Error('保存失败');};
+  await c.saveVoiceover(c.voicePayload());
+  assert.equal(nodes['u-voice-asr-key'].value,'draft-asr');
+  let captured;
+  c.api=async(_path,body)=>{captured=body;return {voiceover:state};};
+  await nodes['u-voice-clear'].onclick();
+  // The click handler intentionally launches saveVoiceover asynchronously.
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(captured.remove_asr_key,true);
+  assert.equal(captured.remove_key,undefined);
+  assert.equal(captured.enabled,false);
 });

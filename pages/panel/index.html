@@ -1132,14 +1132,20 @@
     </section>
 
     <section class="sec collapsible" id="sec-voiceover">
-      <div class="sec-head"><span class="caret">▸</span><h2>配音与字幕</h2><span class="sub">按镜头添加旁白，支持留白、原声混音和同步字幕</span></div>
+      <div class="sec-head"><span class="caret">▸</span><h2>配音与字幕</h2><span class="sub">角色声画同步，从实际音轨识别字幕</span></div>
       <div class="sec-body">
         <div class="panel">
-          <p class="sub">海螺、方舟、万相共用后期处理。无声视频会自动跳过配音与字幕，保留原片。当前后期仍为旁白模式，角色口型同步与原声转字幕尚未接入；语音调用另计费用。</p>
+          <p class="sub">选择支持有声生成的视频模型，让角色声音与嘴形一起生成；字幕来自最终音轨的实际识别结果。无声视频直接保留，不补声音或字幕。原生口型效果取决于视频模型，不用于修复任意已有视频的嘴形。</p>
           <form id="u-voice-form">
             <fieldset id="u-voice-fields" style="border:0;padding:0;margin:0;min-width:0" disabled>
               <div class="grid">
-                <label class="check"><input id="u-voice-enabled" type="checkbox" /><span><span class="t">自动添加旁白配音</span><span class="d">新任务使用保存时的配音设置。失败时保留原视频，不会跳过配音直接投稿。</span></span></label>
+                <label class="check"><input id="u-voice-enabled" type="checkbox" /><span><span class="t">开启角色声音与字幕处理</span><span class="d">新任务使用保存设置；后期失败保留原视频，完成后再投稿。</span></span></label>
+                <label class="field"><span class="lbl">处理方式</span><select id="u-voice-kind"><option value="character">角色声画同步 · 模型原生生成</option><option value="original">保留原声 · 仅识别字幕</option><option value="narration" hidden>旧版旁白 · 兼容已有设置</option></select></label>
+                <label class="field span-all" id="u-voice-style-field"><span class="lbl">角色声音风格</span><input id="u-voice-style" maxlength="120" placeholder="例如：自然中文，语气贴合角色，整片音色保持一致" /><span class="tip">描述声音和情绪，由机器人安排适合剧情的台词；不训练或克隆音色。</span></label>
+                <p class="sub span-all" id="u-voice-capability" role="status"></p>
+                <label class="field" id="u-voice-asr-key-field"><span class="lbl">百炼语音识别 API Key（北京地区）</span><input id="u-voice-asr-key" type="password" maxlength="512" autocomplete="off" aria-describedby="u-voice-asr-tip" /><span class="tip" id="u-voice-asr-tip">识别 Key 独立保存，不自动复制视频或配音 Key。</span></label>
+                <label class="field" id="u-voice-asr-workspace-field"><span class="lbl">语音识别业务空间 ID（可选）</span><input id="u-voice-asr-workspace" maxlength="63" autocomplete="off" /><span class="tip">Paraformer 实时识别，返回句子时间戳；支持海螺、方舟、万相的有声成片。识别服务单独计费。</span></label>
+                <div id="u-voice-legacy" class="grid span-all hide">
                 <label class="field"><span class="lbl">配音服务</span><select id="u-voice-provider"></select></label>
                 <label class="field"><span class="lbl">配音服务地区</span><select id="u-voice-region"></select></label>
                 <label class="field"><span class="lbl">配音 API Key</span><input id="u-voice-key" type="password" maxlength="512" autocomplete="off" aria-describedby="u-voice-key-tip" /><span class="tip" id="u-voice-key-tip">密钥独立保存；可填写同平台的现有 Key，语音权限以服务商为准。</span></label>
@@ -1149,10 +1155,11 @@
                 <label class="field"><span class="lbl">声音模式</span><select id="u-voice-mode"><option value="replace">仅使用后期配音</option><option value="mix">原声与配音混合</option></select></label>
                 <label class="field"><span class="lbl">原声音量（%）</span><input id="u-voice-original_volume" type="number" min="0" max="100" step="1" /></label>
                 <label class="field"><span class="lbl">配音音量（%）</span><input id="u-voice-voice_volume" type="number" min="10" max="150" step="1" /></label>
-                <label class="check"><input id="u-voice-subtitles" type="checkbox" /><span><span class="t">将旁白字幕显示在画面中</span><span class="d">白字深色描边，底部居中。字幕对应后期旁白，暂不识别视频原生对白，也不调整角色口型。</span></span></label>
+                </div>
+                <label class="check"><input id="u-voice-subtitles" type="checkbox" /><span><span class="t">将字幕显示在画面中</span><span class="d">新模式从实际声音识别文字，按识别时间戳显示；没有识别到说话内容则不加字幕。关闭后不调用识别服务。</span></span></label>
                 <label class="field"><span class="lbl">字幕字号（以 720p 为基准）</span><input id="u-voice-font_size" type="number" min="20" max="60" step="1" /></label>
               </div>
-              <div class="save-bar"><button type="submit" class="primary">保存配音与字幕设置</button><button id="u-voice-clear" type="button" disabled>清除配音 Key 并关闭</button></div>
+              <div class="save-bar"><button type="submit" class="primary">保存配音与字幕设置</button><button id="u-voice-clear" type="button" disabled>清除识别 Key 并关闭</button></div>
             </fieldset>
             <p id="u-voice-feedback" class="sub" role="status"></p>
             <p id="u-voice-draft" class="sub" role="status"></p>
@@ -3225,6 +3232,7 @@ function syncAutoPublishActions() {
   $("u-auto-reference-upload").disabled = autoReferenceUploading;
   $("u-auto-reference-refresh").disabled = autoReferenceUploading;
   $("u-auto-start").title = voiceDraftDirty || voiceSaving ? "请先保存配音与字幕设置" : changed || durationChanged ? "请先保存自主投稿设置" : logged_in ? "" : "请先在「刷视频」页登录 B站";
+  syncCharacterAudioHint();
 }
 
 async function readAutoReferenceFile(file) {
@@ -3338,7 +3346,7 @@ function renderStoryPlans(jobs) {
   const container=$("u-auto-plans");
   const expanded=new Set(Array.from(container.querySelectorAll("details[open]"),el=>el.dataset.storyJob));
   const phases={queued:"等待生成",requesting:"提交中",generating:"生成中",done:"已完成",failed:"失败",download_failed:"下载失败",review:"待核对"};
-  container.innerHTML=jobs.filter(job=>job.shots?.length).map(job=>`<details class="sub" data-story-job="${esc(job.id||"")}" ${expanded.has(job.id)?"open":""}><summary>${esc(job.title||"分镜方案")} · 分镜方案与进度</summary>${job.shots.map(shot=>`<p class="sub">${esc(`第 ${shot.number} 段 · ${shot.duration} 秒 · ${phases[shot.phase]||"待核对"}${shot.linked?" · 已接续上一镜尾帧":""}`)}${[ ["目的",shot.beat],["开始",shot.start_state],["动作",shot.prompt],["结束",shot.end_state],["机位",shot.camera],["声音建议",shot.sound],["旁白",shot.narration ? `${shot.voice_start||0} 秒开始：${shot.narration}` : shot.start_state ? "留白" : ""],["任务",shot.task_id] ].filter(([,value])=>value).map(([label,value])=>`<br>${esc(label+"："+value)}`).join("")}</p>`).join("")}</details>`).join("");
+  container.innerHTML=jobs.filter(job=>job.shots?.length).map(job=>`<details class="sub" data-story-job="${esc(job.id||"")}" ${expanded.has(job.id)?"open":""}><summary>${esc(job.title||"分镜方案")} · 分镜方案与进度</summary>${job.shots.map(shot=>`<p class="sub">${esc(`第 ${shot.number} 段 · ${shot.duration} 秒 · ${phases[shot.phase]||"待核对"}${shot.linked?" · 已接续上一镜尾帧":""}`)}${[ ["目的",shot.beat],["开始",shot.start_state],["动作",shot.prompt],["结束",shot.end_state],["机位",shot.camera],["声音建议",shot.sound],["角色台词计划",shot.dialogue?.map(row=>`${row.start}–${row.end} 秒 ${row.speaker}：${row.text}`).join("；")],["旁白",shot.narration ? `${shot.voice_start||0} 秒开始：${shot.narration}` : shot.start_state ? "留白" : ""],["任务",shot.task_id] ].filter(([,value])=>value).map(([label,value])=>`<br>${esc(label+"："+value)}`).join("")}</p>`).join("")}</details>`).join("");
 }
 
 function renderAutoPublish(data, fill) {
@@ -3374,7 +3382,11 @@ function renderAutoPublish(data, fill) {
     const retryLabel={shot:"重试失败片段",download:"重试下载",assemble:"重新合成",voice:"重试后期处理"}[job.retry_stage];
     const retry=job.phase === "failed" && job.recoverable && retryLabel && /^[0-9a-f]{32}$/.test(job.id)
       ? `<button type="button" data-auto-resume="${job.id}" ${!settings.enabled||!data.logged_in||jobs.some(row=>autoPublishActive.includes(row.phase))?"disabled":""}>${retryLabel}</button>` : "";
-    const voice = job.voiceover_enabled ? `<div class="sub">${job.voiceover_skipped === "silent" ? "无声视频 · 已跳过配音与字幕" : job.voiceover_done ? "旁白后期已完成" : `配音 ${job.voiceover_progress || 0} / ${job.voiceover_count || 0}`}</div>` : "";
+    const voiceLabels={silent:"无声视频 · 已跳过配音与字幕",no_speech:"未识别到台词 · 保留原声",subtitles_off:"保留原声 · 未开启字幕"};
+    const voiceLabel=voiceLabels[job.voiceover_skipped] || (job.voiceover_mode && job.voiceover_mode!=="narration"
+      ? job.voiceover_done ? `原声字幕已完成 · ${job.subtitle_count||0} 句` : job.asr_phase==="requesting" ? "正在识别实际音轨" : "等待原声字幕处理"
+      : job.voiceover_done ? "旁白后期已完成" : `配音 ${job.voiceover_progress||0} / ${job.voiceover_count||0}`);
+    const voice = job.voiceover_enabled ? `<div class="sub">${esc(voiceLabel)}</div>` : "";
     return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc([providerName, job.model, job.duration ? "计划 " + job.duration + " 秒" : ""].filter(Boolean).join(" · "))}</div>${category}${task}${reference}</td><td>${esc(status)}${progress}${voice}</td><td>${autoPublishResultMarkup(job)}${retry}</td></tr>`;
   }).join("") : '<tr><td colspan="4" class="empty">还没有自主投稿任务</td></tr>';
   renderStoryPlans(jobs);
@@ -3386,9 +3398,22 @@ function renderAutoPublish(data, fill) {
 
 function voicePayload() {
   return {enabled:$("u-voice-enabled").checked,provider:$("u-voice-provider").value,region:$("u-voice-region").value,
+    mode:$("u-voice-kind").value,voice_style:$("u-voice-style").value.trim(),asr_workspace:$("u-voice-asr-workspace").value.trim(),asr_api_key:$("u-voice-asr-key").value.trim(),
     api_key:$("u-voice-key").value.trim(),model:$("u-voice-model").value,voice:$("u-voice-voice").value,speed:Number($("u-voice-speed").value),
     mix:$("u-voice-mode").value === "mix",original_volume:Number($("u-voice-original_volume").value),
     voice_volume:Number($("u-voice-voice_volume").value),subtitles:$("u-voice-subtitles").checked,font_size:Number($("u-voice-font_size").value)};
+}
+
+function syncCharacterAudioHint() {
+  if (!voiceState || !autoPublishState) return;
+  const mode=$("u-voice-kind").value;
+  const provider=$("u-auto-provider").value, spec=autoPublishState.providers[provider];
+  const model=$("u-auto-model").value||spec?.model||"";
+  const capable=spec?.native_audio_prefixes?.some(prefix=>model.startsWith(prefix));
+  $("u-voice-capability").textContent=mode==="character" ? capable
+    ? "当前视频模型支持原生有声生成，将提交角色台词与声画同步要求；口型与音色效果由模型决定。字幕另行识别实际音轨。"
+    : "当前视频模型未适配角色原生声音，若成片无声则直接跳过。需要角色说话请选择万相 2.5/2.6 或支持有声生成的方舟 Seedance；不会用旁白代替。"
+    : mode==="original" ? "保留生成视频的声音和嘴形，只从实际音轨识别字幕；不会添加角色声音、改口型或补旁白。" : "当前为兼容旧版旁白的设置，可切换到角色声画同步或保留原声。";
 }
 
 function syncVoiceoverForm() {
@@ -3396,13 +3421,22 @@ function syncVoiceoverForm() {
   const current=voicePayload(), saved=voiceState.settings;
   const spec=voiceState.providers[current.provider];
   const profile=voiceState.profiles[current.provider+":"+current.region];
-  voiceDraftDirty=!!current.api_key || Object.keys(saved).some(key=>current[key]!==saved[key])
+  voiceDraftDirty=!!current.api_key || !!current.asr_api_key || Object.keys(saved).some(key=>current[key]!==saved[key])
     || current.model!==(profile?.model||spec.models[0]) || current.voice!==(profile?.voice||Object.keys(spec.voices)[0]) || current.speed!==(profile?.speed||1);
   $("u-voice-key-tip").textContent=profile?.key_configured ? "此服务和地区已保存配音 Key，留空沿用；与视频设置独立保存。" : "填写配音服务的 Key；可用同平台现有 Key，语音权限以服务商为准。";
   $("u-voice-speed").disabled=current.provider==="qwen";
   $("u-voice-original_volume").disabled=!current.mix;
   $("u-voice-font_size").disabled=!current.subtitles;
-  $("u-voice-clear").disabled=!profile?.key_configured;
+  const legacy=current.mode==="narration";
+  $("u-voice-legacy").classList.toggle("hide",!legacy);
+  $("u-voice-style-field").classList.toggle("hide",current.mode!=="character");
+  $("u-voice-asr-key-field").classList.toggle("hide",legacy);
+  $("u-voice-asr-workspace-field").classList.toggle("hide",legacy);
+  $("u-voice-asr-key").disabled=legacy||!current.subtitles;
+  $("u-voice-asr-workspace").disabled=legacy||!current.subtitles;
+  $("u-voice-asr-tip").textContent=voiceState.asr_key_configured ? "已保存识别 Key，留空沿用；不会覆盖视频或旧配音 Key。" : "填写百炼北京地区的 Key；识别服务与视频服务可不同，不会自动复制其他 Key。无声视频不调用识别。";
+  $("u-voice-clear").disabled=legacy?!profile?.key_configured:!voiceState.asr_key_configured;
+  $("u-voice-clear").textContent=legacy?"清除旧配音 Key 并关闭":"清除识别 Key 并关闭";
   $("u-voice-draft").textContent=voiceDraftDirty ? "配音设置尚未保存，请保存后再立即生成视频。" : "";
   if ($("u-auto-provider").value) syncAutoPublishActions();
 }
@@ -3434,6 +3468,10 @@ function renderVoiceover(data, fill=false) {
     $("u-voice-provider").replaceChildren(...Object.entries(data.providers).map(([id,spec])=>new Option(spec.name,id)));
     $("u-voice-provider").value=s.provider;
     $("u-voice-enabled").checked=s.enabled;
+    $("u-voice-kind").value=s.mode||"character";
+    $("u-voice-style").value=s.voice_style??"自然中文，语气贴合角色，整片音色保持一致";
+    $("u-voice-asr-workspace").value=s.asr_workspace||"";
+    $("u-voice-asr-key").value="";
     $("u-voice-subtitles").checked=s.subtitles;
     $("u-voice-mode").value=s.mix?"mix":"replace";
     for (const key of ["original_volume","voice_volume","font_size"]) $("u-voice-"+key).value=s[key];
@@ -3470,7 +3508,7 @@ $("u-voice-form").onsubmit=event=>{event.preventDefault();saveVoiceover(voicePay
 $("u-voice-form").addEventListener("input",syncVoiceoverForm);
 $("u-voice-provider").onchange=()=>selectVoiceRegions(voiceState.settings.provider===$("u-voice-provider").value?voiceState.settings.region:"cn");
 $("u-voice-region").onchange=selectVoiceProfile;
-$("u-voice-clear").onclick=()=>saveVoiceover({...voicePayload(),enabled:false,api_key:"",remove_key:true});
+$("u-voice-clear").onclick=()=>saveVoiceover({...voicePayload(),enabled:false,api_key:"",asr_api_key:"",...($("u-voice-kind").value==="narration"?{remove_key:true}:{remove_asr_key:true})});
 
 async function loadAutoPublish(fill = false) {
   if (autoPublishReading || autoPublishSaving) return;

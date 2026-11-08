@@ -19,7 +19,7 @@ import aiohttp
 from .video_compose import CompositionError, compose_video
 from .reference_images import ReferenceError, ReferenceLibrary
 from .voiceover import VoiceoverError
-from .story_director import directed_shot, frame_path, handoff_frame, native_sound, shot_prompt
+from .story_director import NATIVE_SOUND_PREFIXES, character_prompt, directed_shot, frame_path, handoff_frame, native_sound, parse_dialogue, shot_prompt
 
 VIDEO_PROVIDERS = {
     "minimax": {
@@ -182,7 +182,7 @@ def _write(path: Path, data) -> None:
         raise PublishError("保存自主投稿数据失败，请检查服务端存储。") from exc
 
 
-def parse_plan(text: str) -> dict:
+def parse_plan(text: str, duration: int = 65) -> dict:
     text = text.strip()
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.I)
@@ -199,6 +199,11 @@ def parse_plan(text: str) -> dict:
             raise PublishError("选题缺少标题、镜头描述、简介或标签。")
         fields[name] = value.strip()[:size]
     fields["tags"] = publication_tags(fields["tags"])
+    if "dialogue" in data:
+        try:
+            fields["dialogue"] = parse_dialogue(data["dialogue"], duration)
+        except CompositionError as exc:
+            raise PublishError(str(exc)) from exc
     return fields
 
 
@@ -496,6 +501,7 @@ class AutoPublisher:
                     "duration_rules": [{"prefix": prefix, "options": options} for prefix, options in DURATION_RULES[name]],
                     "duration_fallback": duration_options(name, ""),
                     "reference_models": REFERENCE_MODELS.get(name, {}),
+                    "native_audio_prefixes": list(NATIVE_SOUND_PREFIXES.get(name, ())),
                     "regions": {region: label for region, (label, _) in spec["regions"].items()},
                 }
                 for name, spec in VIDEO_PROVIDERS.items()
@@ -521,12 +527,16 @@ class AutoPublisher:
                     "shot_link": row.get("shot_link", "independent"),
                     "shots": [{"number": index + 1, "duration": shot["duration"], "phase": shot["phase"],
                                "task_id": shot.get("task_id", ""), "linked": bool(shot.get("handoff")),
+                               "dialogue": shot.get("dialogue", []),
                                **{key: shot.get(key, "") for key in ("beat", "start_state", "prompt", "end_state", "camera", "sound", "narration", "voice_start")}}
                               for index, shot in enumerate(row.get("shots", []))],
                     "reference_image": row.get("reference_image", {}).get("name", ""),
                     "voiceover_enabled": bool(row.get("voiceover")),
                     "voiceover_done": row.get("voiceover", {}).get("complete", False),
                     "voiceover_skipped": row.get("voiceover", {}).get("skipped", ""),
+                    "voiceover_mode": row.get("voiceover", {}).get("mode", "narration"),
+                    "asr_phase": row.get("voiceover", {}).get("asr", {}).get("phase", ""),
+                    "subtitle_count": len(row.get("voiceover", {}).get("asr", {}).get("segments", [])),
                     "voiceover_progress": sum(clip["phase"] == "done" for clip in row.get("voiceover", {}).get("clips", [])),
                     "voiceover_count": len(row.get("voiceover", {}).get("clips", [])),
                 }
@@ -707,7 +717,15 @@ class AutoPublisher:
                     raise PublishError(str(exc)) from exc
                 return None
             if pinned:
+                if (pinned.get("mode") != "narration" and pinned.get("subtitles") and native_sound(provider, model)
+                        and not pinned.get("asr_revision")):
+                    if manual:
+                        raise PublishError("请先保存百炼语音识别 Key，或关闭字幕后再生成有声视频。")
+                    return None
                 job["voiceover"] = pinned
+                pinned["expects_audio"] = native_sound(provider, model)
+                if pinned.get("mode") == "character" and native_sound(provider, model):
+                    job["character_audio"] = {"style": pinned["voice_style"]}
         if lengths:
             job["duration"] = sum(lengths)
         _write(self.jobs_path, [*rows, job][-60:])
@@ -824,7 +842,7 @@ class AutoPublisher:
         if job.get("retry_after") and now < datetime.fromisoformat(job["retry_after"]):
             return False
         try:
-            if job.get("voiceover"):
+            if job.get("voiceover") and not (job["phase"] == "ready" and job["voiceover"].get("mode", "narration") != "narration"):
                 if self.voiceover is None:
                     raise PublishError("配音模块暂不可用，任务将等待。")
                 try:
@@ -1006,14 +1024,23 @@ class AutoPublisher:
             try:
                 reference = await self._job_reference(job)
                 plan_options = {"reference": reference} if reference else {}
+                if job.get("character_audio"):
+                    plan_options["character_audio"] = job["character_audio"]
                 recent = [row["title"] for row in rows[-13:-1] if row.get("title")]
                 if job.get("mode") == "storyboard":
                     plan = parse_storyboard(await self.plan_storyboard(job["direction"], recent, job["shot_durations"], **plan_options), job["shot_durations"])
+                    if job.get("character_audio") and any("dialogue" not in shot for shot in plan["shots"]):
+                        raise PublishError("分镜方案缺少逐镜角色台词安排，尚未开始生成。")
                     for index in range(len(plan["shots"])):
                         shot_prompt({**job, **plan}, index)
                 else:
                     duration = video_duration(provider, model, duration)
-                    plan = parse_plan(await self.plan(job.get("direction", settings["direction"]), recent, duration, **plan_options))
+                    plan = parse_plan(await self.plan(job.get("direction", settings["direction"]), recent, duration, **plan_options), duration)
+                    if job.get("character_audio"):
+                        if "dialogue" not in plan:
+                            raise PublishError("视频方案缺少角色台词安排，尚未开始生成。")
+                        speech = character_prompt(job, plan)
+                        plan["prompt"] = speech + "\n画面动作：" + plan["prompt"][:max(1,1500-len(speech))]
                 if plan["title"] in recent:
                     raise PublishError("选题与近期稿件重复。")
             except (PublishError, CompositionError) as exc:

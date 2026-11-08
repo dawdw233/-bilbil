@@ -24,6 +24,7 @@ function form() {
   for (const key of ["duration-field","total-field","storyboard-tip","link-field"]) nodes["u-auto-"+key].classList={toggle(){}};
   const context = {$:id=>nodes[id],voiceSaving:false,voiceDraftDirty:false,autoReferenceUploading:false,autoPublishSaving:false,autoPublishRequest:0,autoPublishState:{settings,jobs:[],logged_in:true,profiles:{"minimax:cn":{key_configured:true,model:"",duration:6}},providers:{minimax:{duration:6}}},autoPublishActive:["queued","requesting","generating","voiceover","ready","uploading"]};
   context.setHint=(id,message)=>nodes[id].textContent=message;
+  context.syncCharacterAudioHint=()=>{};
   vm.runInNewContext(sync, context);
   return {nodes,context};
 }

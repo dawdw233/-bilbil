@@ -27,8 +27,9 @@ def directed_shot(row: dict, duration: int) -> dict:
     """Legacy plans remain valid; a new structured shot must be complete."""
     fields = {"beat": 100, "start_state": 180, "end_state": 180, "camera": 100,
               "sound": 160, "narration": 36}
+    dialogue = {"dialogue": parse_dialogue(row["dialogue"], duration)} if "dialogue" in row else {}
     if not any(key in row for key in fields):
-        return {}
+        return dialogue
     result = {}
     for key, limit in fields.items():
         value = row.get(key)
@@ -42,12 +43,47 @@ def directed_shot(row: dict, duration: int) -> dict:
     if len(result["narration"]) > max(1, min(36, int(window * 2.8))):
         raise CompositionError("分镜旁白过长，请缩短文稿；尚未开始付费生成。")
     result["voice_start"] = float(offset)
+    return {**result, **dialogue}
+
+
+def parse_dialogue(rows, duration: float) -> list[dict]:
+    if not isinstance(rows, list) or len(rows) > 3:
+        raise CompositionError("每镜最多安排三句角色台词。")
+    result, previous_end = [], 0.0
+    for row in rows:
+        if not isinstance(row, dict):
+            raise CompositionError("角色台词格式无效。")
+        start, end, speaker, text = (row.get(key) for key in ("start", "end", "speaker", "text"))
+        if (type(start) not in (int,float) or type(end) not in (int,float)
+                or not math.isfinite(start) or not math.isfinite(end) or not previous_end <= start < end <= duration
+                or not isinstance(speaker,str) or not speaker.strip() or len(speaker)>30
+                or not isinstance(text,str) or not text.strip() or len(text)>min(36,int((end-start)*2.8))):
+            raise CompositionError("角色台词的时间、说话人或长度无效，尚未开始付费生成。")
+        result.append({"start":float(start),"end":float(end),"speaker":speaker.strip(),"text":text.strip()})
+        previous_end=end
     return result
 
 
+NATIVE_SOUND_PREFIXES = {"wan": ("wan2.5-", "wan2.6-"), "ark": ("doubao-seedance-2-", "doubao-seedance-1-5-pro")}
+
+
 def native_sound(provider: str, model: str) -> bool:
-    return ((provider == "wan" and model.startswith(("wan2.5-", "wan2.6-")))
-            or (provider == "ark" and model.startswith(("doubao-seedance-2-", "doubao-seedance-1-5-pro"))))
+    return model.startswith(NATIVE_SOUND_PREFIXES.get(provider, ()))
+
+
+def character_prompt(job: dict, shot: dict) -> str:
+    rows = shot.get("dialogue", [])
+    if not rows:
+        return "本镜无对白，保留自然环境声和动作音，不添加旁白、歌词或画面文字。"
+    lines = [f"角色声画同步，嘴唇、下颌开合与发音对应，说话人出现在镜头内，其他角色不对口型。声音风格：{job['character_audio']['style']}。"]
+    lines += [f"约{row['start']:g}至{row['end']:g}秒，{row['speaker']}说：{json_quote(row['text'])}。" for row in rows]
+    lines.append("台词只说一次，不念镜头指令、不加画外旁白，不生成文字字幕；说完自然闭口。环境声不要盖住说话声。")
+    return "\n".join(lines)
+
+
+def json_quote(text: str) -> str:
+    import json
+    return json.dumps(text, ensure_ascii=False)
 
 
 def shot_prompt(job: dict, index: int) -> str:
@@ -61,7 +97,10 @@ def shot_prompt(job: dict, index: int) -> str:
         parts += [f"起始状态：{shot['start_state']}", f"结束状态：{shot['end_state']}", f"机位与运镜：{shot['camera']}"]
     # Sound instructions precede the optional prose so provider prompt limits
     # cannot truncate the no-duplicate-narration constraint.
-    if native_sound(provider, model):
+    if job.get("character_audio"):
+        parts.append(character_prompt(job, shot))
+        parts.append(f"画面环境音与动作音：{shot.get('sound', '自然环境声')}。")
+    elif native_sound(provider, model):
         parts.append(f"画面同步环境音与动作音：{shot.get('sound', '与可见动作自然匹配的环境声')}。不生成旁白、对白、歌词或文字字幕，解说由后期单独添加。")
     parts.append("只呈现当前镜头的动作，不提前表演后续情节。不生成文字字幕。")
     prefix = "\n".join(parts) + "\n当前动作："

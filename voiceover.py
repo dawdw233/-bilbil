@@ -12,6 +12,7 @@ import shutil
 import stat
 import sys
 import tempfile
+import uuid
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
@@ -19,6 +20,7 @@ import aiohttp
 
 from .video_compose import CompositionError, probe_video, run_media
 from .story_director import narration_clips
+from .speech_recognition import ParaformerClient, RecognitionError, validate_segments
 
 PROVIDERS = {
     "minimax": {
@@ -35,7 +37,8 @@ PROVIDERS = {
     },
 }
 DEFAULTS = {"enabled": False, "provider": "minimax", "region": "cn", "mix": False,
-            "original_volume": 15, "voice_volume": 100, "subtitles": True, "font_size": 28}
+            "original_volume": 15, "voice_volume": 100, "subtitles": True, "font_size": 28,
+            "mode": "character", "voice_style": "自然中文，语气贴合角色，整片音色保持一致", "asr_workspace": ""}
 MAX_AUDIO_BYTES = 8 * 1024 * 1024
 
 
@@ -222,13 +225,23 @@ class VoiceoverService:
 
     def state(self) -> dict:
         settings = self.settings()
-        return {"settings": {key: settings[key] for key in DEFAULTS},
+        return {"settings": {key: settings[key] for key in DEFAULTS}, "asr_key_configured": bool(settings.get("asr_key")),
                 "providers": {name: {key: value for key, value in spec.items() if key != "bases"} for name, spec in PROVIDERS.items()},
                 "profiles": {name: {"key_configured": bool(p.get("key")), "model": p["model"], "voice": p["voice"], "speed": p["speed"]} for name, p in settings["profiles"].items()}}
 
     def save(self, payload: dict) -> None:
         current = self.settings()
         settings = {key: payload.get(key, current[key]) for key in DEFAULTS}
+        if settings["mode"] not in ("character", "original", "narration"):
+            raise VoiceoverError("请选择角色声画同步或保留原声。")
+        if not isinstance(settings["voice_style"], str) or len(settings["voice_style"]) > 120:
+            raise VoiceoverError("角色声音描述最多120字。")
+        if not isinstance(settings["asr_workspace"], str) or (settings["asr_workspace"] and not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,62}", settings["asr_workspace"])):
+            raise VoiceoverError("语音识别业务空间 ID 格式不正确。")
+        asr_key, remove_asr = payload.get("asr_api_key", ""), payload.get("remove_asr_key", False)
+        if type(remove_asr) is not bool or not isinstance(asr_key, str) or (asr_key and not re.fullmatch(r"[!-~]{1,512}", asr_key)):
+            raise VoiceoverError("语音识别 Key 格式不正确。")
+        settings["asr_key"] = "" if remove_asr else asr_key or current.get("asr_key", "")
         provider, region = settings["provider"], settings["region"]
         if not isinstance(provider, str) or provider not in PROVIDERS or not isinstance(region, str) or region not in PROVIDERS[provider]["regions"]:
             raise VoiceoverError("请选择支持的配音服务和地区。")
@@ -249,7 +262,7 @@ class VoiceoverService:
         if type(remove) is not bool or not isinstance(supplied, str) or (supplied and not re.fullmatch(r"[!-~]{1,512}", supplied)):
             raise VoiceoverError("配音 Key 格式不正确。")
         key = "" if remove else supplied or old.get("key", "")
-        if settings["enabled"] and not key:
+        if settings["enabled"] and settings["mode"] == "narration" and not key:
             raise VoiceoverError("请先填写当前配音服务的 Key。")
         profiles[provider + ":" + region] = {"key": key, "model": model, "voice": voice, "speed": speed if provider == "minimax" else 1.0}
         settings["profiles"] = profiles
@@ -259,6 +272,9 @@ class VoiceoverService:
         settings = self.settings()
         if not settings["enabled"]:
             return None
+        if settings["mode"] != "narration":
+            return {**{key: settings[key] for key in ("enabled", "mode", "voice_style", "subtitles", "font_size", "asr_workspace")},
+                    "asr_revision": revision(settings["asr_key"]) if settings.get("asr_key") else ""}
         profile = settings["profiles"].get(settings["provider"] + ":" + settings["region"], {})
         if not profile.get("key"):
             raise VoiceoverError("已开启配音，请先保存所选配音服务的 Key。")
@@ -276,8 +292,8 @@ class VoiceoverService:
 
     async def source_has_audio(self, job: dict) -> bool:
         config = job["voiceover"]
-        source = self.path(job, ".mp4")
-        expected = job["cleanup_identity"]
+        source = self.path(job, "-source.mp4" if config.get("source_identity") else ".mp4")
+        expected = config.get("source_identity", job["cleanup_identity"])
         if identity(source) != expected:
             raise VoiceoverError("原始视频已变化，不能检查声音或开始配音。")
         cached = config.get("audio_check", {})
@@ -298,10 +314,15 @@ class VoiceoverService:
         # Before generation the sound is unknown. Only require the speech
         # service and subtitle fonts once an audible source actually exists.
         if not job.get("file"):
+            if config.get("expects_audio") and config.get("mode") != "narration" and config["subtitles"]:
+                self.asr_key(config)
             return
         if not config.get("clips") and not config.get("script_ready") and not await self.source_has_audio(job):
             return
-        self.key(config)
+        if config.get("mode", "narration") == "narration":
+            self.key(config)
+        elif config["subtitles"] and config.get("asr", {}).get("phase") != "done":
+            self.asr_key(config)
         if config["subtitles"] and not self._tools_checked:
             filters = await run_media("ffmpeg", "-hide_banner", "-filters", timeout=15)
             if b" subtitles " not in filters:
@@ -311,6 +332,15 @@ class VoiceoverService:
             if not font.is_file() and not fonts.strip():
                 raise VoiceoverError("服务器缺少中文字幕字体，请安装文泉驿或 Noto CJK 字体。")
             self._tools_checked = True
+
+    def asr_key(self, config: dict) -> str:
+        settings = self.settings()
+        key = settings.get("asr_key", "")
+        if not settings["enabled"]:
+            raise VoiceoverError("角色声音与字幕处理已关闭，任务保留；重新开启后可继续。")
+        if not key or revision(key) != config.get("asr_revision"):
+            raise VoiceoverError("请在配音与字幕保存百炼北京地区的语音识别 Key，再重试后期处理；视频已保留。")
+        return key
 
     def path(self, job: dict, suffix: str) -> Path:
         if not re.fullmatch(r"[0-9a-f]{32}", job["id"]):
@@ -351,32 +381,38 @@ class VoiceoverService:
             raise VoiceoverError("成片文件已被修改，已停止覆盖并保留供核对。")
         info = await probe_video(source)
         args = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-filter_threads", "1", "-filter_complex_threads", "1", "-i", str(source)]
-        graph, labels, cues, start = [], [], [], 0.0
-        if config["mix"] and info["audio"]:
-            graph.append(f"[0:a:0]volume={config['original_volume']/100}[original]")
-            labels.append("[original]")
-        for index, clip in enumerate(config["clips"]):
-            path = self.path(job, f"-voice-{index+1:02d}.wav")
-            if identity(path) != clip["identity"]:
-                raise VoiceoverError("配音素材已被修改，已保留原视频。")
-            rate = max(1.0, clip["duration"] / clip["window"])
-            if rate > 2:
-                raise VoiceoverError("配音明显长于镜头时长，请核对旁白稿；原视频已保留。")
-            args += ["-i", str(path)]
-            begin = clip.get("start", start)
-            if (type(begin) not in (int, float) or not math.isfinite(begin) or begin < 0
-                    or begin + clip["window"] > info["duration"] + .25):
-                raise VoiceoverError("旁白时间超出成片范围，已保留原视频。")
-            delay = round(begin * 1000)
-            graph.append(f"[{index+1}:a:0]aresample=48000,atempo={rate:.8f},volume={config['voice_volume']/100},adelay={delay}:all=1[v{index}]")
-            labels.append(f"[v{index}]")
-            cues.append((begin, min(info["duration"], begin+clip["duration"]/rate), clip["text"]))
-            start += clip["window"]
-        if labels:
-            graph.append("".join(labels)+f"amix=inputs={len(labels)}:duration=longest:normalize=0,alimiter=limit=0.95:level=0,apad,atrim=duration={info['duration']}[audio]")
+        native = config.get("mode", "narration") != "narration"
+        if native:
+            segments = validate_segments(config["asr"]["segments"], info["duration"])
+            cues = [(row["start"], row["end"], row["text"]) for row in segments]
+            args += ["-map", "0:v:0", "-map", "0:a:0"]
         else:
-            graph.append(f"anullsrc=r=48000:cl=stereo,atrim=duration={info['duration']}[audio]")
-        args += ["-filter_complex", ";".join(graph), "-map", "0:v:0", "-map", "[audio]"]
+            graph, labels, cues, start = [], [], [], 0.0
+            if config["mix"] and info["audio"]:
+                graph.append(f"[0:a:0]volume={config['original_volume']/100}[original]")
+                labels.append("[original]")
+            for index, clip in enumerate(config["clips"]):
+                path = self.path(job, f"-voice-{index+1:02d}.wav")
+                if identity(path) != clip["identity"]:
+                    raise VoiceoverError("配音素材已被修改，已保留原视频。")
+                rate = max(1.0, clip["duration"] / clip["window"])
+                if rate > 2:
+                    raise VoiceoverError("配音明显长于镜头时长，请核对旁白稿；原视频已保留。")
+                args += ["-i", str(path)]
+                begin = clip.get("start", start)
+                if (type(begin) not in (int, float) or not math.isfinite(begin) or begin < 0
+                        or begin + clip["window"] > info["duration"] + .25):
+                    raise VoiceoverError("旁白时间超出成片范围，已保留原视频。")
+                delay = round(begin * 1000)
+                graph.append(f"[{index+1}:a:0]aresample=48000,atempo={rate:.8f},volume={config['voice_volume']/100},adelay={delay}:all=1[v{index}]")
+                labels.append(f"[v{index}]")
+                cues.append((begin, min(info["duration"], begin+clip["duration"]/rate), clip["text"]))
+                start += clip["window"]
+            if labels:
+                graph.append("".join(labels)+f"amix=inputs={len(labels)}:duration=longest:normalize=0,alimiter=limit=0.95:level=0,apad,atrim=duration={info['duration']}[audio]")
+            else:
+                graph.append(f"anullsrc=r=48000:cl=stereo,atrim=duration={info['duration']}[audio]")
+            args += ["-filter_complex", ";".join(graph), "-map", "0:v:0", "-map", "[audio]"]
         if config["subtitles"]:
             def stamp(value):
                 ms = round(value*1000)
@@ -400,7 +436,8 @@ class VoiceoverService:
             args += ["-vf", f"ass=ai-{job['id']}-subtitles.ass:fontsdir=../fonts", "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-maxrate", "4M", "-bufsize", "8M", "-pix_fmt", "yuv420p", "-threads", "2"]
         else:
             args += ["-c:v", "copy"]
-        args += ["-c:a", "aac", "-ar", "48000", "-ac", "2", "-b:a", "128k", "-t", str(info["duration"]), "-movflags", "+faststart", str(temporary)]
+        args += ["-c:a", "copy"] if native else ["-c:a", "aac", "-ar", "48000", "-ac", "2", "-b:a", "128k"]
+        args += ["-t", str(info["duration"]), "-movflags", "+faststart", str(temporary)]
         try:
             await run_media(*args, timeout=300, cwd=str(source.parent))
             check = await probe_video(temporary)
@@ -412,6 +449,69 @@ class VoiceoverService:
             return final
         finally:
             temporary.unlink(missing_ok=True)
+
+    async def native_step(self, job: dict, save, max_bytes: int) -> None:
+        config = job["voiceover"]
+        if not config["subtitles"]:
+            config.update(complete=True, skipped="subtitles_off")
+            job.update(phase="ready", message="已保留视频原声，未开启字幕。", recoverable=False, retry_stage="")
+            save(); return
+        asr = config.get("asr")
+        if asr and asr.get("phase") != "done":
+            job.update(phase="failed", recoverable=True, retry_stage="voice",
+                       message="上次语音识别结果未完成，原视频已保留；手动重试后期会重新识别，可能再次计费。")
+            save(); return
+        if asr is None:
+            try:
+                source, original = self.path(job, ".mp4"), self.path(job, "-source.mp4")
+                expected = job["cleanup_identity"]
+                if not original.exists():
+                    if identity(source) != expected:
+                        raise VoiceoverError("原始视频已变化，不能识别语音。")
+                    os.link(source, original)
+                if identity(original) != expected:
+                    raise VoiceoverError("原始视频备份已变化，已停止识别。")
+                config["source_identity"] = expected
+                config.setdefault("artifacts", [])
+                backup = {"suffix": "-source.mp4", "identity": expected}
+                if backup not in config["artifacts"]:
+                    config["artifacts"].append(backup)
+                info = await probe_video(original)
+                windows(info["duration"])
+                pcm = await run_media("ffmpeg", "-v", "error", "-nostdin", "-i", str(original), "-map", "0:a:0",
+                                      "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", "-f", "s16le", "-", timeout=60)
+                if identity(original) != expected:
+                    raise VoiceoverError("提取语音时原始视频被修改，未提交识别。")
+                key = self.asr_key(config)
+                config["asr"] = {"phase": "requesting", "task_id": uuid.uuid4().hex}
+                job["message"] = "正在识别实际视频音轨，生成带时间戳的字幕。"
+                save()
+                rows = await ParaformerClient(key, config["asr_workspace"]).recognize(pcm, info["duration"], config["asr"]["task_id"])
+                config["asr"].update(phase="done", segments=validate_segments(rows, info["duration"]))
+                job["message"] = f"原声识别完成，共 {len(rows)} 句，准备制作字幕。"
+                save(); return
+            except Exception as exc:
+                if config.get("asr"):
+                    config["asr"]["phase"] = "failed"
+                message = str(exc) if isinstance(exc, (VoiceoverError, RecognitionError)) else "提取或识别原声音轨失败，原视频已保留。"
+                job.update(phase="failed", recoverable=True, retry_stage="voice",
+                           message=message+" 重试后期会重新识别，可能产生识别费用；不会重新生成视频。")
+                save(); return
+        try:
+            if not asr["segments"]:
+                config.update(complete=True, skipped="no_speech")
+                job.update(phase="ready", message="未识别到可转写的说话内容，已保留原声，不添加字幕。", recoverable=False, retry_stage="")
+            else:
+                for path, expected in self.artifacts(job):
+                    if identity(path) != expected:
+                        raise VoiceoverError("后期素材已被修改，请先核对文件。")
+                destination = await self.render(job, max_bytes, save)
+                config["complete"] = True
+                job.update(phase="ready", cleanup_identity=identity(destination), message="原声字幕制作完成，已保留角色声音。", recoverable=False, retry_stage="")
+        except Exception as exc:
+            message = str(exc) if isinstance(exc, (VoiceoverError, RecognitionError)) else "字幕烧录失败；可复用识别结果重新合成，原视频已保留。"
+            job.update(phase="failed", recoverable=True, retry_stage="voice", message=message)
+        save()
 
     async def step(self, job: dict, save, max_bytes: int) -> None:
         """One bounded stage; save() persists the parent ledger before paid calls."""
@@ -426,6 +526,9 @@ class VoiceoverService:
         except Exception as exc:
             message = str(exc) if isinstance(exc, VoiceoverError) else "配音环境检查失败，请检查 FFmpeg、字体和服务器存储。"
             job.update(phase="failed", recoverable=True, retry_stage="voice", message=message); save(); return
+        if config.get("mode", "narration") != "narration":
+            await self.native_step(job, save, max_bytes)
+            return
         if not config.get("script_ready") and not config.get("clips"):
             try:
                 source, original = self.path(job, ".mp4"), self.path(job, "-source.mp4")
@@ -513,6 +616,20 @@ class VoiceoverService:
 
     def resume(self, job: dict) -> None:
         config = job["voiceover"]
+        if config.get("mode", "narration") != "narration":
+            settings = self.settings()
+            if not settings["enabled"]:
+                raise VoiceoverError("请先开启角色声音与字幕处理。")
+            if config["subtitles"] and config.get("asr", {}).get("phase") != "done":
+                key = settings.get("asr_key", "")
+                if not key:
+                    raise VoiceoverError("请先保存百炼北京地区语音识别 Key。")
+                config["asr_revision"] = revision(key)
+                config["asr_workspace"] = settings["asr_workspace"]
+            if config.get("asr", {}).get("phase") in ("requesting", "failed"):
+                # Only this explicit user retry may submit another ASR task.
+                config.pop("asr", None)
+            return
         if any(clip["phase"] == "requesting" for clip in config.get("clips", [])):
             raise VoiceoverError("存在受理状态不明的配音，请先到语音服务商核对，不会重复提交。")
         settings = self.settings()

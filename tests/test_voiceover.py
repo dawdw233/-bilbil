@@ -37,7 +37,7 @@ class VoiceoverTests(unittest.IsolatedAsyncioTestCase):
         self.now = datetime(2026,11,8,19,tzinfo=plugin.BEIJING_TIME)
 
     def configure(self, **extra):
-        self.service.save({"enabled":True,"api_key":"speech-secret",**extra})
+        self.service.save({"enabled":True,"mode":"narration","api_key":"speech-secret",**extra})
 
     def worker(self, provider="minimax"):
         self.configure()
