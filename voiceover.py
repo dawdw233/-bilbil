@@ -20,7 +20,8 @@ import aiohttp
 
 from .video_compose import CompositionError, probe_video, run_media
 from .story_director import narration_clips
-from .speech_recognition import ParaformerClient, RecognitionError, validate_segments
+from .speech_recognition import ASR_SERVICES, OpenAIRecognitionClient, ParaformerClient, RecognitionError, validate_segments
+from .api_config import api_base
 
 PROVIDERS = {
     "minimax": {
@@ -38,7 +39,8 @@ PROVIDERS = {
 }
 DEFAULTS = {"enabled": False, "provider": "minimax", "region": "cn", "mix": False,
             "original_volume": 15, "voice_volume": 100, "subtitles": True, "font_size": 28,
-            "mode": "character", "voice_style": "自然中文，语气贴合角色，整片音色保持一致", "asr_workspace": ""}
+            "mode": "character", "voice_style": "自然中文，语气贴合角色，整片音色保持一致", "asr_workspace": "",
+            "asr_service": "paraformer", "asr_base_url": "", "asr_model": "paraformer-realtime-v2"}
 MAX_AUDIO_BYTES = 8 * 1024 * 1024
 
 
@@ -219,19 +221,46 @@ class VoiceoverService:
     def settings(self) -> dict:
         try:
             stored = json.loads(self.settings_path.read_text(encoding="utf-8")) if self.settings_path.exists() else {}
-            return {**DEFAULTS, "profiles": {}, **stored}
-        except (OSError, ValueError) as exc:
+            settings = {**DEFAULTS, "profiles": {}, **stored}
+            profiles = dict(stored.get("asr_profiles", {}))
+            if "asr_profiles" not in stored and any(key in stored for key in ("asr_key", "asr_workspace", "asr_model", "asr_base_url")):
+                profiles["paraformer"] = {"key": stored.get("asr_key", ""), "workspace": stored.get("asr_workspace", ""),
+                                          "base_url": stored.get("asr_base_url", ""), "model": stored.get("asr_model", "paraformer-realtime-v2")}
+            settings["asr_profiles"] = profiles
+            profile = profiles.get(settings["asr_service"], {})
+            spec = ASR_SERVICES[settings["asr_service"]]
+            settings.update(asr_key=profile.get("key", ""), asr_base_url=profile.get("base_url", spec["base_url"]),
+                            asr_model=profile.get("model", spec["model"]), asr_workspace=profile.get("workspace", ""))
+            return settings
+        except (OSError, ValueError, KeyError, TypeError) as exc:
             raise VoiceoverError("配音设置无法读取，请检查服务器配置文件。") from exc
 
     def state(self) -> dict:
         settings = self.settings()
         return {"settings": {key: settings[key] for key in DEFAULTS}, "asr_key_configured": bool(settings.get("asr_key")),
+                "asr_services": ASR_SERVICES,
+                "asr_profiles": {name: {"key_configured": bool(profile.get("key")),
+                                       **{key: profile.get(key, "") for key in ("base_url", "model", "workspace")}}
+                                 for name, profile in settings["asr_profiles"].items()},
                 "providers": {name: {key: value for key, value in spec.items() if key != "bases"} for name, spec in PROVIDERS.items()},
                 "profiles": {name: {"key_configured": bool(p.get("key")), "model": p["model"], "voice": p["voice"], "speed": p["speed"]} for name, p in settings["profiles"].items()}}
 
     def save(self, payload: dict) -> None:
         current = self.settings()
         settings = {key: payload.get(key, current[key]) for key in DEFAULTS}
+        service = settings["asr_service"]
+        if not isinstance(service, str) or service not in ASR_SERVICES:
+            raise VoiceoverError("请选择支持的语音识别协议。")
+        previous = current["asr_profiles"].get(service, {})
+        spec_asr = ASR_SERVICES[service]
+        try:
+            settings["asr_base_url"] = api_base(payload.get("asr_base_url", previous.get("base_url", spec_asr["base_url"])), websocket=service=="paraformer")
+        except ValueError as exc:
+            raise VoiceoverError(str(exc)) from exc
+        settings["asr_model"] = payload.get("asr_model", previous.get("model", spec_asr["model"]))
+        settings["asr_workspace"] = payload.get("asr_workspace", previous.get("workspace", "")) if service=="paraformer" else ""
+        if not isinstance(settings["asr_model"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_./:-]{0,127}", settings["asr_model"]):
+            raise VoiceoverError("请填写有效的识别模型 ID。")
         if settings["mode"] not in ("character", "original", "narration"):
             raise VoiceoverError("请选择角色声画同步或保留原声。")
         if not isinstance(settings["voice_style"], str) or len(settings["voice_style"]) > 120:
@@ -241,7 +270,10 @@ class VoiceoverService:
         asr_key, remove_asr = payload.get("asr_api_key", ""), payload.get("remove_asr_key", False)
         if type(remove_asr) is not bool or not isinstance(asr_key, str) or (asr_key and not re.fullmatch(r"[!-~]{1,512}", asr_key)):
             raise VoiceoverError("语音识别 Key 格式不正确。")
-        settings["asr_key"] = "" if remove_asr else asr_key or current.get("asr_key", "")
+        recognition_profiles = dict(current["asr_profiles"])
+        recognition_profiles[service] = {"key": "" if remove_asr else asr_key or previous.get("key", ""),
+                                         "base_url": settings["asr_base_url"], "model": settings["asr_model"], "workspace": settings["asr_workspace"]}
+        settings["asr_profiles"] = recognition_profiles
         provider, region = settings["provider"], settings["region"]
         if not isinstance(provider, str) or provider not in PROVIDERS or not isinstance(region, str) or region not in PROVIDERS[provider]["regions"]:
             raise VoiceoverError("请选择支持的配音服务和地区。")
@@ -273,7 +305,7 @@ class VoiceoverService:
         if not settings["enabled"]:
             return None
         if settings["mode"] != "narration":
-            return {**{key: settings[key] for key in ("enabled", "mode", "voice_style", "subtitles", "font_size", "asr_workspace")},
+            return {**{key: settings[key] for key in ("enabled", "mode", "voice_style", "subtitles", "font_size", "asr_workspace", "asr_service", "asr_base_url", "asr_model")},
                     "asr_revision": revision(settings["asr_key"]) if settings.get("asr_key") else ""}
         profile = settings["profiles"].get(settings["provider"] + ":" + settings["region"], {})
         if not profile.get("key"):
@@ -335,11 +367,11 @@ class VoiceoverService:
 
     def asr_key(self, config: dict) -> str:
         settings = self.settings()
-        key = settings.get("asr_key", "")
+        key = settings["asr_profiles"].get(config.get("asr_service", "paraformer"), {}).get("key", "")
         if not settings["enabled"]:
             raise VoiceoverError("角色声音与字幕处理已关闭，任务保留；重新开启后可继续。")
         if not key or revision(key) != config.get("asr_revision"):
-            raise VoiceoverError("请在配音与字幕保存百炼北京地区的语音识别 Key，再重试后期处理；视频已保留。")
+            raise VoiceoverError("请在配音与字幕保存任务所用识别服务的 Key，再重试后期处理；视频已保留。")
         return key
 
     def path(self, job: dict, suffix: str) -> Path:
@@ -486,7 +518,13 @@ class VoiceoverService:
                 config["asr"] = {"phase": "requesting", "task_id": uuid.uuid4().hex}
                 job["message"] = "正在识别实际视频音轨，生成带时间戳的字幕。"
                 save()
-                rows = await ParaformerClient(key, config["asr_workspace"]).recognize(pcm, info["duration"], config["asr"]["task_id"])
+                service = config.get("asr_service", "paraformer")
+                if service == "openai":
+                    client = OpenAIRecognitionClient(key, base_url=config["asr_base_url"], model=config["asr_model"])
+                else:
+                    options = {"base_url": config["asr_base_url"], "model": config["asr_model"]} if "asr_base_url" in config else {}
+                    client = ParaformerClient(key, config["asr_workspace"], **options)
+                rows = await client.recognize(pcm, info["duration"], config["asr"]["task_id"])
                 config["asr"].update(phase="done", segments=validate_segments(rows, info["duration"]))
                 job["message"] = f"原声识别完成，共 {len(rows)} 句，准备制作字幕。"
                 save(); return
@@ -621,11 +659,14 @@ class VoiceoverService:
             if not settings["enabled"]:
                 raise VoiceoverError("请先开启角色声音与字幕处理。")
             if config["subtitles"] and config.get("asr", {}).get("phase") != "done":
-                key = settings.get("asr_key", "")
+                service = config.get("asr_service", "paraformer")
+                profile = settings["asr_profiles"].get(service, {})
+                key = profile.get("key", "")
                 if not key:
-                    raise VoiceoverError("请先保存百炼北京地区语音识别 Key。")
+                    raise VoiceoverError("请先保存任务所用语音识别服务的 Key。")
                 config["asr_revision"] = revision(key)
-                config["asr_workspace"] = settings["asr_workspace"]
+                config.update(asr_workspace=profile.get("workspace", ""), asr_base_url=profile.get("base_url", ASR_SERVICES[service]["base_url"]),
+                              asr_model=profile.get("model", ASR_SERVICES[service]["model"]), asr_service=service)
             if config.get("asr", {}).get("phase") in ("requesting", "failed"):
                 # Only this explicit user retry may submit another ASR task.
                 config.pop("asr", None)

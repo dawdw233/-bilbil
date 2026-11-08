@@ -21,6 +21,7 @@ function form() {
   nodes["u-auto-mode"].value = "single";
   nodes["u-auto-total"].value = "30";
   nodes["u-auto-link"].value = "independent";
+  for(const name of ["base-url","transport","native-audio"])nodes["u-auto-"+name]={value:name==="transport"?"multipart":"",checked:false};
   for (const key of ["duration-field","total-field","storyboard-tip","link-field"]) nodes["u-auto-"+key].classList={toggle(){}};
   const context = {$:id=>nodes[id],voiceSaving:false,voiceDraftDirty:false,autoReferenceUploading:false,autoPublishSaving:false,autoPublishRequest:0,autoPublishState:{settings,jobs:[],logged_in:true,profiles:{"minimax:cn":{key_configured:true,model:"",duration:6}},providers:{minimax:{duration:6}}},autoPublishActive:["queued","requesting","generating","voiceover","ready","uploading"]};
   context.setHint=(id,message)=>nodes[id].textContent=message;
@@ -83,6 +84,14 @@ test("尾帧接续独立保存，未保存及不支持图生的模型阻止立�
   context.syncAutoPublishActions();
   assert.equal(nodes["u-auto-start"].disabled,true);
   assert.match(nodes["u-auto-link-tip"].textContent,/不支持尾帧接续/);
+});
+
+test("视频地址、请求格式及原生声音能力有修改时，先保存再运行",()=>{
+  for(const [name,property,value] of [["base-url","value","https://gateway.test/v1"],["transport","value","json"],["native-audio","checked",true]]){
+    const {nodes,context}=form();context.syncAutoPublishActions();assert.equal(nodes['u-auto-start'].disabled,false);
+    nodes['u-auto-'+name][property]=value;context.syncAutoPublishActions();
+    assert.equal(nodes['u-auto-start'].disabled,true);assert.match(nodes['u-auto-draft-hint'].textContent,/先保存/);
+  }
 });
 
 test("分镜方案在表格外展示、轮询保留展开状态，并转义模型文案", () => {
@@ -184,7 +193,7 @@ test("上传中禁止重复提交与立即生成，取消选择不发请求，�
 });
 
 test("MiniMax 连接检查区分未列出视频模型和接口拒绝，不把其他服务改为连接检查", async () => {
-  const nodes = Object.fromEntries(["provider", "region", "model", "model-tip", "model-read", "key", "workspace"].map(name => ["u-auto-" + name, {value:""}]));
+  const nodes = Object.fromEntries(["provider", "region", "model", "model-tip", "model-read", "key", "workspace", "base-url"].map(name => ["u-auto-" + name, {value:""}]));
   nodes["u-auto-provider"].value = "minimax";
   nodes["u-auto-region"].value = "cn";
   let calls = 0;

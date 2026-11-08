@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
+import io
 import json
 import os
 import re
@@ -15,6 +17,8 @@ from pathlib import Path
 from urllib.parse import quote, urlsplit
 
 import aiohttp
+from PIL import Image, ImageOps
+from .api_config import api_base
 
 from .video_compose import CompositionError, compose_video
 from .reference_images import ReferenceError, ReferenceLibrary
@@ -40,6 +44,8 @@ VIDEO_PROVIDERS = {
             "global": ("新加坡", "https://dashscope-intl.aliyuncs.com/api/v1"),
         },
     },
+    "openai": {"name": "Videos API 兼容（自定义服务）", "model": "", "duration": 4,
+               "regions": {"custom": ("自定义服务", "")}},
 }
 DEFAULTS = {
     "enabled": False, "provider": "minimax", "region": "cn", "time": "20:00",
@@ -52,6 +58,7 @@ VIDEO_MODELS = {
     "minimax": ("MiniMax-Hailuo-2.3", "MiniMax-Hailuo-02", "T2V-01", "T2V-01-Director"),
     "wan": ("wan2.6-t2v", "wan2.5-t2v-preview", "wan2.2-t2v-plus", "wanx2.1-t2v-turbo", "wanx2.1-t2v-plus"),
     "ark": (VIDEO_PROVIDERS["ark"]["model"],),
+    "openai": (),
 }
 DURATION_RULES = {
     "minimax": [("MiniMax-Hailuo-", [6, 10]), ("T2V-", [6])],
@@ -61,6 +68,7 @@ DURATION_RULES = {
         ("doubao-seedance-2-0-", list(range(4, 16))),
         ("doubao-seedance-1-0-", list(range(2, 13))),
     ],
+    "openai": [("", [4, 8, 12])],
 }
 
 
@@ -108,6 +116,8 @@ REFERENCE_MODELS = {
 
 
 def reference_video_model(provider: str, model: str) -> str:
+    if provider == "openai" and supported_video_model(provider, model):
+        return model
     if provider == "ark" and supported_video_model(provider, model) and "-t2v" not in model:
         return model
     models = REFERENCE_MODELS.get(provider, {})
@@ -119,6 +129,8 @@ def reference_video_model(provider: str, model: str) -> str:
 
 
 def supported_video_model(provider: str, model: str) -> bool:
+    if provider == "openai":
+        return bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_./:-]{0,127}", model))
     if provider in ("minimax", "wan"):
         return model in VIDEO_MODELS[provider]
     return bool(re.fullmatch(r"(?:doubao-seedance-[A-Za-z0-9_.-]+|ep-[A-Za-z0-9-]+)", model)) and "-i2v" not in model
@@ -250,16 +262,25 @@ def parse_category(text: str, categories: list[dict]) -> dict:
 
 
 class VideoClient:
-    def __init__(self, provider: str, region: str, key: str, model: str, workspace: str = "", duration: int | None = None):
+    def __init__(self, provider: str, region: str, key: str, model: str, workspace: str = "", duration: int | None = None, *, base_url: str = "", transport: str = "multipart"):
         spec = VIDEO_PROVIDERS[provider]
         self.name = spec["name"]
         self.provider = provider
         self.duration = video_duration(provider, model, spec["duration"] if duration is None else duration)
         self.model = model
-        self.base_url = spec["regions"][region][1]
+        try:
+            self.base_url = api_base(base_url) or spec["regions"][region][1]
+        except ValueError as exc:
+            raise PublishError(str(exc)) from exc
+        self.transport = transport
+        self.custom_endpoint = bool(base_url)
+        if provider == "openai" and self.base_url.endswith("/videos"):
+            self.base_url = self.base_url[:-7]
+        if provider == "openai" and not self.base_url:
+            raise PublishError("请填写兼容视频服务的 API 地址，不能使用已下线的官方视频接口。")
         self.headers = {"Authorization": f"Bearer {key}"}
         self.models_url = self.base_url
-        if provider == "wan":
+        if provider == "wan" and not base_url:
             workspace = workspace_id(workspace)
             location = "cn-beijing" if region == "cn" else "ap-southeast-1"
             self.models_url = f"https://{workspace}.{location}.maas.aliyuncs.com/api/v1" if workspace else ""
@@ -304,13 +325,15 @@ class VideoClient:
                 raise PublishError(f"{self.name} 未能返回模型列表，请检查 Key 与地区。")
             output = data.get("output", {})
             rows = output.get("models") if self.provider == "wan" else data.get("data")
+            if self.custom_endpoint and not isinstance(rows, list):
+                rows = data.get("data")
             if not isinstance(rows, list):
                 raise PublishError(f"{self.name} 返回的模型列表格式无法识别。")
             for row in rows:
                 if not isinstance(row, dict):
                     continue
                 model = row.get("id") or row.get("model")
-                if not isinstance(model, str) or not supported_video_model(self.provider, model):
+                if not isinstance(model, str) or not (supported_video_model(self.provider, model) or self.custom_endpoint and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_./:-]{0,127}", model)):
                     continue
                 if row.get("status") in ("Offline", "offline", "Disabled", "disabled"):
                     continue
@@ -323,13 +346,14 @@ class VideoClient:
                 break
         return list(results.values())
 
-    async def download(self, url: str, temporary: Path, destination: Path) -> None:
+    async def download(self, url: str, temporary: Path, destination: Path, *, headers=None) -> None:
         parsed = urlsplit(url)
-        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+        local_api = self.base_url.startswith("http://") and url.startswith(self.base_url + "/")
+        if (parsed.scheme != "https" and not local_api) or not parsed.hostname or parsed.username or parsed.password:
             raise PublishError(f"{self.name} 返回的成片下载地址无效。")
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=90)) as session:
-                async with session.get(url, allow_redirects=False) as response:
+                async with session.get(url, **({"headers": headers} if headers else {}), allow_redirects=False) as response:
                     response.raise_for_status()
                     if response.status != 200:
                         raise aiohttp.ClientError("Unexpected download status")
@@ -436,7 +460,42 @@ class WanVideo(VideoClient):
         return None
 
 
-VIDEO_CLIENTS = {"minimax": MiniMaxVideo, "ark": ArkVideo, "wan": WanVideo}
+class CompatibleVideo(VideoClient):
+    async def create(self, prompt: str, *, reference_image: str | None = None) -> str:
+        reference = None
+        if reference_image:
+            try:
+                encoded = reference_image.split(",", 1)[1]
+                with Image.open(io.BytesIO(base64.b64decode(encoded, validate=True))) as source:
+                    image = ImageOps.pad(source.convert("RGB"), (1280,720), color="#e8edf0")
+                    stream = io.BytesIO(); image.save(stream, format="PNG"); reference = stream.getvalue()
+            except Exception as exc:
+                raise PublishError("兼容视频接口的参考图无法读取，尚未提交生成。") from exc
+        values = {"model": self.model, "prompt": prompt, "seconds": str(self.duration), "size": "1280x720"}
+        if self.transport == "json":
+            if reference:
+                values["input_reference"] = {"image_url": "data:image/png;base64," + base64.b64encode(reference).decode()}
+            data = await self._request("POST", "/videos", json=values)
+        else:
+            form = aiohttp.FormData()
+            for name, value in values.items():
+                form.add_field(name, value, content_type="text/plain")
+            if reference:
+                form.add_field("input_reference", reference, filename="reference.png", content_type="image/png")
+            data = await self._request("POST", "/videos", data=form)
+        return self._task_id(data.get("id"))
+
+    async def query(self, task_id: str) -> str | None:
+        data = await self._request("GET", "/videos/" + quote(task_id, safe=""))
+        if data.get("status") in ("failed", "cancelled", "expired"):
+            raise GenerationFailed("兼容视频服务确认生成失败。")
+        return task_id if data.get("status") == "completed" else None
+
+    async def download(self, task_id: str, temporary: Path, destination: Path) -> None:
+        await super().download(self.base_url + "/videos/" + quote(task_id, safe="") + "/content", temporary, destination, headers=self.headers)
+
+
+VIDEO_CLIENTS = {"minimax": MiniMaxVideo, "ark": ArkVideo, "wan": WanVideo, "openai": CompatibleVideo}
 
 
 class AutoPublisher:
@@ -502,6 +561,7 @@ class AutoPublisher:
                     "duration_fallback": duration_options(name, ""),
                     "reference_models": REFERENCE_MODELS.get(name, {}),
                     "native_audio_prefixes": list(NATIVE_SOUND_PREFIXES.get(name, ())),
+                    "base_urls": {region: address for region, (_, address) in spec["regions"].items()},
                     "regions": {region: label for region, (label, _) in spec["regions"].items()},
                 }
                 for name, spec in VIDEO_PROVIDERS.items()
@@ -510,6 +570,8 @@ class AutoPublisher:
                 name: {
                     "key_configured": bool(profile.get("key")), "model": profile.get("model", ""),
                     "workspace": profile.get("workspace", ""),
+                    "base_url": profile.get("base_url", ""), "transport": profile.get("transport", "multipart"),
+                    "native_audio": profile.get("native_audio", False),
                     "duration": profile.get("duration", VIDEO_PROVIDERS[name.split(":")[0]]["duration"]),
                 }
                 for name, profile in settings["profiles"].items()
@@ -560,7 +622,8 @@ class AutoPublisher:
             raise PublishError("先填写该服务的 Key，再读取模型。")
         workspace = workspace_id(payload.get("workspace", settings["profiles"].get(f"{provider}:{region}", {}).get("workspace", ""))) if provider == "wan" else ""
         try:
-            client = VIDEO_CLIENTS[provider](provider, region, key, VIDEO_PROVIDERS[provider]["model"], workspace)
+            base_url = payload.get("base_url", settings["profiles"].get(f"{provider}:{region}", {}).get("base_url", ""))
+            client = VIDEO_CLIENTS[provider](provider, region, key, VIDEO_PROVIDERS[provider]["model"], workspace, base_url=base_url)
             models = await client.models()
         except PublishError:
             raise
@@ -607,12 +670,26 @@ class AutoPublisher:
         profile_name = f"{provider}:{region}"
         profiles = dict(current["profiles"])
         profile = profiles.get(profile_name, {})
+        try:
+            base_url = api_base(payload.get("base_url", profile.get("base_url", "")))
+        except ValueError as exc:
+            raise PublishError(str(exc)) from exc
+        if provider == "openai" and base_url.endswith("/videos"):
+            base_url = base_url[:-7]
+        if provider == "openai" and settings["enabled"] and not base_url:
+            raise PublishError("请填写兼容视频服务的 API 地址。")
+        transport = payload.get("transport", profile.get("transport", "multipart"))
+        sound = payload.get("native_audio", profile.get("native_audio", False))
+        if transport not in ("multipart", "json") or type(sound) is not bool:
+            raise PublishError("兼容视频协议或原生声音开关无效。")
         model = payload.get("model", profile.get("model", ""))
-        if not isinstance(model, str) or (model and not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", model)):
+        if not isinstance(model, str) or (model and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_./:-]{0,127}", model)):
             raise PublishError("请选择有效的视频模型。")
-        if model and not supported_video_model(provider, model):
+        if model and not supported_video_model(provider, model) and not base_url:
             raise PublishError("该模型尚未适配当前文生视频接口，请从读取结果中选择。")
         effective_model = model or spec["model"]
+        if provider == "openai" and settings["enabled"] and not effective_model:
+            raise PublishError("请填写兼容视频服务的模型 ID。")
         if settings["reference_enabled"] or (settings["mode"] == "storyboard" and settings["shot_link"] == "continue"):
             reference_video_model(provider, effective_model)
         duration = payload.get("duration", profile.get("duration", spec["duration"]))
@@ -623,7 +700,8 @@ class AutoPublisher:
         if settings["enabled"] and not key:
             raise PublishError("先填写所选服务的 API Key，再开启自主投稿。")
         workspace = workspace_id(payload.get("workspace", profile.get("workspace", ""))) if provider == "wan" else ""
-        profiles[profile_name] = {"key": key, "model": model, "workspace": workspace, "duration": duration}
+        profiles[profile_name] = {"key": key, "model": model, "workspace": workspace, "duration": duration,
+                                  "base_url": base_url, "transport": transport, "native_audio": sound}
         settings["profiles"] = profiles
         settings["schedule_after"] = current["schedule_after"]
         if settings["enabled"] and (
@@ -703,6 +781,7 @@ class AutoPublisher:
             "auto_category": settings["auto_category"],
             "direction": settings["direction"], "key_revision": key_revision(profile["key"]),
             "provider": provider, "region": region, "model": model, "duration": duration,
+            "base_url": profile.get("base_url", ""), "transport": profile.get("transport", "multipart"),
             "cleanup_after_publish": True,
             "mode": settings["mode"], "shot_durations": lengths,
             "shot_link": settings["shot_link"],
@@ -717,14 +796,15 @@ class AutoPublisher:
                     raise PublishError(str(exc)) from exc
                 return None
             if pinned:
-                if (pinned.get("mode") != "narration" and pinned.get("subtitles") and native_sound(provider, model)
+                sound = native_sound(provider, model) or provider == "openai" and profile.get("native_audio", False)
+                if (pinned.get("mode") != "narration" and pinned.get("subtitles") and sound
                         and not pinned.get("asr_revision")):
                     if manual:
-                        raise PublishError("请先保存百炼语音识别 Key，或关闭字幕后再生成有声视频。")
+                        raise PublishError("请先保存语音识别服务的 Key，或关闭字幕后再生成有声视频。")
                     return None
                 job["voiceover"] = pinned
-                pinned["expects_audio"] = native_sound(provider, model)
-                if pinned.get("mode") == "character" and native_sound(provider, model):
+                pinned["expects_audio"] = sound
+                if pinned.get("mode") == "character" and sound:
                     job["character_audio"] = {"style": pinned["voice_style"]}
         if lengths:
             job["duration"] = sum(lengths)
@@ -926,7 +1006,8 @@ class AutoPublisher:
             shot.update(phase="requesting", submitted_at=now.isoformat())
             self._update(rows, job, "storyboard", message=f"正在提交{label}。", retry_after="")
             try:
-                task_id = await VIDEO_CLIENTS[provider](provider, region, key, model, duration=shot["duration"]).create(
+                task_id = await VIDEO_CLIENTS[provider](provider, region, key, model, duration=shot["duration"],
+                                                       base_url=job.get("base_url", ""), transport=job.get("transport", "multipart")).create(
                     prompt, **({"reference_image": reference["data_url"]} if reference else {}))
             except PublishError as exc:
                 shot["phase"] = "failed"
@@ -938,7 +1019,8 @@ class AutoPublisher:
                 shot.update(phase="generating", task_id=task_id)
                 self._update(rows, job, "storyboard", message=f"正在生成{label}。")
             return
-        client = VIDEO_CLIENTS[provider](provider, region, key, model, duration=shot["duration"])
+        client = VIDEO_CLIENTS[provider](provider, region, key, model, duration=shot["duration"],
+                                       base_url=job.get("base_url", ""), transport=job.get("transport", "multipart"))
         try:
             artifact = await client.query(shot["task_id"])
         except GenerationFailed as exc:
@@ -1090,7 +1172,8 @@ class AutoPublisher:
                 **category,
             )
             try:
-                task_id = await VIDEO_CLIENTS[provider](provider, region, key, model, duration=duration).create(
+                task_id = await VIDEO_CLIENTS[provider](provider, region, key, model, duration=duration,
+                                                       base_url=job.get("base_url", ""), transport=job.get("transport", "multipart")).create(
                     plan["prompt"], **({"reference_image": reference["data_url"]} if reference else {}))
             except PublishError as exc:
                 self._update(rows, job, "failed", message=str(exc))
@@ -1105,7 +1188,7 @@ class AutoPublisher:
             return
 
         if phase == "generating":
-            client = VIDEO_CLIENTS[provider](provider, region, key, model)
+            client = VIDEO_CLIENTS[provider](provider, region, key, model, base_url=job.get("base_url", ""), transport=job.get("transport", "multipart"))
             submitted = datetime.fromisoformat(job["submitted_at"])
             try:
                 artifact = await client.query(job["task_id"])

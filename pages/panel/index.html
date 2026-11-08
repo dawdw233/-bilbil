@@ -1049,6 +1049,7 @@
               </label>
               <label class="field"><span class="lbl">视频生成服务</span><select id="u-auto-provider" required></select></label>
               <label class="field"><span class="lbl">服务地区</span><select id="u-auto-region" required></select></label>
+              <label class="field span-all"><span class="lbl">视频 API 地址（Base URL）</span><input id="u-auto-base-url" type="url" maxlength="2048" autocomplete="off" aria-describedby="u-auto-base-tip" /><span class="tip" id="u-auto-base-tip">留空使用所选地区默认地址；自定义服务需兼容所选协议，地址包含 API 前缀，例如 /v1。</span></label>
               <label class="field"><span class="lbl">所选服务的 API Key</span>
                 <input id="u-auto-key" type="password" autocomplete="off" maxlength="512" aria-describedby="u-auto-key-state" />
                 <span class="tip" id="u-auto-key-state">正在读取配置…</span>
@@ -1061,6 +1062,9 @@
                 </div>
                 <span class="tip" id="u-auto-model-tip" role="status"></span>
               </div>
+              <label class="field span-all"><span class="lbl">手动填写视频模型 ID（可选）</span><input id="u-auto-custom-model" maxlength="128" autocomplete="off" placeholder="接口未列出模型时，填写服务商提供的模型 ID" /><span class="tip">输入后会选中此模型。模型列表和名称不代表账号已经开通视频生成权限。</span></label>
+              <label class="field hide" id="u-auto-transport-field"><span class="lbl">兼容视频请求格式</span><select id="u-auto-transport"><option value="multipart">multipart · 文件上传协议</option><option value="json">JSON · input_reference 对象协议</option></select></label>
+              <label class="check hide" id="u-auto-native-audio-field"><input id="u-auto-native-audio" type="checkbox" /><span><span class="t">此兼容视频模型支持原生声音</span><span class="d">仅在服务商确认支持时勾选；角色模式会提交声画同步要求，不代表插件已验证模型能力。</span></span></label>
               <label class="field span-all hide" id="u-auto-workspace-field"><span class="lbl">百炼业务空间 ID（读取模型时填写）</span>
                 <input id="u-auto-workspace" maxlength="63" autocomplete="off" placeholder="填写控制台的业务空间 ID" aria-describedby="u-auto-workspace-tip" />
                 <span class="tip" id="u-auto-workspace-tip">无需填写网址；留空也可选择已适配模型，实际可用性取决于 Key 的权限。</span>
@@ -1143,8 +1147,11 @@
                 <label class="field"><span class="lbl">处理方式</span><select id="u-voice-kind"><option value="character">角色声画同步 · 模型原生生成</option><option value="original">保留原声 · 仅识别字幕</option><option value="narration" hidden>旧版旁白 · 兼容已有设置</option></select></label>
                 <label class="field span-all" id="u-voice-style-field"><span class="lbl">角色声音风格</span><input id="u-voice-style" maxlength="120" placeholder="例如：自然中文，语气贴合角色，整片音色保持一致" /><span class="tip">描述声音和情绪，由机器人安排适合剧情的台词；不训练或克隆音色。</span></label>
                 <p class="sub span-all" id="u-voice-capability" role="status"></p>
-                <label class="field" id="u-voice-asr-key-field"><span class="lbl">百炼语音识别 API Key（北京地区）</span><input id="u-voice-asr-key" type="password" maxlength="512" autocomplete="off" aria-describedby="u-voice-asr-tip" /><span class="tip" id="u-voice-asr-tip">识别 Key 独立保存，不自动复制视频或配音 Key。</span></label>
-                <label class="field" id="u-voice-asr-workspace-field"><span class="lbl">语音识别业务空间 ID（可选）</span><input id="u-voice-asr-workspace" maxlength="63" autocomplete="off" /><span class="tip">Paraformer 实时识别，返回句子时间戳；支持海螺、方舟、万相的有声成片。识别服务单独计费。</span></label>
+                <label class="field" id="u-voice-asr-service-field"><span class="lbl">语音识别服务 / 协议</span><select id="u-voice-asr-service"></select></label>
+                <label class="field" id="u-voice-asr-model-field"><span class="lbl">识别模型 ID</span><input id="u-voice-asr-model" maxlength="128" autocomplete="off" /></label>
+                <label class="field span-all" id="u-voice-asr-base-field"><span class="lbl">识别 API 地址</span><input id="u-voice-asr-base" type="url" maxlength="2048" autocomplete="off" /><span class="tip" id="u-voice-asr-protocol-tip"></span></label>
+                <label class="field" id="u-voice-asr-key-field"><span class="lbl">所选识别服务的 API Key</span><input id="u-voice-asr-key" type="password" maxlength="512" autocomplete="off" aria-describedby="u-voice-asr-tip" /><span class="tip" id="u-voice-asr-tip">识别 Key 按服务独立保存，不自动复制视频或配音 Key。</span></label>
+                <label class="field" id="u-voice-asr-workspace-field"><span class="lbl">百炼业务空间 ID（可选）</span><input id="u-voice-asr-workspace" maxlength="63" autocomplete="off" /><span class="tip">仅 Paraformer 协议使用；填写自定义地址时优先使用该地址。识别服务单独计费。</span></label>
                 <div id="u-voice-legacy" class="grid span-all hide">
                 <label class="field"><span class="lbl">配音服务</span><select id="u-voice-provider"></select></label>
                 <label class="field"><span class="lbl">配音服务地区</span><select id="u-voice-region"></select></label>
@@ -3122,7 +3129,7 @@ function resetAutoPublishModels() {
   const provider = $("u-auto-provider").value;
   const region = $("u-auto-region").value;
   const profile = autoPublishState.profiles[provider + ":" + region];
-  const model = profile?.model || "";
+  const model = ($("u-auto-custom-model")?.value||"").trim() || profile?.model || "";
   setAutoPublishModelOptions(model, []);
   $("u-auto-model-tip").textContent = provider === "minimax"
     ? "MiniMax 列表接口可能不包含海螺视频模型；可直接选择已适配模型。检查连接不会生成视频，也不验证视频权限。"
@@ -3133,7 +3140,7 @@ function resetAutoPublishModels() {
 
 function setAutoPublishModelOptions(selected, discovered) {
   const spec = autoPublishState.providers[$("u-auto-provider").value];
-  const options = [new Option(selected ? "当前选择 · " + selected : "默认配置 · " + spec.model, selected)];
+  const options = [new Option(selected ? "当前选择 · " + selected : spec.model ? "默认配置 · " + spec.model : "请选择或手动填写模型", selected)];
   const seen = new Set([selected]);
   for (const model of discovered) {
     if (seen.has(model.id)) continue;
@@ -3166,6 +3173,15 @@ function selectAutoPublishProfile() {
   $("u-auto-key").value = "";
   const provider = $("u-auto-provider").value;
   const profile = autoPublishState.profiles[provider + ":" + $("u-auto-region").value];
+  const custom=provider==="openai";
+  $("u-auto-base-url").value=profile?.base_url||"";
+  $("u-auto-base-url").placeholder=autoPublishState.providers[provider].base_urls?.[$("u-auto-region").value]||"https://你的服务地址/v1";
+  $("u-auto-base-tip").textContent=custom ? "填写自己的兼容视频服务 Base URL，需实现 /videos、任务查询和 /content 下载。官方 Videos API 已下线，这里不预置官方视频地址。" : "留空使用所选地区默认地址；自定义地址需兼容所选服务协议，不会自动转换不同平台的请求格式。";
+  $("u-auto-custom-model").value="";
+  $("u-auto-transport").value=profile?.transport||"multipart";
+  $("u-auto-native-audio").checked=profile?.native_audio===true;
+  $("u-auto-transport-field").classList.toggle("hide",!custom);
+  $("u-auto-native-audio-field").classList.toggle("hide",!custom);
   $("u-auto-workspace").value = profile?.workspace || "";
   $("u-auto-workspace-field").classList.toggle("hide", provider !== "wan");
   resetAutoPublishModels();
@@ -3185,13 +3201,16 @@ async function readAutoPublishModels() {
   try {
     const data = await api("upload/auto/models", {
       provider, region, api_key: $("u-auto-key").value.trim(),
+      base_url: $("u-auto-base-url").value.trim(),
       workspace: $("u-auto-workspace").value.trim(),
     });
     if (requestId !== autoModelRequest) return;
     if (!Array.isArray(data.models)) throw new Error("服务商未返回有效模型列表");
     setAutoPublishModelOptions($("u-auto-model").value, data.models);
     $("u-auto-model-tip").textContent = data.models.length
-      ? `从接口读到 ${data.models.length} 个已适配的文生视频模型，选择后保存生效；仍需对应模型权限。`
+      ? provider === "openai" || $("u-auto-base-url").value.trim()
+        ? `接口列出 ${data.models.length} 个模型，未确认每个模型的视频能力；请选择平台支持的视频模型，选择后保存。`
+        : `从接口读到 ${data.models.length} 个已适配的文生视频模型，选择后保存生效；仍需对应模型权限。`
       : data.message || "接口没有列出已适配的视频模型；可直接选择标注「已适配」的模型，实际可用性取决于 Key 权限。";
     syncAutoPublishActions();
   } catch (error) {
@@ -3215,8 +3234,10 @@ function syncAutoPublishActions() {
     || $("u-auto-mode").value !== (settings.mode || "single") || Number($("u-auto-total").value) !== (settings.total_duration || 30)
     || $("u-auto-reference").checked !== (settings.reference_enabled === true)
     || $("u-auto-link").value !== (settings.shot_link || "independent");
+  const connectionChanged=$("u-auto-base-url").value.trim()!==(profile?.base_url||"")
+    || $("u-auto-transport").value!==(profile?.transport||"multipart") || $("u-auto-native-audio").checked!==(profile?.native_audio===true);
   const durationChanged = Number($("u-auto-duration").value) !== (profile?.duration || autoPublishState.providers[provider].duration);
-  $("u-auto-draft-hint").textContent = changed || durationChanged ? "设置有未保存的修改，请先保存，再立即生成。" : "";
+  $("u-auto-draft-hint").textContent = changed || durationChanged || connectionChanged ? "设置有未保存的修改，请先保存，再立即生成。" : "";
   const autoCategory = $("u-auto-category").checked;
   $("u-auto-tid-label").textContent = autoCategory ? "备用投稿分区" : "投稿分区";
   $("u-auto-tid-tip").textContent = autoCategory
@@ -3228,10 +3249,10 @@ function syncAutoPublishActions() {
   const active = jobs.some(job => autoPublishActive.includes(job.phase));
   const referenceReady = syncAutoPublishReferences();
   const storyboardReady = syncAutoPublishStoryboardForm();
-  $("u-auto-start").disabled = !settings.enabled || !configured || !logged_in || active || changed || durationChanged || !referenceReady || !storyboardReady || autoReferenceUploading || voiceSaving || voiceDraftDirty;
+  $("u-auto-start").disabled = !settings.enabled || !configured || !logged_in || active || changed || durationChanged || connectionChanged || !referenceReady || !storyboardReady || autoReferenceUploading || voiceSaving || voiceDraftDirty;
   $("u-auto-reference-upload").disabled = autoReferenceUploading;
   $("u-auto-reference-refresh").disabled = autoReferenceUploading;
-  $("u-auto-start").title = voiceDraftDirty || voiceSaving ? "请先保存配音与字幕设置" : changed || durationChanged ? "请先保存自主投稿设置" : logged_in ? "" : "请先在「刷视频」页登录 B站";
+  $("u-auto-start").title = voiceDraftDirty || voiceSaving ? "请先保存配音与字幕设置" : changed || durationChanged || connectionChanged ? "请先保存自主投稿设置" : logged_in ? "" : "请先在「刷视频」页登录 B站";
   syncCharacterAudioHint();
 }
 
@@ -3292,7 +3313,7 @@ function syncAutoPublishReferences() {
   const provider = $("u-auto-provider").value;
   const spec = autoPublishState.providers[provider];
   const model = $("u-auto-model").value || spec.model;
-  const imageModel = provider === "ark" && !model?.includes("-t2v") ? model : spec.reference_models?.[model];
+  const imageModel = (provider === "ark" && !model?.includes("-t2v")) || provider === "openai" && model ? model : spec.reference_models?.[model];
   $("u-auto-reference-dir").textContent = library?.directory || "插件数据目录 / reference_images /";
   const names = library?.files?.map(item => item.name).join("、") || "";
   const invalid = library?.invalid_count ? `；${library.invalid_count} 张不可用（${library.invalid?.[0]?.message || "请检查图片格式与尺寸"}）` : "";
@@ -3327,12 +3348,12 @@ function syncAutoPublishStoryboardForm() {
   const options=spec.duration_rules?.find(rule=>model.startsWith(rule.prefix))?.options||spec.duration_fallback||[spec.duration];
   const lengths=storyboardLengths(options,Number($("u-auto-total").value));
   const provider=$("u-auto-provider").value;
-  const supported=provider === "ark" && !model.includes("-t2v") || !!spec.reference_models?.[model];
+  const supported=provider === "ark" && !model.includes("-t2v") || provider === "openai" && !!model || !!spec.reference_models?.[model];
   const linked=$("u-auto-link").value === "continue";
   $("u-auto-link-tip").textContent=linked && !supported
     ? "当前模型不支持尾帧接续，请切回分别生成，或选择海螺 2.3/02、支持图生视频的方舟模型、万相 2.5/2.6。"
     : "连续动作会读取上一镜实际结束画面，帮助保持角色、道具和动作承接；适合同一场景，不保证完全消除角色漂移。";
-  $("u-auto-storyboard-tip").textContent = `将生成 ${lengths.length} 个分镜（${lengths.join(" + ")} 秒），再合成为一条视频。先规划动作起止、机位、声音和旁白；各片段分别生成和计费。支持原声的模型会尝试生成环境与动作声，保留声音请在配音设置中选择原声混合。`;
+  $("u-auto-storyboard-tip").textContent = lengths.length ? `将生成 ${lengths.length} 个分镜（${lengths.join(" + ")} 秒），再合成为一条视频。先规划动作起止、机位、声音和旁白；各片段分别生成和计费。角色模式或保留原声模式不会覆盖模型原音轨。` : "当前协议的时长无法组成所选总时长，请切换总时长；Videos 兼容协议可选择 60 秒分镜。";
   return lengths.length >= 2 && lengths.length <= 12 && (!linked || supported);
 }
 
@@ -3399,9 +3420,30 @@ function renderAutoPublish(data, fill) {
 function voicePayload() {
   return {enabled:$("u-voice-enabled").checked,provider:$("u-voice-provider").value,region:$("u-voice-region").value,
     mode:$("u-voice-kind").value,voice_style:$("u-voice-style").value.trim(),asr_workspace:$("u-voice-asr-workspace").value.trim(),asr_api_key:$("u-voice-asr-key").value.trim(),
+    asr_service:$("u-voice-asr-service").value,asr_base_url:$("u-voice-asr-base").value.trim(),asr_model:$("u-voice-asr-model").value.trim(),
     api_key:$("u-voice-key").value.trim(),model:$("u-voice-model").value,voice:$("u-voice-voice").value,speed:Number($("u-voice-speed").value),
     mix:$("u-voice-mode").value === "mix",original_volume:Number($("u-voice-original_volume").value),
     voice_volume:Number($("u-voice-voice_volume").value),subtitles:$("u-voice-subtitles").checked,font_size:Number($("u-voice-font_size").value)};
+}
+
+function recognitionServices() {
+  return voiceState.asr_services||{paraformer:{name:"百炼 / Paraformer 兼容",model:"paraformer-realtime-v2",base_url:"",hint:"WebSocket 识别协议，留空地址连接百炼北京地区。"},openai:{name:"OpenAI / Whisper 兼容",model:"whisper-1",base_url:"https://api.openai.com/v1",hint:"需支持 /audio/transcriptions、verbose_json 和 segments 时间戳。"}};
+}
+
+function recognitionProfile(service) {
+  if(voiceState.asr_profiles?.[service])return voiceState.asr_profiles[service];
+  if(service===(voiceState.settings.asr_service||"paraformer"))return {key_configured:voiceState.asr_key_configured,base_url:voiceState.settings.asr_base_url,model:voiceState.settings.asr_model,workspace:voiceState.settings.asr_workspace};
+  return {};
+}
+
+function selectRecognitionService(sync=true) {
+  const service=$("u-voice-asr-service").value;
+  const spec=recognitionServices()[service],profile=recognitionProfile(service);
+  $("u-voice-asr-key").value="";
+  $("u-voice-asr-base").value=profile.base_url??spec.base_url;
+  $("u-voice-asr-model").value=profile.model||spec.model;
+  $("u-voice-asr-workspace").value=profile.workspace||"";
+  if(sync)syncVoiceoverForm();
 }
 
 function syncCharacterAudioHint() {
@@ -3409,10 +3451,10 @@ function syncCharacterAudioHint() {
   const mode=$("u-voice-kind").value;
   const provider=$("u-auto-provider").value, spec=autoPublishState.providers[provider];
   const model=$("u-auto-model").value||spec?.model||"";
-  const capable=spec?.native_audio_prefixes?.some(prefix=>model.startsWith(prefix));
+  const capable=spec?.native_audio_prefixes?.some(prefix=>model.startsWith(prefix)) || provider==="openai" && $("u-auto-native-audio").checked;
   $("u-voice-capability").textContent=mode==="character" ? capable
     ? "当前视频模型支持原生有声生成，将提交角色台词与声画同步要求；口型与音色效果由模型决定。字幕另行识别实际音轨。"
-    : "当前视频模型未适配角色原生声音，若成片无声则直接跳过。需要角色说话请选择万相 2.5/2.6 或支持有声生成的方舟 Seedance；不会用旁白代替。"
+    : "当前视频模型未声明角色原生声音能力，若成片无声则直接跳过。可选择万相 2.5/2.6、支持有声的方舟，或按平台能力勾选兼容视频的原生声音；不会用旁白代替。"
     : mode==="original" ? "保留生成视频的声音和嘴形，只从实际音轨识别字幕；不会添加角色声音、改口型或补旁白。" : "当前为兼容旧版旁白的设置，可切换到角色声画同步或保留原声。";
 }
 
@@ -3428,14 +3470,18 @@ function syncVoiceoverForm() {
   $("u-voice-original_volume").disabled=!current.mix;
   $("u-voice-font_size").disabled=!current.subtitles;
   const legacy=current.mode==="narration";
+  const asrSpec=recognitionServices()[current.asr_service],asrProfile=recognitionProfile(current.asr_service);
   $("u-voice-legacy").classList.toggle("hide",!legacy);
   $("u-voice-style-field").classList.toggle("hide",current.mode!=="character");
   $("u-voice-asr-key-field").classList.toggle("hide",legacy);
-  $("u-voice-asr-workspace-field").classList.toggle("hide",legacy);
+  $("u-voice-asr-workspace-field").classList.toggle("hide",legacy||current.asr_service!=="paraformer");
+  for(const name of ["service","model","base"]){$("u-voice-asr-"+name+"-field").classList.toggle("hide",legacy);$("u-voice-asr-"+name).disabled=legacy||!current.subtitles;}
   $("u-voice-asr-key").disabled=legacy||!current.subtitles;
   $("u-voice-asr-workspace").disabled=legacy||!current.subtitles;
-  $("u-voice-asr-tip").textContent=voiceState.asr_key_configured ? "已保存识别 Key，留空沿用；不会覆盖视频或旧配音 Key。" : "填写百炼北京地区的 Key；识别服务与视频服务可不同，不会自动复制其他 Key。无声视频不调用识别。";
-  $("u-voice-clear").disabled=legacy?!profile?.key_configured:!voiceState.asr_key_configured;
+  $("u-voice-asr-protocol-tip").textContent=asrSpec.hint;
+  $("u-voice-asr-base").placeholder=current.asr_service==="paraformer"?"留空按业务空间使用默认地址；也可填 wss://…":asrSpec.base_url;
+  $("u-voice-asr-tip").textContent=asrProfile.key_configured ? "此识别服务已保存 Key，留空沿用；切换服务不会混用其他服务的 Key。" : "填写所选识别服务的 Key；可与视频服务不同。无声视频不调用识别。";
+  $("u-voice-clear").disabled=legacy?!profile?.key_configured:!asrProfile.key_configured;
   $("u-voice-clear").textContent=legacy?"清除旧配音 Key 并关闭":"清除识别 Key 并关闭";
   $("u-voice-draft").textContent=voiceDraftDirty ? "配音设置尚未保存，请保存后再立即生成视频。" : "";
   if ($("u-auto-provider").value) syncAutoPublishActions();
@@ -3470,8 +3516,9 @@ function renderVoiceover(data, fill=false) {
     $("u-voice-enabled").checked=s.enabled;
     $("u-voice-kind").value=s.mode||"character";
     $("u-voice-style").value=s.voice_style??"自然中文，语气贴合角色，整片音色保持一致";
-    $("u-voice-asr-workspace").value=s.asr_workspace||"";
-    $("u-voice-asr-key").value="";
+    $("u-voice-asr-service").replaceChildren(...Object.entries(recognitionServices()).map(([id,spec])=>new Option(spec.name,id)));
+    $("u-voice-asr-service").value=s.asr_service||"paraformer";
+    selectRecognitionService(false);
     $("u-voice-subtitles").checked=s.subtitles;
     $("u-voice-mode").value=s.mix?"mix":"replace";
     for (const key of ["original_volume","voice_volume","font_size"]) $("u-voice-"+key).value=s[key];
@@ -3508,6 +3555,7 @@ $("u-voice-form").onsubmit=event=>{event.preventDefault();saveVoiceover(voicePay
 $("u-voice-form").addEventListener("input",syncVoiceoverForm);
 $("u-voice-provider").onchange=()=>selectVoiceRegions(voiceState.settings.provider===$("u-voice-provider").value?voiceState.settings.region:"cn");
 $("u-voice-region").onchange=selectVoiceProfile;
+$("u-voice-asr-service").onchange=()=>selectRecognitionService();
 $("u-voice-clear").onclick=()=>saveVoiceover({...voicePayload(),enabled:false,api_key:"",asr_api_key:"",...($("u-voice-kind").value==="narration"?{remove_key:true}:{remove_asr_key:true})});
 
 async function loadAutoPublish(fill = false) {
@@ -3551,6 +3599,7 @@ $("u-auto-form").onsubmit = (event) => {
     region: $("u-auto-region").value,
     model: $("u-auto-model").value.trim(),
     duration: Number($("u-auto-duration").value),
+    base_url: $("u-auto-base-url").value.trim(), transport: $("u-auto-transport").value, native_audio: $("u-auto-native-audio").checked,
     mode: $("u-auto-mode").value,
     total_duration: Number($("u-auto-total").value),
     shot_link: $("u-auto-link").value,
@@ -3589,9 +3638,17 @@ $("u-auto-key").oninput = () => {
 };
 $("u-auto-key").onchange = readAutoPublishModels;
 $("u-auto-model-read").onclick = readAutoPublishModels;
+$("u-auto-base-url").oninput=()=>{++autoModelRequest;$("u-auto-model-read").disabled=false;$("u-auto-model-tip").textContent="地址已修改，可重新读取此接口的模型；当前模型选择保留。";syncAutoPublishActions();};
 $("u-auto-model").onchange = () => {
+  $("u-auto-custom-model").value="";
   syncAutoPublishDuration();
   syncAutoPublishActions();
+};
+$("u-auto-custom-model").oninput=()=>{
+  const model=$("u-auto-custom-model").value.trim();
+  if(model){if(!Array.from($("u-auto-model").options).some(option=>option.value===model))$("u-auto-model").add(new Option("手动填写 · "+model,model));$("u-auto-model").value=model;}
+  else resetAutoPublishModels();
+  syncAutoPublishDuration();syncAutoPublishActions();
 };
 $("u-auto-duration").onchange = syncAutoPublishActions;
 $("u-auto-mode").onchange = syncAutoPublishActions;

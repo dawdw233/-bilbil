@@ -141,7 +141,7 @@ class CharacterAudioTests(unittest.IsolatedAsyncioTestCase):
         now=plugin.datetime(2026,11,8,21,tzinfo=plugin.BEIJING_TIME)
         worker=auto.AutoPublisher(self.root,AsyncMock(),AsyncMock(),lambda:"42",lambda:False,voiceover=self.service)
         worker.save_settings({"enabled":True,"provider":"wan","api_key":"video-key"},now)
-        with self.assertRaisesRegex(auto.PublishError,"语音识别 Key"):
+        with self.assertRaisesRegex(auto.PublishError,"语音识别.*Key"):
             worker.enqueue(now,manual=True)
         self.assertEqual(worker.jobs(),[])
         self.service.save({"subtitles":False})

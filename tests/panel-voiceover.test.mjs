@@ -8,6 +8,7 @@ function setup() {
   const nodes={};
   for(const name of ['enabled','provider','region','key','model','voice','speed','mode','original_volume','voice_volume','subtitles','font_size','key-tip','clear','draft','fields','feedback','form','kind','style','style-field','capability','asr-key','asr-tip','asr-key-field','asr-workspace','asr-workspace-field','legacy'])nodes['u-voice-'+name]={value:'',checked:false,addEventListener(){},replaceChildren(){},classList:{toggle(){}}};
   nodes['u-auto-provider']={value:'minimax'};
+  for(const name of ['asr-service','asr-model','asr-base','asr-service-field','asr-model-field','asr-base-field','asr-protocol-tip'])nodes['u-voice-'+name]={value:'',replaceChildren(){},classList:{toggle(){}}};
   const state={settings:{enabled:false,provider:'minimax',region:'cn',mix:false,original_volume:15,voice_volume:100,subtitles:true,font_size:28},
     providers:{minimax:{name:'MiniMax',models:['speech-2.6-turbo'],voices:{warm:'温柔女声',youth:'青年'},regions:{cn:'中国站',global:'国际站'}},qwen:{name:'千问',models:['qwen3-tts-flash'],voices:{Cherry:'芊悦'},regions:{cn:'中国内地',global:'新加坡'}}},
     profiles:{'minimax:cn':{key_configured:true,model:'speech-2.6-turbo',voice:'warm',speed:1}}};
@@ -80,4 +81,18 @@ test('识别Key与旧配音Key独立，清除只针对当前模式，保存失�
   assert.equal(captured.remove_asr_key,true);
   assert.equal(captured.remove_key,undefined);
   assert.equal(captured.enabled,false);
+});
+
+test('切换识别协议读取各自地址和模型，清空Key草稿并保留其他服务配置',()=>{
+  const {nodes,c,state}=setup();
+  state.asr_profiles={paraformer:{key_configured:true,base_url:'wss://para.test/api-ws/v1/inference',model:'para-model',workspace:'space'},openai:{key_configured:true,base_url:'https://whisper.test/v1',model:'whisper-custom',workspace:''}};
+  nodes['u-voice-asr-key'].value='unsaved-key';
+  nodes['u-voice-asr-service'].value='openai';c.selectRecognitionService();
+  assert.equal(nodes['u-voice-asr-key'].value,'');
+  assert.equal(nodes['u-voice-asr-base'].value,'https://whisper.test/v1');
+  assert.equal(nodes['u-voice-asr-model'].value,'whisper-custom');
+  assert.equal(c.voicePayload().asr_service,'openai');
+  nodes['u-voice-asr-service'].value='paraformer';c.selectRecognitionService();
+  assert.equal(nodes['u-voice-asr-model'].value,'para-model');assert.equal(nodes['u-voice-asr-workspace'].value,'space');
+  assert.equal(state.asr_profiles.openai.base_url,'https://whisper.test/v1');
 });

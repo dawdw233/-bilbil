@@ -2,11 +2,21 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import math
 import re
+import wave
 
 import aiohttp
+from .api_config import api_base, api_endpoint
+
+ASR_SERVICES = {
+    "paraformer": {"name": "百炼 / Paraformer 兼容", "model": "paraformer-realtime-v2", "base_url": "",
+                   "hint": "WebSocket run-task 协议，返回句子时间戳；留空地址按业务空间连接百炼北京地区。"},
+    "openai": {"name": "OpenAI / Whisper 兼容", "model": "whisper-1", "base_url": "https://api.openai.com/v1",
+               "hint": "POST /audio/transcriptions，模型需支持 verbose_json 及 segments 时间戳；仅返回纯文本的接口不能制作同步字幕。"},
+}
 
 
 class RecognitionError(Exception):
@@ -53,12 +63,13 @@ def validate_segments(rows: list, duration: float) -> list[dict]:
 
 
 class ParaformerClient:
-    def __init__(self, key: str, workspace: str = ""):
+    def __init__(self, key: str, workspace: str = "", *, base_url: str = "", model: str = "paraformer-realtime-v2"):
         if not isinstance(workspace, str) or (workspace and not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,62}", workspace)):
             raise RecognitionError("语音识别业务空间 ID 无效。")
         host = f"{workspace}.cn-beijing.maas.aliyuncs.com" if workspace else "dashscope.aliyuncs.com"
-        self.url = "wss://" + host + "/api-ws/v1/inference"
+        self.url = api_endpoint(api_base(base_url, websocket=True) or "wss://" + host, "/api-ws/v1/inference")
         self.key = key
+        self.model = model
 
     async def recognize(self, pcm: bytes, duration: float, task_id: str) -> list[dict]:
         if (not re.fullmatch(r"[0-9a-f]{32}", task_id) or not 0 < duration <= 65
@@ -73,7 +84,7 @@ class ParaformerClient:
                                                   max_msg_size=256*1024, heartbeat=15) as ws:
                         await ws.send_json({"header": {"action": "run-task", "task_id": task_id, "streaming": "duplex"},
                                             "payload": {"task_group": "audio", "task": "asr", "function": "recognition",
-                                                        "model": "paraformer-realtime-v2", "parameters": {
+                                                        "model": self.model, "parameters": {
                                                             "format": "pcm", "sample_rate": 16000, "heartbeat": True,
                                                             "disfluency_removal_enabled": False,
                                                             "punctuation_prediction_enabled": True}, "input": {}}})
@@ -125,3 +136,43 @@ class ParaformerClient:
                 sender.cancel()
             if sender:
                 await asyncio.gather(sender, return_exceptions=True)
+
+
+class OpenAIRecognitionClient:
+    def __init__(self, key: str, *, base_url: str, model: str):
+        self.url = api_endpoint(api_base(base_url) or ASR_SERVICES["openai"]["base_url"], "/audio/transcriptions")
+        self.key, self.model = key, model
+
+    async def recognize(self, pcm: bytes, duration: float, task_id: str) -> list[dict]:
+        if not pcm or len(pcm) % 2 or not 0 < duration <= 65 or len(pcm) > 65*32000+64000:
+            raise RecognitionError("识别音频参数无效。")
+        audio = io.BytesIO()
+        with wave.open(audio, "wb") as stream:
+            stream.setnchannels(1); stream.setsampwidth(2); stream.setframerate(16000); stream.writeframes(pcm)
+        form = aiohttp.FormData()
+        form.add_field("model", self.model)
+        form.add_field("response_format", "verbose_json")
+        form.add_field("timestamp_granularities[]", "segment")
+        form.add_field("file", audio.getvalue(), filename="audio.wav", content_type="audio/wav")
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=120)) as session:
+                async with session.post(self.url, data=form, headers={"Authorization": "Bearer " + self.key}, allow_redirects=False) as response:
+                    if response.status != 200:
+                        raise RecognitionError(f"兼容语音识别请求未成功（HTTP {response.status}），请检查地址、模型和权限。")
+                    chunks, size = [], 0
+                    async for chunk in response.content.iter_chunked(65536):
+                        size += len(chunk)
+                        if size > 2*1024*1024:
+                            raise RecognitionError("识别返回数据过大，已保留视频。")
+                        chunks.append(chunk)
+                    data = json.loads(b"".join(chunks))
+            if not isinstance(data, dict) or not isinstance(data.get("segments"), list):
+                raise RecognitionError("接口没有返回 segments 时间戳，请使用支持 verbose_json 的识别模型；不会根据纯文本猜测字幕时间。")
+            rows = [{key: row.get(key) for key in ("start", "end", "text")} for row in data["segments"] if isinstance(row, dict)]
+            if len(rows) != len(data["segments"]):
+                raise RecognitionError("识别返回的分段格式无效。")
+            return validate_segments(rows, duration)
+        except RecognitionError:
+            raise
+        except Exception as exc:
+            raise RecognitionError("兼容语音识别连接或响应异常，已保留视频；不会自动重复提交。") from exc
