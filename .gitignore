@@ -14,6 +14,7 @@ venv/
 bili_credential.json
 auto_publish_settings.json
 auto_publish_jobs.json
+creative_learning.json
 config/
 plugin_data/
 media/

@@ -358,6 +358,7 @@ class DutyRunner:
         judge: Callable[[str, str], Awaitable[str]],
         log: Callable[[str], None],
         commenter: Callable[[str, str], Awaitable[str]] | None = None,
+        learner=None,
     ) -> None:
         self.bili = bili
         self.cfg = config or {}
@@ -366,6 +367,7 @@ class DutyRunner:
         self.log = log
         # 自动评论用的"写一句话"回调；不给就等于关掉这个功能
         self.commenter = commenter
+        self.learner = learner
         self.data_dir.mkdir(parents=True, exist_ok=True)
         (self.data_dir / "out").mkdir(exist_ok=True)
         self.seen_path = self.data_dir / "seen.json"
@@ -743,6 +745,15 @@ class DutyRunner:
                 "want_interaction": verdict.get("want_interaction") is True and isinstance(verdict.get("reason"), str),
             })
             subtitles[bvid] = text
+            if self.learner:
+                try:
+                    await self.learner(bvid, text, self._call)
+                except RiskPause as exc:
+                    risk_abort = str(exc)
+                    self.log(f"[warn] {exc}，停止本轮学习和互动")
+                    break
+                except Exception as exc:
+                    self.log(f"[warn] 创作学习已跳过（{type(exc).__name__}），继续正常刷视频")
 
         # 3.5) 自动评论（可关；有每轮/每天上限，被风控就停手）
         if risk_abort:

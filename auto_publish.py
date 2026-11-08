@@ -211,6 +211,11 @@ def parse_plan(text: str, duration: int = 65) -> dict:
             raise PublishError("选题缺少标题、镜头描述、简介或标签。")
         fields[name] = value.strip()[:size]
     fields["tags"] = publication_tags(fields["tags"])
+    if isinstance(data.get("learning_used"), list):
+        fields["learning_used"] = [
+            {key: str(row.get(key, ""))[:size] for key, size in (("id", 32), ("topic", 40), ("rule", 180), ("limitation", 120), ("status", 20))}
+            for row in data["learning_used"][:5] if isinstance(row, dict) and re.fullmatch(r"[0-9a-f]{32}", str(row.get("id", "")))
+        ]
     if "dialogue" in data:
         try:
             fields["dialogue"] = parse_dialogue(data["dialogue"], duration)
@@ -593,6 +598,7 @@ class AutoPublisher:
                                **{key: shot.get(key, "") for key in ("beat", "start_state", "prompt", "end_state", "camera", "sound", "narration", "voice_start")}}
                               for index, shot in enumerate(row.get("shots", []))],
                     "reference_image": row.get("reference_image", {}).get("name", ""),
+                    "learning_used": row.get("learning_used", []),
                     "voiceover_enabled": bool(row.get("voiceover")),
                     "voiceover_done": row.get("voiceover", {}).get("complete", False),
                     "voiceover_skipped": row.get("voiceover", {}).get("skipped", ""),

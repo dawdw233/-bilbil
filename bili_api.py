@@ -844,6 +844,26 @@ async def bili_video_info(bvid: str) -> str:
     }, ensure_ascii=False)
 
 
+async def bili_learning_info(bvid: str) -> dict:
+    """Keep disclosure separate from titles/comments; never infer AI from a tag."""
+    v = video.Video(bvid=bvid, credential=get_cred())
+    try:
+        info = await v.get_info()
+    except ResponseCodeException as exc:
+        return {"code": exc.code, "message": "读取学习视频信息失败。"}
+    return {"bvid": bvid, "title": info.get("title", ""), "description": info.get("desc", ""),
+            "duration": info.get("duration"), "pages": len(info.get("pages", [])),
+            "ai_declaration": (info.get("argue_info") or {}).get("argue_msg", "")}
+
+
+async def bili_learning_stream(bvid: str) -> dict:
+    """Read a playback URL only after the learning service accepts a disclosure."""
+    try:
+        return await video.Video(bvid=bvid, credential=get_cred()).get_download_url(page_index=0)
+    except ResponseCodeException as exc:
+        return {"code": exc.code, "message": "读取学习视频播放流失败。"}
+
+
 async def bili_upload_categories() -> list[dict]:
     """Read the current account's submission subcategories without publishing."""
     from bilibili_api.utils.network import Api

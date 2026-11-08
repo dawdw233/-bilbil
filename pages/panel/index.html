@@ -140,6 +140,21 @@
   .video-model-picker select { flex: 1; width: 0; }
   .video-model-picker button { flex-shrink: 0; padding: 8px 12px; }
   #sec-auto-publish .panel + .panel { margin-top: 12px; }
+  #sec-learning .learning-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:28px; align-items:start; }
+  #sec-learning .learning-explanation h3, #sec-learning .learning-record-head h3 { margin:0; font-size:16px; }
+  #sec-learning .sub, #sec-learning .learning-limits { font-size:13px; line-height:1.7; }
+  #sec-learning .learning-limits summary, #sec-learning .learning-record > summary { cursor:pointer; padding:8px 0; }
+  #sec-learning .learning-limits li + li { margin-top:8px; }
+  #sec-learning .learning-record-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:28px; }
+  #sec-learning .learning-record { padding:12px 0; border-top:1px solid var(--line); overflow-wrap:anywhere; }
+  #sec-learning .learning-record > summary { font-size:14px; font-weight:600; }
+  #sec-learning .learning-lesson { margin:16px 0 20px; }
+  #sec-learning .learning-lesson p { margin:6px 0; }
+  #sec-learning .learning-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+  #sec-learning .learning-actions button { padding:7px 13px; }
+  #sec-learning .learning-actions button[aria-pressed="true"] { color:var(--ink); border-color:currentColor; }
+  #sec-learning #learn-more { margin-top:12px; }
+  @media(max-width:1000px) { #sec-learning .learning-layout { grid-template-columns:minmax(0,1fr); gap:24px; } }
   .sec.collapsible.collapsed > .sec-body { display: none; }
   .panel { border: 1px solid #ffffffcf; border-radius: var(--r); background: var(--surface); box-shadow: var(--shadow); padding: 22px 24px; }
   .panel-title { font-size: 13px; font-weight: 600; color: #49677f; margin-bottom: 14px; }
@@ -1122,6 +1137,43 @@
           </fieldset>
           <p id="u-auto-feedback" class="sub" role="status"></p>
         </form>
+      </div>
+    </section>
+
+    <section class="sec collapsible" id="sec-learning">
+      <div class="sec-head"><span class="caret">▸</span><h2>自主学习</h2><span class="sub">从明确标注的 AI 视频中积累创作经验</span></div>
+      <div class="sec-body">
+        <div class="panel">
+          <div class="learning-layout">
+            <form id="learn-form">
+              <fieldset id="learn-fields" disabled style="border:0;padding:0;margin:0;min-width:0">
+                <label class="check"><input id="learn-enabled" type="checkbox" /><span><span class="t">开启自主学习与经验引用</span><span class="d">默认关闭。开启后，在刷到挑中的视频时检查 AI 声明；生成前按题材检索经验，辅助优化提示词。</span></span></label>
+                <div class="grid" style="margin-top:20px">
+                  <label class="field"><span class="lbl">每日学习视频上限</span><input id="learn-limit" type="number" min="1" max="3" step="1" /><span class="tip">北京时间计数，失败也占一次；同一视频不重复分析。</span></label>
+                  <label class="field"><span class="lbl">每条视频的关键帧</span><select id="learn-frames"><option value="4">4 张 · 节省用量</option><option value="6">6 张 · 更多画面依据</option></select><span class="tip">使用当前 AstrBot 模型，需支持多图识别，会增加模型用量。</span></label>
+                </div>
+                <div class="save-bar"><button type="submit" class="primary">保存学习设置</button></div>
+              </fieldset>
+              <p id="learn-feedback" class="sub" role="status"></p>
+              <p id="learn-draft" class="sub" role="status"></p>
+            </form>
+            <div class="learning-explanation">
+              <h3>学什么，如何使用</h3>
+              <p class="sub">仅接受平台明确的 AI 生成声明，或作者明确声明整段视频画面由 AI 生成。只在标题或标签中提到 AI、无声明或信息冲突时跳过。</p>
+              <p class="sub">第一版分析单 P、2～120 秒的视频，下载不超过 40 MB，临时视频与关键帧分析后移除。保存构图、动作状态和一致性的简短经验，不保存原片。</p>
+              <p class="sub">每次策划最多检索 5 条相关经验，经验上下文不超过 1200 字符；一次文本优化失败即沿用原方案，不自动重新付费生成视频。关闭后停止新学习与新策划的经验引用，已有任务保留原方案。</p>
+              <details class="learning-limits"><summary>三项实际限制</summary><ul>
+                <li>AI 身份不能保证百分之百准确。明确声明是准入依据，不代表已完成真实性鉴定；不确定就不学。</li>
+                <li>少量关键帧不能完整判断快速动作、节奏或口型同步；当前不分析音频。</li>
+                <li>无法还原作者的原始提示词。经验是待验证推断，不会训练视频模型，也不保证成片质量。</li>
+              </ul></details>
+            </div>
+          </div>
+          <div class="learning-record-head"><h3>学习记录与经验</h3><button id="learn-refresh" type="button">刷新记录</button></div>
+          <p id="learn-summary" class="sub" role="status">正在读取学习状态…</p>
+          <div id="learn-records"><p class="empty">尚未读取学习记录</p></div>
+          <button id="learn-more" type="button" hidden>查看更多记录</button>
+        </div>
       </div>
     </section>
 
@@ -3404,6 +3456,7 @@ function renderAutoPublish(data, fill) {
     const category = categoryMode ? `<div class="sub">${esc(categoryMode + " · " + categoryName)}</div><div class="sub">${esc(job.category_reason || "")}</div>` : "";
     const task = job.task_id ? `<div class="sub">服务商任务：${esc(job.task_id)}</div>` : "";
     const reference = job.reference_image ? `<div class="sub">参考图：${esc(job.reference_image)}</div>` : "";
+    const learned = job.learning_used?.length ? `<details class="sub"><summary>已参考 ${job.learning_used.length} 条创作经验</summary>${job.learning_used.map(row=>`<p>${esc(row.topic)}：${esc(row.rule)}<br>局限：${esc(row.limitation)}</p>`).join("")}</details>` : "";
     const progress=job.mode === "storyboard" ? `<div class="sub">分镜 ${job.shots?.filter(shot=>shot.phase==="done").length||0} / ${job.shot_count||job.shots?.length||0}</div>` : "";
     const retryLabel={shot:"重试失败片段",download:"重试下载",assemble:"重新合成",voice:"重试后期处理"}[job.retry_stage];
     const retry=job.phase === "failed" && job.recoverable && retryLabel && /^[0-9a-f]{32}$/.test(job.id)
@@ -3413,7 +3466,7 @@ function renderAutoPublish(data, fill) {
       ? job.voiceover_done ? `原声字幕已完成 · ${job.subtitle_count||0} 句` : job.asr_phase==="requesting" ? "正在识别实际音轨" : "等待原声字幕处理"
       : job.voiceover_done ? "旁白后期已完成" : `配音 ${job.voiceover_progress||0} / ${job.voiceover_count||0}`);
     const voice = job.voiceover_enabled ? `<div class="sub">${esc(voiceLabel)}</div>` : "";
-    return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc([providerName, job.model, job.duration ? "计划 " + job.duration + " 秒" : ""].filter(Boolean).join(" · "))}</div>${category}${task}${reference}</td><td>${esc(status)}${progress}${voice}</td><td>${autoPublishResultMarkup(job)}${retry}</td></tr>`;
+    return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc([providerName, job.model, job.duration ? "计划 " + job.duration + " 秒" : ""].filter(Boolean).join(" · "))}</div>${category}${task}${reference}${learned}</td><td>${esc(status)}${progress}${voice}</td><td>${autoPublishResultMarkup(job)}${retry}</td></tr>`;
   }).join("") : '<tr><td colspan="4" class="empty">还没有自主投稿任务</td></tr>';
   renderStoryPlans(jobs);
   const filesState = jobs.filter(job => job.file).map(job => job.file + ":" + (job.cleanup_state || "")).join("|");
@@ -3700,9 +3753,72 @@ window.addEventListener("bili:view", (event) => {
   }, 5000) : null;
 });
 
+let learningState=null, learningReading=false, learningSaving=false, learningVisible=10;
+function learningPayload() {
+  return {enabled:$("learn-enabled").checked,daily_limit:Number($("learn-limit").value),frame_count:Number($("learn-frames").value)};
+}
+function syncLearningDraft() {
+  const dirty=learningState && JSON.stringify(learningPayload())!==JSON.stringify(learningState.settings);
+  setHint("learn-draft",dirty?"学习设置尚未保存。":"");
+}
+function renderLearning(data,fill=false) {
+  const opened=new Set(Array.from($("learn-records").querySelectorAll("details[open]")).map(row=>row.dataset.learningId));
+  learningState=data;
+  if(fill) {
+    $("learn-enabled").checked=data.settings.enabled;
+    $("learn-limit").value=data.settings.daily_limit;
+    $("learn-frames").value=data.settings.frame_count;
+  }
+  $("learn-fields").disabled=learningSaving;
+  const status=data.settings.enabled?"已开启":"已关闭";
+  const active=data.busy?" · 正在学习，关闭后将停止后续分析":"";
+  $("learn-summary").textContent=`${status} · 今日已尝试 ${data.today_attempts} / ${data.settings.daily_limit} 条 · 已保存 ${data.lesson_count} 条经验${active}${data.capacity_reached?" · 判重库已达上限，已暂停新增学习":""}`;
+  const feedback={pending:"待验证",useful:"已标记有帮助",ineffective:"不适用 · 停止引用"};
+    const phase={done:"已提取经验",failed:"学习失败",skipped:"已跳过"};
+  $("learn-records").innerHTML=data.records.length?data.records.slice(0,learningVisible).map(record=>{
+    const link=/^BV[0-9A-Za-z]{10}$/.test(record.bvid)?`<a href="https://www.bilibili.com/video/${record.bvid}" target="_blank" rel="noopener noreferrer">查看来源视频</a>`:"";
+    const lessons=(record.lessons||[]).map(lesson=>`<article class="learning-lesson"><p><strong>${esc(lesson.topic)}</strong> · ${esc(feedback[lesson.status]||"待验证")}</p><p>${esc(lesson.rule)}</p><p class="sub">画面依据：${esc(lesson.evidence)}（帧 ${esc((lesson.frames||[]).join("、"))}）</p><p class="sub">适用：${esc((lesson.tags||[]).join("、"))}；局限：${esc(lesson.limitation)}</p><div class="learning-actions">${[["useful","有帮助"],["ineffective","不适用"],["pending","待验证"]].map(([value,label])=>`<button type="button" data-learn-action="feedback" data-learn-record="${esc(record.id)}" data-learn-lesson="${esc(lesson.id)}" data-learn-status="${value}" aria-pressed="${lesson.status===value}">${label}</button>`).join("")}</div></article>`).join("");
+    return `<details class="learning-record" data-learning-id="${esc(record.id)}" ${opened.has(record.id)?"open":""}><summary>${esc(record.title||record.bvid)} · ${esc(phase[record.phase]||(record.phase==="analyzing"?(record.id===data.active_id?"正在学习":"上次学习已中断 · 不自动重试"):"待核对"))}</summary><p class="sub">${esc(String(record.created_at).slice(0,16).replace("T"," "))} · ${link}</p><p class="sub">准入依据：${esc(record.declaration?.source||"")} · ${esc(record.declaration?.text||"")}</p><p class="sub">${esc(record.message||"")}${record.sampled_at?.length?" · 采样秒数："+esc(record.sampled_at.join("、")):""}</p>${lessons}<div class="learning-actions"><button type="button" data-learn-action="delete" data-learn-record="${esc(record.id)}" ${record.id===data.active_id?"disabled":""}>删除这条学习记录</button></div></details>`;
+  }).join(""):'<p class="empty">还没有学习记录。开启后，刷到符合声明条件的视频才会分析；不会补学历史视频。</p>';
+  $("learn-more").hidden=data.records.length<=learningVisible;
+  syncLearningDraft();
+}
+async function loadLearning(fill=false) {
+  if(learningReading||learningSaving)return;
+  learningReading=true;
+  $("learn-refresh").disabled=true;
+  try {const data=await api("learning/state");renderLearning(data,fill||!learningState);}
+  catch(error){setHint("learn-feedback","读取学习状态失败："+(error?.message||error),"bad");}
+  finally{learningReading=false;$("learn-refresh").disabled=false;}
+}
+$("learn-form").addEventListener("input",syncLearningDraft);
+$("learn-form").onsubmit=async event=>{
+  event.preventDefault();if(learningSaving||learningReading)return;
+  learningSaving=true;$("learn-fields").disabled=true;
+  setHint("learn-feedback","正在保存…");
+  try{const data=await api("learning/save",learningPayload());learningSaving=false;renderLearning(data,true);setHint("learn-feedback","学习设置已保存。","ok");}
+  catch(error){setHint("learn-feedback","保存失败："+(error?.message||error),"bad");}
+  finally{learningSaving=false;$("learn-fields").disabled=false;syncLearningDraft();}
+};
+$("learn-refresh").onclick=()=>loadLearning();
+$("learn-more").onclick=()=>{learningVisible+=10;if(learningState)renderLearning(learningState);};
+$("learn-records").onclick=async event=>{
+  const button=event.target.closest("[data-learn-action]");
+  if(!button||learningSaving||learningReading)return;
+  if(button.dataset.learnAction==="delete"&&!confirm("删除这条学习记录及其经验？已生成任务中的引用快照保留，同一视频不会自动重新学习。"))return;
+  learningSaving=true;
+  $("learn-fields").disabled=true;
+  for(const control of $("learn-records").querySelectorAll("button"))control.disabled=true;
+  try{
+    const data=await api("learning/manage",{action:button.dataset.learnAction,id:button.dataset.learnRecord,lesson_id:button.dataset.learnLesson,status:button.dataset.learnStatus});
+    learningSaving=false;renderLearning(data);setHint("learn-feedback",button.dataset.learnAction==="delete"?"学习记录已删除，判重和今日用量保留。":"经验反馈已保存，不适用的经验不再引用。","ok");
+  }catch(error){setHint("learn-feedback","操作失败："+(error?.message||error),"bad");learningSaving=false;if(learningState)renderLearning(learningState);}
+  finally{learningSaving=false;$("learn-fields").disabled=false;}
+};
+
 async function loadUpload() {
   uShowErr("");
-  await Promise.all([loadAutoPublish(true), loadUploadFiles(), pollUpload()]);
+  await Promise.all([loadAutoPublish(true), loadUploadFiles(), pollUpload(), loadLearning()]);
 }
 
 async function loadUploadFiles() {
