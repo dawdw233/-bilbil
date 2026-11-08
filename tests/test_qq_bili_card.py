@@ -69,6 +69,17 @@ class QQCardTests(unittest.IsolatedAsyncioTestCase):
         for e in (event([Json(data=miniapp())]), event([Json(data=miniapp())], private=False, at=True)):
             self.assertTrue(handler.filter(e, {}))
             self.assertEqual(e.get_extra("bili_share_url"), URL)
+        own = event([Json(data=miniapp())]); own.get_self_id = lambda: "test-user"
+        self.assertFalse(handler.filter(own, {}))
+
+    def test_onebot_raw_share_fallback_works_when_adapter_drops_segment(self):
+        e = event([{"type": "unknown", "data": {"text": "unsupported segment"}}])
+        e.message_obj.raw_message = {"message": [{"type": "xml", "data": {"data": '<msg url="'+URL+'"/>'}}]}
+        self.assertEqual(card.share_url(e), URL)
+        e.message_obj.raw_message = {"message": [{"type": "json", "data": {"data": json.dumps(miniapp())}}]}
+        self.assertEqual(card.share_url(e), URL)
+        e.message_obj.raw_message = {"message": [{"type": "forward", "data": {"content": [miniapp()]}}]}
+        self.assertEqual(card.share_url(e), "")
 
     def test_duplicate_delivery_and_per_session_rate_limit_are_bounded(self):
         reader = card.CardReader(); clock = [0]
@@ -135,6 +146,8 @@ class QQCardTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("private-server-error", json.dumps(material))
         material = await card.CardReader().read(URL, AsyncMock(return_value=INFO), AsyncMock(side_effect=RuntimeError("secret")))
         self.assertIn("读取失败", material["subtitle_status"])
+        material = await card.CardReader().read(URL, AsyncMock(return_value=INFO), AsyncMock(return_value={"text": "讲讲AI字幕是如何生成的"}))
+        self.assertEqual(material["subtitle_excerpt"], "讲讲AI字幕是如何生成的")
 
     async def test_missing_video_stops_before_subtitle_read(self):
         subtitle = AsyncMock()

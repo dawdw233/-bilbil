@@ -143,6 +143,25 @@ def share_url(event):
             continue
         if found:
             return found
+    # OneBot can retain an unsupported XML/JSON segment only in raw_message.
+    # Restrict this fallback to top-level share segments, not reply/forward content.
+    raw = getattr(getattr(event, "message_obj", None), "raw_message", None)
+    if isinstance(raw, dict):
+        parts = raw.get("message", raw.get("raw_message", []))
+    else:
+        parts = raw
+    if isinstance(parts, list):
+        for segment in parts[:20]:
+            if not isinstance(segment, dict) or not isinstance(segment.get("data"), dict):
+                continue
+            data, kind = segment["data"], segment.get("type")
+            found = (json_url(data.get("data")) if kind == "json" else
+                     xml_url(data.get("data")) if kind == "xml" else
+                     video_url(data.get("url")) if kind == "share" else "")
+            if found:
+                return found
+    elif isinstance(parts, str) and ("[CQ:json," in parts or "[CQ:xml," in parts):
+        return raw_url(parts)
     # Some QQ adapters expose CQ shares as raw text rather than components.
     return raw_url(getattr(event, "message_str", "")) if not components else ""
 
@@ -150,6 +169,9 @@ def share_url(event):
 class QQBiliCardFilter(filter.CustomFilter):
     def filter(self, event, cfg):
         if event.get_platform_name() not in ("aiocqhttp", "qq_official", "qqofficial", "qq"):
+            return False
+        own_id = getattr(event, "get_self_id", lambda: None)()
+        if own_id is not None and str(event.get_sender_id()) == str(own_id):
             return False
         if not event.is_private_chat() and not getattr(event, "is_at_or_wake_command", False):
             return False
@@ -228,7 +250,7 @@ class CardReader:
             try:
                 raw_subtitle = read_object(await asyncio.wait_for(subtitle(bvid), timeout=8))
                 text = str(raw_subtitle.get("text") or "").strip() if not raw_subtitle.get("error") else ""
-                if len(text) < 40 and len(text.splitlines()) <= 1 and "字幕" in text:
+                if len(text) < 40 and re.fullmatch(r"字幕(?:由.+(?:提供|制作)|(?:制作|组)[:：].+)[。.]?", text):
                     text = ""
                 status = "可用字幕" if text else "无可用字幕，仅依据简介"
             except Exception:
