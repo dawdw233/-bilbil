@@ -9,7 +9,7 @@ const modelOptions = html.slice(html.indexOf("function setAutoPublishModelOption
 
 function form() {
   const nodes = {};
-  for (const name of ["provider", "region", "model", "key", "time", "limit", "direction", "tid", "workspace", "duration", "mode", "total", "duration-field", "total-field", "storyboard-tip", "enabled", "category", "reference", "reference-dir", "reference-status", "reference-model", "reference-upload", "reference-refresh", "reference-upload-status", "reference-file", "fields", "draft-hint", "tid-label", "tid-tip", "key-state", "clear", "start"]) nodes["u-auto-" + name] = {};
+  for (const name of ["provider", "region", "model", "key", "time", "limit", "direction", "tid", "workspace", "duration", "mode", "total", "link", "link-field", "link-tip", "duration-field", "total-field", "storyboard-tip", "enabled", "category", "reference", "reference-dir", "reference-status", "reference-model", "reference-upload", "reference-refresh", "reference-upload-status", "reference-file", "fields", "draft-hint", "tid-label", "tid-tip", "key-state", "clear", "start"]) nodes["u-auto-" + name] = {};
   const settings = {provider:"minimax",region:"cn",enabled:true,auto_category:false,tid:21,direction:"鱼吃饭",time:"20:00",limit:1};
   for (const key of ["provider", "region", "tid", "time", "direction"]) nodes["u-auto-" + key].value = String(settings[key]);
   for (const key of ["key", "model", "workspace"]) nodes["u-auto-" + key].value = "";
@@ -20,7 +20,8 @@ function form() {
   nodes["u-auto-duration"].value = "6";
   nodes["u-auto-mode"].value = "single";
   nodes["u-auto-total"].value = "30";
-  for (const key of ["duration-field","total-field","storyboard-tip"]) nodes["u-auto-"+key].classList={toggle(){}};
+  nodes["u-auto-link"].value = "independent";
+  for (const key of ["duration-field","total-field","storyboard-tip","link-field"]) nodes["u-auto-"+key].classList={toggle(){}};
   const context = {$:id=>nodes[id],voiceSaving:false,voiceDraftDirty:false,autoReferenceUploading:false,autoPublishSaving:false,autoPublishRequest:0,autoPublishState:{settings,jobs:[],logged_in:true,profiles:{"minimax:cn":{key_configured:true,model:"",duration:6}},providers:{minimax:{duration:6}}},autoPublishActive:["queued","requesting","generating","voiceover","ready","uploading"]};
   context.setHint=(id,message)=>nodes[id].textContent=message;
   vm.runInNewContext(sync, context);
@@ -59,6 +60,41 @@ test("分镜估算按模型合法时长组合 30/60 秒，并显示分别生成�
   assert.match(nodes["u-auto-storyboard-tip"].textContent,/分别生成和计费/);
   assert.deepEqual(Array.from(context.storyboardLengths([6,10],60)),[10,10,10,10,10,10]);
   assert.deepEqual(Array.from(context.storyboardLengths([5,10,15],30)),[15,15]);
+});
+
+test("尾帧接续独立保存，未保存及不支持图生的模型阻止立即运行", () => {
+  const {nodes,context}=form();
+  const state=context.autoPublishState;
+  state.settings.mode="storyboard";
+  nodes["u-auto-mode"].value="storyboard";
+  state.providers.minimax.model="MiniMax-Hailuo-2.3";
+  state.providers.minimax.duration_rules=[{prefix:"MiniMax-Hailuo-",options:[6,10]}];
+  state.providers.minimax.reference_models={"MiniMax-Hailuo-2.3":"MiniMax-Hailuo-2.3"};
+  nodes["u-auto-link"].value="continue";
+  context.syncAutoPublishActions();
+  assert.equal(nodes["u-auto-start"].disabled,true);
+  assert.match(nodes["u-auto-draft-hint"].textContent,/先保存/);
+  state.settings.shot_link="continue";
+  context.syncAutoPublishActions();
+  assert.equal(nodes["u-auto-start"].disabled,false);
+  nodes["u-auto-model"].value="T2V-01";
+  state.profiles["minimax:cn"].model="T2V-01";
+  context.syncAutoPublishActions();
+  assert.equal(nodes["u-auto-start"].disabled,true);
+  assert.match(nodes["u-auto-link-tip"].textContent,/不支持尾帧接续/);
+});
+
+test("分镜方案在表格外展示、轮询保留展开状态，并转义模型文案", () => {
+  const source=html.slice(html.indexOf("function renderStoryPlans("),html.indexOf("function renderAutoPublish("));
+  const container={querySelectorAll:()=>[{dataset:{storyJob:"a".repeat(32)}}],innerHTML:""};
+  const context={$:()=>container,esc:value=>String(value).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll('"',"&quot;")};
+  vm.runInNewContext(source,context);
+  context.renderStoryPlans([{id:"a".repeat(32),title:"<script>bad</script>",shots:[{number:2,duration:10,phase:"done",linked:true,start_state:"已走到窗前",narration:"",prompt:'<img src="x">'}]}]);
+  assert.match(container.innerHTML,/ open>/);
+  assert.match(container.innerHTML,/已接续上一镜尾帧/);
+  assert.match(container.innerHTML,/旁白：留白/);
+  assert.doesNotMatch(container.innerHTML,/<script>|<img/);
+  assert.match(html,/<\/table>\s*<\/div>\s*<div id="u-auto-plans">/);
 });
 
 test("参考图显示真实目录与图集状态，空图集及不支持的模型阻止生成，关闭后恢复文字模式", () => {

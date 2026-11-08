@@ -19,6 +19,7 @@ import aiohttp
 from .video_compose import CompositionError, compose_video
 from .reference_images import ReferenceError, ReferenceLibrary
 from .voiceover import VoiceoverError
+from .story_director import directed_shot, frame_path, handoff_frame, native_sound, shot_prompt
 
 VIDEO_PROVIDERS = {
     "minimax": {
@@ -43,7 +44,7 @@ VIDEO_PROVIDERS = {
 DEFAULTS = {
     "enabled": False, "provider": "minimax", "region": "cn", "time": "20:00",
     "limit": 1, "direction": "", "tid": 21, "auto_category": False, "schedule_after": "",
-    "mode": "single", "total_duration": 30, "reference_enabled": False,
+    "mode": "single", "total_duration": 30, "reference_enabled": False, "shot_link": "independent",
 }
 ACTIVE_PHASES = {"queued", "requesting", "generating", "storyboard", "assembling", "voiceover", "ready", "uploading"}
 MAX_VIDEO_BYTES = 100 * 1024 * 1024
@@ -215,7 +216,13 @@ def parse_storyboard(text: str, durations: list[int]) -> dict:
         if (not isinstance(shot, dict) or not isinstance(shot.get("prompt"), str) or not shot["prompt"].strip()
                 or type(shot.get("duration", duration)) is not int or shot.get("duration", duration) != duration):
             raise PublishError("分镜描述或时长无效，尚未开始付费生成。")
-        parsed.append({"prompt": shot["prompt"].strip()[:1200], "duration": duration, "phase": "queued"})
+        try:
+            direction = directed_shot(shot, duration)
+        except CompositionError as exc:
+            raise PublishError(str(exc)) from exc
+        parsed.append({"prompt": shot["prompt"].strip()[:1200], "duration": duration, "phase": "queued", **direction})
+    if any("narration" in shot for shot in parsed) and not all("narration" in shot for shot in parsed):
+        raise PublishError("分镜方案不完整，请为每一镜安排动作、声音和旁白。")
     return {**fields, "continuity": continuity.strip()[:400], "shots": parsed}
 
 
@@ -374,10 +381,13 @@ class ArkVideo(VideoClient):
         if reference_image:
             reference_video_model(self.provider, self.model)
             content.append({"type": "image_url", "image_url": {"url": reference_image}, "role": "first_frame"})
-        data = await self._request("POST", "/contents/generations/tasks", json={
+        body = {
             "model": self.model, "content": content,
             "duration": self.duration, "resolution": "720p", "ratio": "16:9",
-        })
+        }
+        if native_sound(self.provider, self.model):
+            body["generate_audio"] = True
+        data = await self._request("POST", "/contents/generations/tasks", json=body)
         return self._task_id(data.get("id"))
 
     async def query(self, task_id: str) -> str | None:
@@ -508,8 +518,11 @@ class AutoPublisher:
                     "mode": row.get("mode", "single"), "recoverable": row.get("recoverable", False),
                     "retry_stage": row.get("retry_stage", ""),
                     "shot_count": len(row.get("shot_durations", [])),
+                    "shot_link": row.get("shot_link", "independent"),
                     "shots": [{"number": index + 1, "duration": shot["duration"], "phase": shot["phase"],
-                               "task_id": shot.get("task_id", "")} for index, shot in enumerate(row.get("shots", []))],
+                               "task_id": shot.get("task_id", ""), "linked": bool(shot.get("handoff")),
+                               **{key: shot.get(key, "") for key in ("beat", "start_state", "prompt", "end_state", "camera", "sound", "narration", "voice_start")}}
+                              for index, shot in enumerate(row.get("shots", []))],
                     "reference_image": row.get("reference_image", {}).get("name", ""),
                     "voiceover_enabled": bool(row.get("voiceover")),
                     "voiceover_done": row.get("voiceover", {}).get("complete", False),
@@ -558,6 +571,8 @@ class AutoPublisher:
             raise PublishError("参考图开关格式不正确。")
         if settings["mode"] not in ("single", "storyboard"):
             raise PublishError("请选择单段生成或分镜合成。")
+        if settings["shot_link"] not in ("independent", "continue"):
+            raise PublishError("请选择分别生成或连续动作。")
         if type(settings["total_duration"]) is not int or settings["total_duration"] not in (30, 60):
             raise PublishError("分镜成片时长请选择 30 秒或 60 秒。")
         provider, region = settings["provider"], settings["region"]
@@ -587,7 +602,7 @@ class AutoPublisher:
         if model and not supported_video_model(provider, model):
             raise PublishError("该模型尚未适配当前文生视频接口，请从读取结果中选择。")
         effective_model = model or spec["model"]
-        if settings["reference_enabled"]:
+        if settings["reference_enabled"] or (settings["mode"] == "storyboard" and settings["shot_link"] == "continue"):
             reference_video_model(provider, effective_model)
         duration = payload.get("duration", profile.get("duration", spec["duration"]))
         if "duration" not in payload and duration not in duration_options(provider, effective_model):
@@ -669,6 +684,8 @@ class AutoPublisher:
                 return None
         duration = video_duration(provider, model, profile.get("duration", VIDEO_PROVIDERS[provider]["duration"]))
         lengths = storyboard_lengths(provider, model, settings["total_duration"]) if settings["mode"] == "storyboard" else []
+        if lengths and settings["shot_link"] == "continue":
+            reference_video_model(provider, model)
         job = {
             "id": uuid.uuid4().hex, "phase": "queued", "created_at": now.isoformat(timespec="seconds"),
             "day": today, "scheduled": not manual, "account": account, "tid": settings["tid"],
@@ -677,6 +694,7 @@ class AutoPublisher:
             "provider": provider, "region": region, "model": model, "duration": duration,
             "cleanup_after_publish": True,
             "mode": settings["mode"], "shot_durations": lengths,
+            "shot_link": settings["shot_link"],
         }
         if reference:
             job["reference_image"] = reference
@@ -780,6 +798,8 @@ class AutoPublisher:
                     if shot["phase"] != "done":
                         raise PublishError("分镜记录不完整，已保留本地文件供核对。")
                     targets.append((self._cleanup_path(job, index), shot.get("identity")))
+                    if shot.get("handoff"):
+                        targets.append((frame_path(self.data_dir, job["id"], index), shot["handoff"]["identity"]))
             if job.get("voiceover"):
                 if not self.voiceover:
                     raise PublishError("后期处理模块不可用，已保留所有素材。")
@@ -789,7 +809,7 @@ class AutoPublisher:
                     raise PublishError("本地成片已被修改，已保留供核对。")
             for target, _identity in targets:
                 target.unlink(missing_ok=True)
-        except (PublishError, VoiceoverError) as exc:
+        except (PublishError, VoiceoverError, CompositionError) as exc:
             self._update(rows, job, "published", cleanup_state="kept", message=str(exc))
             return
         except OSError:
@@ -864,18 +884,26 @@ class AutoPublisher:
                 return
             try:
                 reference = await self._job_reference(job)
-            except PublishError as exc:
+                if job.get("shot_link") == "continue" and index:
+                    frame = await handoff_frame(self.data_dir, job, index)
+                    shot["handoff"] = frame["record"]
+                    reference = {"data_url": frame["data_url"]}
+                    # Persist the exact frame before any paid video request.
+                    self._update(rows, job, "storyboard", message=f"已准备{label}的承接帧。")
+                prompt = shot_prompt(job, index)
+            except (PublishError, CompositionError, OSError) as exc:
                 shot["phase"] = "failed"
-                self._update(rows, job, "failed", recoverable=True, retry_stage="shot", message=f"{label}尚未提交：{exc}")
+                message = str(exc) if isinstance(exc, (PublishError, CompositionError)) else "承接帧文件无法读取，请检查原始分镜。"
+                self._update(rows, job, "failed", recoverable=True, retry_stage="shot", message=f"{label}尚未提交：{message}")
                 return
-            profile = self.settings()["profiles"].get(f"{provider}:{region}", {})
+            latest = self.settings()
+            if not latest["enabled"] or self.account() != job["account"]:
+                return
+            profile = latest["profiles"].get(f"{provider}:{region}", {})
             key = profile.get("key")
             if not key or key_revision(key) != job["key_revision"]:
                 self._update(rows, job, "review", recoverable=False, message="视频服务 Key 已更换，分镜任务保留待核对。")
                 return
-            budget = 1500 if provider == "wan" and model.startswith(("wan2.6-", "wan2.5-")) else 800 if provider == "wan" else 2000
-            common = f"统一人物、场景与画风：{job['continuity']}\n{label}，时长 {shot['duration']} 秒："
-            prompt = common + shot["prompt"][:max(1, budget - len(common))]
             shot.update(phase="requesting", submitted_at=now.isoformat())
             self._update(rows, job, "storyboard", message=f"正在提交{label}。", retry_after="")
             try:
@@ -980,12 +1008,14 @@ class AutoPublisher:
                 recent = [row["title"] for row in rows[-13:-1] if row.get("title")]
                 if job.get("mode") == "storyboard":
                     plan = parse_storyboard(await self.plan_storyboard(job["direction"], recent, job["shot_durations"], **plan_options), job["shot_durations"])
+                    for index in range(len(plan["shots"])):
+                        shot_prompt({**job, **plan}, index)
                 else:
                     duration = video_duration(provider, model, duration)
                     plan = parse_plan(await self.plan(job.get("direction", settings["direction"]), recent, duration, **plan_options))
                 if plan["title"] in recent:
                     raise PublishError("选题与近期稿件重复。")
-            except PublishError as exc:
+            except (PublishError, CompositionError) as exc:
                 self._update(rows, job, "failed", message=str(exc))
                 return
             except Exception:

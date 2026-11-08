@@ -16,6 +16,7 @@ from urllib.parse import urlsplit, urlunsplit
 import aiohttp
 
 from .video_compose import CompositionError, probe_video, run_media
+from .story_director import narration_clips
 
 PROVIDERS = {
     "minimax": {
@@ -283,7 +284,7 @@ class VoiceoverService:
         result = []
         for item in config.get("artifacts", []):
             suffix = item["suffix"]
-            if not re.fullmatch(r"-(?:source\.mp4|voice-0[1-6]\.wav|subtitles\.(?:srt|ass))", suffix):
+            if not re.fullmatch(r"-(?:source\.mp4|voice-(?:0[1-9]|1[0-2])\.wav|subtitles\.(?:srt|ass))", suffix):
                 raise VoiceoverError("后期素材记录异常，已保留文件。")
             result.append((self.path(job, suffix), item["identity"]))
         return result
@@ -320,12 +321,19 @@ class VoiceoverService:
             if rate > 2:
                 raise VoiceoverError("配音明显长于镜头时长，请核对旁白稿；原视频已保留。")
             args += ["-i", str(path)]
-            delay = round(start * 1000)
+            begin = clip.get("start", start)
+            if (type(begin) not in (int, float) or not math.isfinite(begin) or begin < 0
+                    or begin + clip["window"] > info["duration"] + .25):
+                raise VoiceoverError("旁白时间超出成片范围，已保留原视频。")
+            delay = round(begin * 1000)
             graph.append(f"[{index+1}:a:0]aresample=48000,atempo={rate:.8f},volume={config['voice_volume']/100},adelay={delay}:all=1[v{index}]")
             labels.append(f"[v{index}]")
-            cues.append((start, min(info["duration"], start+clip["duration"]/rate), clip["text"]))
+            cues.append((begin, min(info["duration"], begin+clip["duration"]/rate), clip["text"]))
             start += clip["window"]
-        graph.append("".join(labels)+f"amix=inputs={len(labels)}:duration=longest:normalize=0,alimiter=limit=0.95:level=0,apad,atrim=duration={info['duration']}[audio]")
+        if labels:
+            graph.append("".join(labels)+f"amix=inputs={len(labels)}:duration=longest:normalize=0,alimiter=limit=0.95:level=0,apad,atrim=duration={info['duration']}[audio]")
+        else:
+            graph.append(f"anullsrc=r=48000:cl=stereo,atrim=duration={info['duration']}[audio]")
         args += ["-filter_complex", ";".join(graph), "-map", "0:v:0", "-map", "[audio]"]
         if config["subtitles"]:
             def stamp(value):
@@ -371,7 +379,7 @@ class VoiceoverService:
         except Exception as exc:
             message = str(exc) if isinstance(exc, VoiceoverError) else "配音环境检查失败，请检查 FFmpeg、字体和服务器存储。"
             job.update(phase="failed", recoverable=True, retry_stage="voice", message=message); save(); return
-        if not config.get("clips"):
+        if not config.get("script_ready") and not config.get("clips"):
             try:
                 source, original = self.path(job, ".mp4"), self.path(job, "-source.mp4")
                 expected = job["cleanup_identity"]
@@ -384,9 +392,13 @@ class VoiceoverService:
                 config["source_identity"] = expected
                 config["artifacts"] = [{"suffix": "-source.mp4", "identity": expected}]
                 info = await probe_video(original)
-                slots = windows(info["duration"])
-                result = await self.plan(job, slots)
-                config["clips"] = parse_narration(result, slots)
+                clips = narration_clips(job, info["duration"])
+                if clips is None:
+                    slots = windows(info["duration"])
+                    result = await self.plan(job, slots)
+                    clips = parse_narration(result, slots)
+                config["clips"] = clips
+                config["script_ready"] = True
             except Exception as exc:
                 job.update(phase="failed", recoverable=True, retry_stage="voice", message=str(exc) if isinstance(exc, VoiceoverError) else "旁白策划失败，请检查 AstrBot 文本模型；原视频已保留。")
                 save(); return
