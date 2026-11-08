@@ -293,3 +293,20 @@ class LearningTests(unittest.IsolatedAsyncioTestCase):
         fake = {**plan, "learning_used": [{"id": "a" * 32, "rule": "invented"}]}
         cleaned = json.loads(await instance._apply_creative_learning(json.dumps(fake), "吃饭"))
         self.assertNotIn("learning_used", cleaned)
+
+    async def test_publisher_persists_learning_snapshot_for_both_generation_modes(self):
+        snapshot = [{"id": "a" * 32, "topic": "吃饭", "rule": "明确勺子位置", "limitation": "动作仍依赖模型", "status": "pending"}]
+        now = learning.datetime.now(learning.ZONE)
+        for mode in ("single", "storyboard"):
+            with tempfile.TemporaryDirectory() as folder:
+                plan = {"title": "吃饭", "desc": "原创动画", "tags": "动画", "prompt": "完成一次吃饭动作", "learning_used": snapshot,
+                        "continuity": "统一画风和角色", "shots": [{"prompt": "送饭入口", "duration": 10} for _ in range(3)]}
+                planner = AsyncMock(return_value=json.dumps(plan))
+                worker = auto.AutoPublisher(Path(folder), planner, AsyncMock(), lambda: "42", lambda: False, plan_storyboard=planner)
+                worker.save_settings({"enabled": True, "api_key": "fake", "mode": mode, "total_duration": 30}, now)
+                worker.enqueue(now, manual=True)
+                with patch.object(auto.MiniMaxVideo, "create", AsyncMock(return_value="test-task")):
+                    await worker.tick(now)
+                self.assertIn("learning_used", worker.jobs()[0], worker.jobs()[0].get("message"))
+                self.assertEqual(worker.jobs()[0]["learning_used"], snapshot)
+                self.assertEqual(worker.state()["jobs"][0]["learning_used"], snapshot)

@@ -1169,12 +1169,14 @@ class AutoPublisher:
             if job.get("mode") == "storyboard":
                 self._update(rows, job, "storyboard", title=plan["title"], desc=plan["desc"], tags=plan["tags"],
                              prompt=plan["prompt"], continuity=plan["continuity"], shots=plan["shots"], recoverable=False,
+                             learning_used=plan.get("learning_used", []),
                              retry_after="", message=f"已规划 {len(plan['shots'])} 个分镜，等待逐段生成。", **category)
                 return
             self._update(
                 rows, job, "requesting", title=plan["title"], desc=plan["desc"], tags=plan["tags"],
                 provider=provider, region=region, model=model, submitted_at=now.isoformat(),
                 prompt=plan["prompt"], message="", retry_after="",
+                learning_used=plan.get("learning_used", []),
                 **category,
             )
             try:
