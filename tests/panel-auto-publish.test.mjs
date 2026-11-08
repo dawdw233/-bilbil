@@ -9,7 +9,7 @@ const modelOptions = html.slice(html.indexOf("function setAutoPublishModelOption
 
 function form() {
   const nodes = {};
-  for (const name of ["provider", "region", "model", "key", "time", "limit", "direction", "tid", "workspace", "duration", "mode", "total", "duration-field", "total-field", "storyboard-tip", "enabled", "category", "reference", "reference-dir", "reference-status", "reference-model", "draft-hint", "tid-label", "tid-tip", "key-state", "clear", "start"]) nodes["u-auto-" + name] = {};
+  for (const name of ["provider", "region", "model", "key", "time", "limit", "direction", "tid", "workspace", "duration", "mode", "total", "duration-field", "total-field", "storyboard-tip", "enabled", "category", "reference", "reference-dir", "reference-status", "reference-model", "reference-upload", "reference-refresh", "reference-upload-status", "reference-file", "fields", "draft-hint", "tid-label", "tid-tip", "key-state", "clear", "start"]) nodes["u-auto-" + name] = {};
   const settings = {provider:"minimax",region:"cn",enabled:true,auto_category:false,tid:21,direction:"鱼吃饭",time:"20:00",limit:1};
   for (const key of ["provider", "region", "tid", "time", "direction"]) nodes["u-auto-" + key].value = String(settings[key]);
   for (const key of ["key", "model", "workspace"]) nodes["u-auto-" + key].value = "";
@@ -21,7 +21,8 @@ function form() {
   nodes["u-auto-mode"].value = "single";
   nodes["u-auto-total"].value = "30";
   for (const key of ["duration-field","total-field","storyboard-tip"]) nodes["u-auto-"+key].classList={toggle(){}};
-  const context = {$:id=>nodes[id],autoPublishState:{settings,jobs:[],logged_in:true,profiles:{"minimax:cn":{key_configured:true,model:"",duration:6}},providers:{minimax:{duration:6}}},autoPublishActive:["queued","requesting","generating","ready","uploading"]};
+  const context = {$:id=>nodes[id],autoReferenceUploading:false,autoPublishSaving:false,autoPublishRequest:0,autoPublishState:{settings,jobs:[],logged_in:true,profiles:{"minimax:cn":{key_configured:true,model:"",duration:6}},providers:{minimax:{duration:6}}},autoPublishActive:["queued","requesting","generating","ready","uploading"]};
+  context.setHint=(id,message)=>nodes[id].textContent=message;
   vm.runInNewContext(sync, context);
   return {nodes,context};
 }
@@ -102,6 +103,47 @@ test("接口没有返回视频模型时，保留已适配选项并明确权限�
   context.setAutoPublishModelOptions("T2V-01",[{id:"T2V-01",name:"test"}]);
   assert.equal(actual.filter(option=>option.value==="T2V-01").length,1);
   assert.equal(nodes["u-auto-model"].value,"T2V-01");
+});
+
+test("本机图集上传逐张验证、确认保存、复用重复图，部分失败可见且不会自动开启参考图", async () => {
+  const {nodes,context}=form();
+  const calls=[];
+  context.FileReader=function(){this.readAsDataURL=file=>{this.result="data:"+file.type+";base64,fixture";this.onload();};};
+  context.api=async(path,body)=>{
+    calls.push([path,body.name]);
+    return {uploaded:true,created:body.name!=="existing.jpg",references:{count:2,files:[{name:"new.png"},{name:"existing.jpg"}]}};
+  };
+  await context.uploadAutoPublishReferences([{name:"bad.bmp",type:"image/bmp",size:10},{name:"new.png",type:"image/png",size:30},{name:"existing.jpg",type:"image/jpeg",size:30}]);
+  assert.deepEqual(calls.map(item=>item[1]),["new.png","existing.jpg"]);
+  assert.ok(calls.every(item=>item[0]==="upload/auto/reference/upload"));
+  assert.match(nodes["u-auto-reference-upload-status"].textContent,/已上传 1 张，图集已有 1 张，1 张未成功/);
+  assert.equal(nodes["u-auto-reference"].checked,false);
+  assert.equal(nodes["u-auto-fields"].disabled,false);
+  assert.equal(nodes["u-auto-reference-upload"].disabled,false);
+  assert.equal(nodes["u-auto-reference-file"].value,"");
+  context.api=async()=>({uploaded:false});
+  await context.uploadAutoPublishReferences([{name:"new.png",type:"image/png",size:30}]);
+  assert.match(nodes["u-auto-reference-upload-status"].textContent,/服务器未确认保存/);
+  context.FileReader=function(){throw new Error("Should not read an oversized file");};
+  await context.uploadAutoPublishReferences([{name:"big.png",type:"image/png",size:11*1024*1024}]);
+  assert.match(nodes["u-auto-reference-upload-status"].textContent,/10 MB/);
+});
+
+test("上传中禁止重复提交与立即生成，取消选择不发请求，结束后恢复操作", async () => {
+  const {nodes,context}=form();
+  let calls=0,finish;
+  context.FileReader=function(){this.readAsDataURL=()=>{this.result="data:image/png;base64,fixture";this.onload();};};
+  context.api=()=>{calls++;return new Promise(resolve=>finish=resolve);};
+  await context.uploadAutoPublishReferences([]);
+  assert.equal(calls,0);
+  const pending=context.uploadAutoPublishReferences([{name:"fish.png",type:"image/png",size:20}]);
+  await Promise.resolve();await Promise.resolve();
+  assert.equal(nodes["u-auto-start"].disabled,true);
+  await context.uploadAutoPublishReferences([{name:"fish.png",type:"image/png",size:20}]);
+  assert.equal(calls,1);
+  finish({uploaded:true,created:true,references:{count:1,files:[{name:"fish.png"}]}});
+  await pending;
+  assert.equal(nodes["u-auto-start"].disabled,false);
 });
 
 test("MiniMax 连接检查区分未列出视频模型和接口拒绝，不把其他服务改为连接检查", async () => {

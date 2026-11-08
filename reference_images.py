@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import io
 import os
 import stat
+import tempfile
 from pathlib import Path
 
 from PIL import Image
@@ -49,6 +51,17 @@ class ReferenceLibrary:
                 content = stream.read(MAX_IMAGE_BYTES + 1)
             if len(content) > MAX_IMAGE_BYTES:
                 raise ReferenceError("参考图超过 10 MB。")
+        except ReferenceError:
+            raise
+        except OSError as exc:
+            raise ReferenceError("参考图无法读取，请检查文件是否存在及服务器权限。") from exc
+        return self._inspect(name, content), content
+
+    @staticmethod
+    def _inspect(name: str, content: bytes) -> dict:
+        if not 0 < len(content) <= MAX_IMAGE_BYTES:
+            raise ReferenceError("参考图必须是非空图片，且不超过 10 MB。")
+        try:
             with Image.open(io.BytesIO(content)) as image:
                 width, height = image.size
                 mime = MIMES.get(image.format)
@@ -65,7 +78,55 @@ class ReferenceLibrary:
         except (OSError, ValueError, Image.DecompressionBombError) as exc:
             raise ReferenceError("参考图无法读取或图片已损坏，请重新放入有效图片。") from exc
         return {"name": name, "sha256": hashlib.sha256(content).hexdigest(), "size": len(content),
-                "mime": mime, "width": width, "height": height, "alpha": alpha}, content
+                "mime": mime, "width": width, "height": height, "alpha": alpha}
+
+    def upload(self, name: str, image: str) -> dict:
+        """Validate bytes first, then atomically add an image without overwriting."""
+        if (not isinstance(name, str) or not name or len(name.encode("utf-8")) > 255
+                or Path(name).name != name or "/" in name or "\\" in name
+                or any(ord(c) < 32 for c in name) or Path(name).suffix.lower() not in SUFFIXES):
+            raise ReferenceError("请选择 PNG、JPG 或 WebP 图片，文件名不能包含路径。")
+        if not isinstance(image, str) or len(image) > 4 * ((MAX_IMAGE_BYTES + 2) // 3) + 40:
+            raise ReferenceError("参考图不能超过 10 MB。")
+        header, separator, encoded = image.partition(",")
+        if not separator or header not in {"data:" + mime + ";base64" for mime in MIMES.values()}:
+            raise ReferenceError("上传内容不是支持的图片数据。")
+        try:
+            content = base64.b64decode(encoded, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise ReferenceError("上传图片数据不完整，请重新选择图片。") from exc
+        metadata = self._inspect(name, content)
+        if header != "data:" + metadata["mime"] + ";base64":
+            raise ReferenceError("图片声明格式与实际内容不一致，请重新导出图片。")
+        self.ensure()
+        # Content suffix makes retries idempotent and preserves pictures used by jobs.
+        stem = Path(name).stem.strip(" .") or "reference"
+        while len(stem.encode("utf-8")) > 100:
+            stem = stem[:-1]
+        suffix = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}[metadata["mime"]]
+        saved_name = stem + "-" + metadata["sha256"][:16] + suffix
+        destination = self.path / saved_name
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=self.path, prefix=".upload-", suffix=".tmp", delete=False) as stream:
+                temporary = Path(stream.name)
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+            try:
+                os.link(temporary, destination)
+                created = True
+            except FileExistsError:
+                existing, _ = self._read(saved_name)
+                if existing["sha256"] != metadata["sha256"]:
+                    raise ReferenceError("同名参考图已存在且内容不同，请修改图片名称后上传。")
+                created = False
+        except OSError as exc:
+            raise ReferenceError("参考图保存失败，请检查服务器磁盘空间和文件夹权限。") from exc
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+        return {"uploaded": True, "created": created, "name": saved_name}
 
     def scan(self) -> dict:
         files, invalid = [], []

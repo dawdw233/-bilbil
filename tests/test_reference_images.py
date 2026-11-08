@@ -1,5 +1,6 @@
 """Reference pictures are synthetic; all LLM/video/upload calls are mocked."""
 import json
+import base64
 import tempfile
 import unittest
 from importlib import import_module
@@ -46,6 +47,60 @@ class ReferenceTests(unittest.IsolatedAsyncioTestCase):
         self.picture("d.png")
         self.assertEqual(self.library.choose([{"reference_image":{"name":"c.webp"}}])["name"],"d.png")
         self.assertTrue(self.library.load(first,provider="minimax")["data_url"].startswith("data:image/png;base64,"))
+
+    def upload_image(self, color="blue"):
+        import io
+        stream=io.BytesIO()
+        Image.new("RGB",(640,480),color).save(stream,format="PNG")
+        return "data:image/png;base64,"+base64.b64encode(stream.getvalue()).decode()
+
+    async def test_local_upload_is_private_idempotent_and_preserves_pinned_original(self):
+        first=self.library.upload("大肥鱼.png",self.upload_image())
+        metadata=self.library.choose([])
+        again=self.library.upload("大肥鱼.png",self.upload_image())
+        changed=self.library.upload("大肥鱼.png",self.upload_image("red"))
+        self.assertTrue(first["created"])
+        self.assertFalse(again["created"])
+        self.assertEqual(first["name"],again["name"])
+        self.assertNotEqual(first["name"],changed["name"])
+        self.assertEqual(self.library.scan()["count"],2)
+        self.library.load(metadata,provider="minimax")
+        self.assertFalse(list(self.library.path.glob("*.tmp")))
+
+    async def test_local_upload_rejects_invalid_inputs_without_creating_files(self):
+        image=self.upload_image()
+        for name,content in (("../escape.png",image),("bad\\path.png",image),("model.obj",image),
+                             ("a.png",None),("a.png","https://example.com/pic.png"),
+                             ("a.png","data:image/png;base64,%%%%"),("a.png","data:image/png;base64,"),
+                             ("a.jpg",image.replace("image/png","image/jpeg")),
+                             ("a.png","data:image/png;base64,"+"A"*(14*1024*1024))):
+            with self.subTest(name=name),self.assertRaises(refs.ReferenceError):
+                self.library.upload(name,content)
+        self.assertEqual(list(self.library.path.iterdir()),[])
+
+    async def test_local_upload_failure_leaves_no_partial_image_or_temporary_file(self):
+        with patch.object(refs.os,"link",side_effect=PermissionError()):
+            with self.assertRaisesRegex(refs.ReferenceError,"保存失败"):
+                self.library.upload("fish.png",self.upload_image())
+        self.assertEqual(list(self.library.path.iterdir()),[])
+
+    async def test_upload_route_adds_to_library_without_changing_settings_or_starting_video(self):
+        worker=self.worker(reference_enabled=False)
+        before=worker.settings_path.read_bytes()
+        instance=plugin.BiliScrollPlugin.__new__(plugin.BiliScrollPlugin)
+        instance._auto_publish=worker
+        payload={"name":"fish.png","image":self.upload_image()}
+        class Request:
+            async def json(self,default=None):return payload
+        with patch.object(plugin,"request",Request()),patch.object(plugin,"json_response",lambda value:value),patch.object(plugin,"error_response",lambda message:{"error":message}):
+            result=await instance._api_auto_reference_upload()
+            self.assertTrue(result["uploaded"])
+            self.assertEqual(result["references"]["count"],1)
+            payload["name"]="../escape.png"
+            self.assertIn("error",await instance._api_auto_reference_upload())
+        self.assertEqual(worker.settings_path.read_bytes(),before)
+        self.assertEqual(worker.jobs(),[])
+        self.plan.assert_not_awaited()
 
     async def test_invalid_size_shape_corruption_and_path_are_rejected(self):
         self.picture("small.png",size=(300,300))

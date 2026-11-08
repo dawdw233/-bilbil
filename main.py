@@ -43,6 +43,7 @@ from . import guard
 from . import reply as reply_logic
 from . import rhythm
 from .auto_publish import MAX_VIDEO_BYTES, AutoPublisher, PublishError, parse_category
+from .reference_images import ReferenceError
 from .duty import AUTO_COIN_DAILY_RANGE, BEIJING_TIME, DEFAULT_KEYWORDS, VIDEO_ACTIONS, DutyRunner, RiskPause
 
 PLUGIN_NAME = "astrbot_plugin_bili_scroll"
@@ -240,6 +241,7 @@ class BiliScrollPlugin(Star):
             ("upload/start", self._api_upload_start, ["POST"], "开始投稿"),
             ("upload/status", self._api_upload_status, ["GET"], "投稿进度"),
             ("upload/auto/state", self._api_auto_publish_state, ["GET"], "自主投稿设置与记录"),
+            ("upload/auto/reference/upload", self._api_auto_reference_upload, ["POST"], "上传本机参考图到图集"),
             ("upload/auto/models", self._api_auto_publish_models, ["POST"], "读取可选视频模型"),
             ("upload/auto/save", self._api_auto_publish_save, ["POST"], "保存自主投稿设置"),
             ("upload/auto/start", self._api_auto_publish_start, ["POST"], "立即自主生成并投稿"),
@@ -1517,6 +1519,17 @@ class BiliScrollPlugin(Star):
         try:
             return json_response(await asyncio.to_thread(self._auto_publish.state))
         except PublishError as exc:
+            return error_response(str(exc))
+
+    async def _api_auto_reference_upload(self):
+        payload = await request.json(default={})
+        if not isinstance(payload, dict):
+            return error_response("上传内容必须为 JSON 对象。")
+        try:
+            result = await asyncio.to_thread(self._auto_publish.references.upload, payload.get("name"), payload.get("image"))
+            state = await asyncio.to_thread(self._auto_publish.state)
+            return json_response({**result, "references": state["references"]})
+        except (ReferenceError, PublishError) as exc:
             return error_response(str(exc))
 
     async def _api_auto_publish_models(self):
