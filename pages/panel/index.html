@@ -1110,8 +1110,22 @@
           </fieldset>
           <p id="u-auto-feedback" class="sub" role="status"></p>
         </form>
-        <details class="panel" open>
-          <summary class="panel-title">配音与字幕</summary>
+        <div class="panel">
+          <div class="panel-title">最近自主投稿</div>
+          <p class="sub">分镜失败后可单独重试。后期重试复用原视频和已完成配音；服务商已拒绝的语音片段可重新提交，可能计费。下载和本地合成不重新生成视频。</p>
+          <div class="tbl-wrap">
+            <table id="u-auto-jobs"><thead><tr><th>时间</th><th>稿件</th><th>状态</th><th>成片／结果</th></tr></thead>
+              <tbody><tr><td colspan="4" class="empty">正在读取任务记录…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec collapsible" id="sec-voiceover">
+      <div class="sec-head"><span class="caret">▸</span><h2>配音与字幕</h2><span class="sub">为投稿视频添加旁白、原声混音和同步字幕</span></div>
+      <div class="sec-body">
+        <div class="panel">
           <p class="sub">海螺、方舟、万相共用后期处理。使用现成音色，无需训练；先生成视频，再写旁白、合成配音与字幕，最后投稿。语音调用另计费用。</p>
           <form id="u-voice-form">
             <fieldset id="u-voice-fields" style="border:0;padding:0;margin:0;min-width:0" disabled>
@@ -1134,15 +1148,6 @@
             <p id="u-voice-feedback" class="sub" role="status"></p>
             <p id="u-voice-draft" class="sub" role="status"></p>
           </form>
-        </details>
-        <div class="panel">
-          <div class="panel-title">最近自主投稿</div>
-          <p class="sub">分镜失败后可单独重试。后期重试复用原视频和已完成配音；服务商已拒绝的语音片段可重新提交，可能计费。下载和本地合成不重新生成视频。</p>
-          <div class="tbl-wrap">
-            <table id="u-auto-jobs"><thead><tr><th>时间</th><th>稿件</th><th>状态</th><th>成片／结果</th></tr></thead>
-              <tbody><tr><td colspan="4" class="empty">正在读取任务记录…</td></tr></tbody>
-            </table>
-          </div>
         </div>
       </div>
     </section>
