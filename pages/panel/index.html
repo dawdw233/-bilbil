@@ -1110,9 +1110,34 @@
           </fieldset>
           <p id="u-auto-feedback" class="sub" role="status"></p>
         </form>
+        <details class="panel" open>
+          <summary class="panel-title">配音与字幕</summary>
+          <p class="sub">海螺、方舟、万相共用后期处理。使用现成音色，无需训练；先生成视频，再写旁白、合成配音与字幕，最后投稿。语音调用另计费用。</p>
+          <form id="u-voice-form">
+            <fieldset id="u-voice-fields" style="border:0;padding:0;margin:0;min-width:0" disabled>
+              <div class="grid">
+                <label class="check"><input id="u-voice-enabled" type="checkbox" /><span><span class="t">自动添加旁白配音</span><span class="d">新任务使用保存时的配音设置。失败时保留原视频，不会跳过配音直接投稿。</span></span></label>
+                <label class="field"><span class="lbl">配音服务</span><select id="u-voice-provider"></select></label>
+                <label class="field"><span class="lbl">配音服务地区</span><select id="u-voice-region"></select></label>
+                <label class="field"><span class="lbl">配音 API Key</span><input id="u-voice-key" type="password" maxlength="512" autocomplete="off" aria-describedby="u-voice-key-tip" /><span class="tip" id="u-voice-key-tip">密钥独立保存；可填写同平台的现有 Key，语音权限以服务商为准。</span></label>
+                <label class="field"><span class="lbl">语音模型</span><select id="u-voice-model"></select></label>
+                <label class="field"><span class="lbl">预设音色</span><select id="u-voice-voice"></select></label>
+                <label class="field"><span class="lbl">语速</span><select id="u-voice-speed"><option value="0.8">稍慢 · 0.8</option><option value="1">自然 · 1.0</option><option value="1.2">稍快 · 1.2</option></select><span class="tip">千问使用自然语速；旁白按段合成，以实际音频时长对齐字幕。</span></label>
+                <label class="field"><span class="lbl">声音模式</span><select id="u-voice-mode"><option value="replace">仅使用后期配音</option><option value="mix">原声与配音混合</option></select></label>
+                <label class="field"><span class="lbl">原声音量（%）</span><input id="u-voice-original_volume" type="number" min="0" max="100" step="1" /></label>
+                <label class="field"><span class="lbl">配音音量（%）</span><input id="u-voice-voice_volume" type="number" min="10" max="150" step="1" /></label>
+                <label class="check"><input id="u-voice-subtitles" type="checkbox" /><span><span class="t">将旁白字幕显示在画面中</span><span class="d">白字深色描边，底部居中。字幕对应后期旁白，暂不识别视频原生对白，也不调整角色口型。</span></span></label>
+                <label class="field"><span class="lbl">字幕字号（以 720p 为基准）</span><input id="u-voice-font_size" type="number" min="20" max="60" step="1" /></label>
+              </div>
+              <div class="save-bar"><button type="submit" class="primary">保存配音与字幕设置</button><button id="u-voice-clear" type="button" disabled>清除配音 Key 并关闭</button></div>
+            </fieldset>
+            <p id="u-voice-feedback" class="sub" role="status"></p>
+            <p id="u-voice-draft" class="sub" role="status"></p>
+          </form>
+        </details>
         <div class="panel">
           <div class="panel-title">最近自主投稿</div>
-          <p class="sub">分镜失败后可单独重试，已完成的片段保留；重试生成会再次消耗服务额度，下载和本地重新合成不重新生成视频。</p>
+          <p class="sub">分镜失败后可单独重试。后期重试复用原视频和已完成配音；服务商已拒绝的语音片段可重新提交，可能计费。下载和本地合成不重新生成视频。</p>
           <div class="tbl-wrap">
             <table id="u-auto-jobs"><thead><tr><th>时间</th><th>稿件</th><th>状态</th><th>成片／结果</th></tr></thead>
               <tbody><tr><td colspan="4" class="empty">正在读取任务记录…</td></tr></tbody>
@@ -3050,15 +3075,16 @@ function stopUploadPoll() {
 const autoPublishPhases = {
   queued: "待选题", requesting: "提交生成任务", generating: "生成成片中", ready: "成片已保存，等待投稿",
   uploading: "正在投稿", published: "已提交 B站", failed: "失败", review: "待核对",
-  storyboard: "分镜生成中", assembling: "正在合成视频",
+  storyboard: "分镜生成中", assembling: "正在合成视频", voiceover: "正在配音与制作字幕",
 };
-const autoPublishActive = ["queued", "requesting", "generating", "storyboard", "assembling", "ready", "uploading"];
+const autoPublishActive = ["queued", "requesting", "generating", "storyboard", "assembling", "voiceover", "ready", "uploading"];
 let autoPublishTimer = null;
 let autoPublishFile = "";
 let autoPublishRequest = 0;
 let autoPublishReading = false;
 let autoPublishSaving = false;
 let autoReferenceUploading = false;
+let voiceState = null, voiceLoaded = false, voiceSaving = false, voiceDraftDirty = false;
 let autoPublishState = null;
 let autoModelRequest = 0;
 $("u-auto-tid").innerHTML = $("u-tid").innerHTML;
@@ -3179,10 +3205,10 @@ function syncAutoPublishActions() {
   $("u-auto-clear").disabled = !configured;
   const active = jobs.some(job => autoPublishActive.includes(job.phase));
   const referenceReady = syncAutoPublishReferences();
-  $("u-auto-start").disabled = !settings.enabled || !configured || !logged_in || active || changed || durationChanged || !referenceReady || autoReferenceUploading;
+  $("u-auto-start").disabled = !settings.enabled || !configured || !logged_in || active || changed || durationChanged || !referenceReady || autoReferenceUploading || voiceSaving || voiceDraftDirty;
   $("u-auto-reference-upload").disabled = autoReferenceUploading;
   $("u-auto-reference-refresh").disabled = autoReferenceUploading;
-  $("u-auto-start").title = changed || durationChanged ? "请先保存自主投稿设置" : logged_in ? "" : "请先在「刷视频」页登录 B站";
+  $("u-auto-start").title = voiceDraftDirty || voiceSaving ? "请先保存配音与字幕设置" : changed || durationChanged ? "请先保存自主投稿设置" : logged_in ? "" : "请先在「刷视频」页登录 B站";
   syncAutoPublishStoryboardForm();
 }
 
@@ -3314,17 +3340,107 @@ function renderAutoPublish(data, fill) {
     const task = job.task_id ? `<div class="sub">服务商任务：${esc(job.task_id)}</div>` : "";
     const reference = job.reference_image ? `<div class="sub">参考图：${esc(job.reference_image)}</div>` : "";
     const progress=job.mode === "storyboard" ? `<div class="sub">分镜 ${job.shots?.filter(shot=>shot.phase==="done").length||0} / ${job.shot_count||job.shots?.length||0}</div>` : "";
-    const retryLabel={shot:"重试失败片段",download:"重试下载",assemble:"重新合成"}[job.retry_stage];
+    const retryLabel={shot:"重试失败片段",download:"重试下载",assemble:"重新合成",voice:"重试后期处理"}[job.retry_stage];
     const retry=job.phase === "failed" && job.recoverable && retryLabel && /^[0-9a-f]{32}$/.test(job.id)
       ? `<button type="button" data-auto-resume="${job.id}" ${!settings.enabled||!data.logged_in||jobs.some(row=>autoPublishActive.includes(row.phase))?"disabled":""}>${retryLabel}</button>` : "";
     const shotPhases={queued:"等待生成",requesting:"提交中",generating:"生成中",done:"已完成",failed:"失败",download_failed:"下载失败",review:"待核对"};
     const clips=job.shots?.length ? `<details class="sub"><summary>分镜详情</summary>${job.shots.map(shot=>`<div class="sub">${esc(`第 ${shot.number} 段 · ${shot.duration} 秒 · ${shotPhases[shot.phase]||"待核对"}`)}${shot.task_id?`<br>${esc(shot.task_id)}`:""}</div>`).join("")}</details>` : "";
-    return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc([providerName, job.model, job.duration ? "计划 " + job.duration + " 秒" : ""].filter(Boolean).join(" · "))}</div>${category}${task}${reference}</td><td>${esc(status)}${progress}</td><td>${autoPublishResultMarkup(job)}${clips}${retry}</td></tr>`;
+    const voice = job.voiceover_enabled ? `<div class="sub">${job.voiceover_done ? "旁白后期已完成" : `配音 ${job.voiceover_progress || 0} / ${job.voiceover_count || 0}`}</div>` : "";
+    return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc([providerName, job.model, job.duration ? "计划 " + job.duration + " 秒" : ""].filter(Boolean).join(" · "))}</div>${category}${task}${reference}</td><td>${esc(status)}${progress}${voice}</td><td>${autoPublishResultMarkup(job)}${clips}${retry}</td></tr>`;
   }).join("") : '<tr><td colspan="4" class="empty">还没有自主投稿任务</td></tr>';
   const filesState = jobs.filter(job => job.file).map(job => job.file + ":" + (job.cleanup_state || "")).join("|");
   if (!fill && filesState !== autoPublishFile) loadUploadFiles();
   autoPublishFile = filesState;
+  renderVoiceover(data.voiceover);
 }
+
+function voicePayload() {
+  return {enabled:$("u-voice-enabled").checked,provider:$("u-voice-provider").value,region:$("u-voice-region").value,
+    api_key:$("u-voice-key").value.trim(),model:$("u-voice-model").value,voice:$("u-voice-voice").value,speed:Number($("u-voice-speed").value),
+    mix:$("u-voice-mode").value === "mix",original_volume:Number($("u-voice-original_volume").value),
+    voice_volume:Number($("u-voice-voice_volume").value),subtitles:$("u-voice-subtitles").checked,font_size:Number($("u-voice-font_size").value)};
+}
+
+function syncVoiceoverForm() {
+  if (!voiceState) return;
+  const current=voicePayload(), saved=voiceState.settings;
+  const spec=voiceState.providers[current.provider];
+  const profile=voiceState.profiles[current.provider+":"+current.region];
+  voiceDraftDirty=!!current.api_key || Object.keys(saved).some(key=>current[key]!==saved[key])
+    || current.model!==(profile?.model||spec.models[0]) || current.voice!==(profile?.voice||Object.keys(spec.voices)[0]) || current.speed!==(profile?.speed||1);
+  $("u-voice-key-tip").textContent=profile?.key_configured ? "此服务和地区已保存配音 Key，留空沿用；与视频设置独立保存。" : "填写配音服务的 Key；可用同平台现有 Key，语音权限以服务商为准。";
+  $("u-voice-speed").disabled=current.provider==="qwen";
+  $("u-voice-original_volume").disabled=!current.mix;
+  $("u-voice-font_size").disabled=!current.subtitles;
+  $("u-voice-clear").disabled=!profile?.key_configured;
+  $("u-voice-draft").textContent=voiceDraftDirty ? "配音设置尚未保存，请保存后再立即生成视频。" : "";
+  if ($("u-auto-provider").value) syncAutoPublishActions();
+}
+
+function selectVoiceProfile() {
+  const spec=voiceState.providers[$("u-voice-provider").value];
+  const profile=voiceState.profiles[$("u-voice-provider").value+":"+$("u-voice-region").value];
+  $("u-voice-key").value="";
+  $("u-voice-model").replaceChildren(...spec.models.map(model=>new Option(model,model)));
+  $("u-voice-model").value=profile?.model||spec.models[0];
+  $("u-voice-voice").replaceChildren(...Object.entries(spec.voices).map(([id,label])=>new Option(label,id)));
+  $("u-voice-voice").value=profile?.voice||Object.keys(spec.voices)[0];
+  $("u-voice-speed").value=String(profile?.speed||1);
+  syncVoiceoverForm();
+}
+
+function selectVoiceRegions(region) {
+  const spec=voiceState.providers[$("u-voice-provider").value];
+  $("u-voice-region").replaceChildren(...Object.entries(spec.regions).map(([id,label])=>new Option(label,id)));
+  $("u-voice-region").value=region in spec.regions ? region : Object.keys(spec.regions)[0];
+  selectVoiceProfile();
+}
+
+function renderVoiceover(data, fill=false) {
+  if (!data || voiceSaving) return;
+  voiceState=data;
+  if (!voiceLoaded || fill) {
+    const s=data.settings;
+    $("u-voice-provider").replaceChildren(...Object.entries(data.providers).map(([id,spec])=>new Option(spec.name,id)));
+    $("u-voice-provider").value=s.provider;
+    $("u-voice-enabled").checked=s.enabled;
+    $("u-voice-subtitles").checked=s.subtitles;
+    $("u-voice-mode").value=s.mix?"mix":"replace";
+    for (const key of ["original_volume","voice_volume","font_size"]) $("u-voice-"+key).value=s[key];
+    selectVoiceRegions(s.region);
+    voiceLoaded=true;
+  }
+  $("u-voice-fields").disabled=false;
+  syncVoiceoverForm();
+}
+
+async function saveVoiceover(payload) {
+  if (voiceSaving) return;
+  voiceSaving=true;
+  $("u-voice-fields").disabled=true;
+  syncAutoPublishActions();
+  setHint("u-voice-feedback","正在保存配音设置…");
+  try {
+    const data=await api("upload/auto/voice/save",payload);
+    if (!data.voiceover) throw new Error("服务器未返回配音设置");
+    voiceSaving=false;
+    renderAutoPublish(data,false);
+    renderVoiceover(data.voiceover,true);
+    setHint("u-voice-feedback","配音与字幕设置已保存，新任务将使用这些设置。","ok");
+  } catch (error) {
+    setHint("u-voice-feedback","保存失败："+(error?.message||error),"bad");
+  } finally {
+    voiceSaving=false;
+    $("u-voice-fields").disabled=false;
+    syncVoiceoverForm();
+  }
+}
+
+$("u-voice-form").onsubmit=event=>{event.preventDefault();saveVoiceover(voicePayload());};
+$("u-voice-form").addEventListener("input",syncVoiceoverForm);
+$("u-voice-provider").onchange=()=>selectVoiceRegions(voiceState.settings.provider===$("u-voice-provider").value?voiceState.settings.region:"cn");
+$("u-voice-region").onchange=selectVoiceProfile;
+$("u-voice-clear").onclick=()=>saveVoiceover({...voicePayload(),enabled:false,api_key:"",remove_key:true});
 
 async function loadAutoPublish(fill = false) {
   if (autoPublishReading || autoPublishSaving) return;

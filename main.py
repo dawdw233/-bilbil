@@ -44,6 +44,7 @@ from . import reply as reply_logic
 from . import rhythm
 from .auto_publish import MAX_VIDEO_BYTES, AutoPublisher, PublishError, parse_category
 from .reference_images import ReferenceError
+from .voiceover import VoiceoverError, VoiceoverService
 from .duty import AUTO_COIN_DAILY_RANGE, BEIJING_TIME, DEFAULT_KEYWORDS, VIDEO_ACTIONS, DutyRunner, RiskPause
 
 PLUGIN_NAME = "astrbot_plugin_bili_scroll"
@@ -163,6 +164,7 @@ class BiliScrollPlugin(Star):
             self._auto_publish_preflight,
             self._verify_auto_publication,
             self._plan_auto_storyboard,
+            voiceover=VoiceoverService(self.data_dir, self._plan_video_narration),
         )
         # 投稿：同一时间只跑一个
         self._upload: dict = {
@@ -242,10 +244,11 @@ class BiliScrollPlugin(Star):
             ("upload/status", self._api_upload_status, ["GET"], "投稿进度"),
             ("upload/auto/state", self._api_auto_publish_state, ["GET"], "自主投稿设置与记录"),
             ("upload/auto/reference/upload", self._api_auto_reference_upload, ["POST"], "上传本机参考图到图集"),
+            ("upload/auto/voice/save", self._api_voiceover_save, ["POST"], "保存独立配音与字幕设置"),
             ("upload/auto/models", self._api_auto_publish_models, ["POST"], "读取可选视频模型"),
             ("upload/auto/save", self._api_auto_publish_save, ["POST"], "保存自主投稿设置"),
             ("upload/auto/start", self._api_auto_publish_start, ["POST"], "立即自主生成并投稿"),
-            ("upload/auto/resume", self._api_auto_publish_resume, ["POST"], "继续失败分镜或重新合成"),
+            ("upload/auto/resume", self._api_auto_publish_resume, ["POST"], "继续失败分镜或配音后期"),
             ("rhythm/state", self._api_rhythm_state, ["GET"], "作息状态"),
             ("rhythm/runs", self._api_rhythm_runs, ["GET"], "最近醒来记录"),
             ("reply/summary", self._api_reply_summary, ["GET"], "回复状态"),
@@ -1500,6 +1503,27 @@ class BiliScrollPlugin(Star):
         ), timeout=90)
         return result.completion_text or ""
 
+    async def _plan_video_narration(self, job: dict, durations: list[float]) -> str:
+        result = await asyncio.wait_for(self.context.llm_generate(
+            chat_provider_id=self._provider_id(),
+            system_prompt=("为已生成的原创短片写简短中文旁白。严格按提供的时间段数量返回 JSON："
+                           "{\"segments\":[{\"text\":\"旁白\"}]}。每段只写自然口语，不写镜头提示或标签。"
+                           "每段字数不超过该段秒数乘2.8且最多36字，宁可少说，为画面留白。"
+                           "旁白依据提供的视频方案，不声称看到了未提供的成片，不引入新人物或无关情节。"),
+            prompt=json.dumps({"标题": job["title"], "视频方案": job["prompt"], "分段时长秒": durations}, ensure_ascii=False),
+        ), timeout=90)
+        return result.completion_text or ""
+
+    async def _api_voiceover_save(self):
+        payload = await request.json(default={})
+        if not isinstance(payload, dict):
+            return error_response("配音设置必须为 JSON 对象。")
+        try:
+            await asyncio.to_thread(self._auto_publish.voiceover.save, payload)
+            return json_response(await asyncio.to_thread(self._auto_publish.state))
+        except (VoiceoverError, PublishError) as exc:
+            return error_response(str(exc))
+
     async def _select_auto_video_category(self, plan: dict) -> dict:
         categories = await bili_api.bili_upload_categories()
         result = await self.context.llm_generate(
@@ -1518,7 +1542,7 @@ class BiliScrollPlugin(Star):
     async def _api_auto_publish_state(self):
         try:
             return json_response(await asyncio.to_thread(self._auto_publish.state))
-        except PublishError as exc:
+        except (PublishError, VoiceoverError) as exc:
             return error_response(str(exc))
 
     async def _api_auto_reference_upload(self):
@@ -1564,7 +1588,7 @@ class BiliScrollPlugin(Star):
     async def _api_auto_publish_resume(self):
         payload = await request.json(default={})
         if not isinstance(payload, dict) or not isinstance(payload.get("id"), str) or not re.fullmatch(r"[0-9a-f]{32}", payload["id"]):
-            return error_response("分镜任务编号无效。")
+            return error_response("自主投稿任务编号无效。")
         try:
             self._auto_publish.resume(payload["id"])
         except PublishError as exc:

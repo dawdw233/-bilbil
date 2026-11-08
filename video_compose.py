@@ -13,9 +13,9 @@ class CompositionError(Exception):
     """A local composition failure safe to show in the dashboard."""
 
 
-async def run_media(*args: str, timeout: int = 300) -> bytes:
+async def run_media(*args: str, timeout: int = 300, cwd: str | None = None) -> bytes:
     process = await asyncio.create_subprocess_exec(
-        *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd,
     )
     try:
         async with asyncio.timeout(timeout):

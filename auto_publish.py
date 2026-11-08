@@ -18,6 +18,7 @@ import aiohttp
 
 from .video_compose import CompositionError, compose_video
 from .reference_images import ReferenceError, ReferenceLibrary
+from .voiceover import VoiceoverError
 
 VIDEO_PROVIDERS = {
     "minimax": {
@@ -44,7 +45,7 @@ DEFAULTS = {
     "limit": 1, "direction": "", "tid": 21, "auto_category": False, "schedule_after": "",
     "mode": "single", "total_duration": 30, "reference_enabled": False,
 }
-ACTIVE_PHASES = {"queued", "requesting", "generating", "storyboard", "assembling", "ready", "uploading"}
+ACTIVE_PHASES = {"queued", "requesting", "generating", "storyboard", "assembling", "voiceover", "ready", "uploading"}
 MAX_VIDEO_BYTES = 100 * 1024 * 1024
 VIDEO_MODELS = {
     "minimax": ("MiniMax-Hailuo-2.3", "MiniMax-Hailuo-02", "T2V-01", "T2V-01-Director"),
@@ -424,7 +425,7 @@ VIDEO_CLIENTS = {"minimax": MiniMaxVideo, "ark": ArkVideo, "wan": WanVideo}
 
 
 class AutoPublisher:
-    def __init__(self, data_dir: Path, plan, publish, account, upload_busy, select_category=None, preflight=None, verify_publication=None, plan_storyboard=None, compose=None):
+    def __init__(self, data_dir: Path, plan, publish, account, upload_busy, select_category=None, preflight=None, verify_publication=None, plan_storyboard=None, compose=None, voiceover=None):
         self.data_dir = data_dir
         self.settings_path = data_dir / "auto_publish_settings.json"
         self.jobs_path = data_dir / "auto_publish_jobs.json"
@@ -437,6 +438,7 @@ class AutoPublisher:
         self.verify_publication = verify_publication
         self.plan_storyboard = plan_storyboard
         self.compose = compose or compose_video
+        self.voiceover = voiceover
         self.references = ReferenceLibrary(data_dir)
         try:
             self.references.ensure()
@@ -472,6 +474,7 @@ class AutoPublisher:
         rows = self.jobs()
         references = self.references.scan()
         return {
+            "voiceover": self.voiceover.state() if self.voiceover else None,
             "references": {**references, "files": [
                 {key: item[key] for key in ("name", "size", "width", "height")}
                 for item in references["files"][:12]], "invalid": references["invalid"][:6]},
@@ -508,6 +511,10 @@ class AutoPublisher:
                     "shots": [{"number": index + 1, "duration": shot["duration"], "phase": shot["phase"],
                                "task_id": shot.get("task_id", "")} for index, shot in enumerate(row.get("shots", []))],
                     "reference_image": row.get("reference_image", {}).get("name", ""),
+                    "voiceover_enabled": bool(row.get("voiceover")),
+                    "voiceover_done": row.get("voiceover", {}).get("complete", False),
+                    "voiceover_progress": sum(clip["phase"] == "done" for clip in row.get("voiceover", {}).get("clips", [])),
+                    "voiceover_count": len(row.get("voiceover", {}).get("clips", [])),
                 }
                 for row in reversed(rows[-10:])
             ],
@@ -673,6 +680,15 @@ class AutoPublisher:
         }
         if reference:
             job["reference_image"] = reference
+        if self.voiceover:
+            try:
+                pinned = self.voiceover.pin()
+            except VoiceoverError as exc:
+                if manual:
+                    raise PublishError(str(exc)) from exc
+                return None
+            if pinned:
+                job["voiceover"] = pinned
         if lengths:
             job["duration"] = sum(lengths)
         _write(self.jobs_path, [*rows, job][-60:])
@@ -681,6 +697,15 @@ class AutoPublisher:
     def resume(self, job_id: str) -> None:
         settings, rows = self.settings(), self.jobs()
         job = next((row for row in rows if row["id"] == job_id), None)
+        if job and job["phase"] == "failed" and job.get("recoverable") is True and job.get("retry_stage") == "voice":
+            if not self.voiceover or not settings["enabled"] or self.account() != job["account"] or any(row["phase"] in ACTIVE_PHASES for row in rows):
+                raise PublishError("请开启自主投稿、登录任务原账号，并等待其他任务完成。")
+            try:
+                self.voiceover.resume(job)
+            except VoiceoverError as exc:
+                raise PublishError(str(exc)) from exc
+            self._update(rows, job, "voiceover", recoverable=False, retry_stage="", message="已继续后期处理，将复用原视频和已完成配音。")
+            return
         if job is None or job.get("mode") != "storyboard" or job["phase"] != "failed" or job.get("recoverable") is not True:
             raise PublishError("此任务不能直接重试，请先核对服务商或 B站记录。")
         if not settings["enabled"] or self.account() != job["account"]:
@@ -755,12 +780,16 @@ class AutoPublisher:
                     if shot["phase"] != "done":
                         raise PublishError("分镜记录不完整，已保留本地文件供核对。")
                     targets.append((self._cleanup_path(job, index), shot.get("identity")))
+            if job.get("voiceover"):
+                if not self.voiceover:
+                    raise PublishError("后期处理模块不可用，已保留所有素材。")
+                targets.extend(self.voiceover.artifacts(job))
             for target, identity in targets:
                 if target.exists() and self._file_identity(target) != identity:
                     raise PublishError("本地成片已被修改，已保留供核对。")
             for target, _identity in targets:
                 target.unlink(missing_ok=True)
-        except PublishError as exc:
+        except (PublishError, VoiceoverError) as exc:
             self._update(rows, job, "published", cleanup_state="kept", message=str(exc))
             return
         except OSError:
@@ -774,11 +803,18 @@ class AutoPublisher:
         if job.get("retry_after") and now < datetime.fromisoformat(job["retry_after"]):
             return False
         try:
+            if job.get("voiceover"):
+                if self.voiceover is None:
+                    raise PublishError("配音模块暂不可用，任务将等待。")
+                try:
+                    await self.voiceover.preflight(job)
+                except VoiceoverError as exc:
+                    raise PublishError(str(exc)) from exc
             if self.preflight is not None:
-                kwargs = {}
+                kwargs = {"required_bytes": 3 * MAX_VIDEO_BYTES} if job.get("voiceover") else {}
                 if job.get("mode") == "storyboard":
                     remaining = sum(shot["phase"] != "done" for shot in job.get("shots", [])) if job.get("shots") else len(job["shot_durations"])
-                    kwargs = {"storyboard": True, "required_bytes": (remaining + 2) * MAX_VIDEO_BYTES}
+                    kwargs = {"storyboard": True, "required_bytes": (remaining + 2 + bool(job.get("voiceover"))) * MAX_VIDEO_BYTES}
                 await asyncio.wait_for(self.preflight(job["account"], **kwargs), timeout=25)
         except Exception as exc:
             reason = str(exc) if isinstance(exc, PublishError) else "暂时无法完成运行前检查，请稍后重试。"
@@ -930,6 +966,13 @@ class AutoPublisher:
                 return
             if phase == "ready" and self.upload_busy():
                 return
+        if phase == "voiceover" or (phase == "ready" and job.get("voiceover") and not job["voiceover"].get("complete")):
+            if self.voiceover is None:
+                self._update(rows, job, "failed", recoverable=True, retry_stage="voice", message="配音模块暂不可用，原视频已保留。")
+                return
+            self._update(rows, job, "voiceover")
+            await self.voiceover.step(job, lambda: _write(self.jobs_path, rows[-60:]), MAX_VIDEO_BYTES)
+            return
         if phase == "queued":
             try:
                 reference = await self._job_reference(job)

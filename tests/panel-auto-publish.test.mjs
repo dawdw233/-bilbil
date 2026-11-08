@@ -21,7 +21,7 @@ function form() {
   nodes["u-auto-mode"].value = "single";
   nodes["u-auto-total"].value = "30";
   for (const key of ["duration-field","total-field","storyboard-tip"]) nodes["u-auto-"+key].classList={toggle(){}};
-  const context = {$:id=>nodes[id],autoReferenceUploading:false,autoPublishSaving:false,autoPublishRequest:0,autoPublishState:{settings,jobs:[],logged_in:true,profiles:{"minimax:cn":{key_configured:true,model:"",duration:6}},providers:{minimax:{duration:6}}},autoPublishActive:["queued","requesting","generating","ready","uploading"]};
+  const context = {$:id=>nodes[id],voiceSaving:false,voiceDraftDirty:false,autoReferenceUploading:false,autoPublishSaving:false,autoPublishRequest:0,autoPublishState:{settings,jobs:[],logged_in:true,profiles:{"minimax:cn":{key_configured:true,model:"",duration:6}},providers:{minimax:{duration:6}}},autoPublishActive:["queued","requesting","generating","voiceover","ready","uploading"]};
   context.setHint=(id,message)=>nodes[id].textContent=message;
   vm.runInNewContext(sync, context);
   return {nodes,context};
