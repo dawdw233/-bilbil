@@ -172,6 +172,7 @@ class DirectorPipelineTests(unittest.IsolatedAsyncioTestCase):
         job["cleanup_identity"]=voice.identity(final)
         for shot in job["shots"]:shot["narration"]=""
         with patch.object(service,"preflight",AsyncMock()), patch.object(voice,"probe_video",AsyncMock(return_value={"duration":30})), \
+             patch.object(service,"source_has_audio",AsyncMock(return_value=True)), \
              patch.object(service,"render",AsyncMock(return_value=final)), patch.object(voice.SpeechClient,"synthesize",AsyncMock()) as tts:
             await service.step(job,lambda:None,auto.MAX_VIDEO_BYTES)
             self.assertEqual(job["voiceover"]["clips"],[])

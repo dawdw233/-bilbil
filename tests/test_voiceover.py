@@ -65,6 +65,7 @@ class VoiceoverTests(unittest.IsolatedAsyncioTestCase):
             (self.service,"preflight",AsyncMock()),
             (voice,"probe_video",AsyncMock(return_value={"duration":6,"audio":False})),
             (voice,"audio_duration",AsyncMock(return_value=.5)),
+            (voice,"has_audible_audio",AsyncMock(return_value=True)),
         ):
             item=patch.object(target,name,value);item.start();self.addCleanup(item.stop)
 
@@ -256,6 +257,57 @@ class VoiceoverTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("voiceover",worker.jobs()[0])
         self.assertEqual((await self.drive(worker))["phase"],"published")
         self.synthesize.assert_not_awaited();self.render.assert_not_awaited()
+
+    async def test_silent_source_bypasses_paid_speech_subtitles_and_video_reencoding(self):
+        worker=self.worker();self.pipeline()
+        with patch.object(voice,"has_audible_audio",AsyncMock(return_value=False)):
+            worker.enqueue(self.now,manual=True)
+            job=await self.drive(worker)
+        self.assertEqual(job["phase"],"published")
+        self.assertEqual(job["voiceover"]["skipped"],"silent")
+        self.assertEqual(worker.state()["jobs"][0]["voiceover_skipped"],"silent")
+        self.plan.assert_not_awaited();self.synthesize.assert_not_awaited();self.render.assert_not_awaited()
+        self.assertEqual(Path(self.publish.await_args.args[0]["video_path"]).read_bytes(),b"original MP4")
+        self.assertFalse(list((self.path/"media").glob("*-subtitles.*")))
+        self.assertFalse(list((self.path/"media").glob("*-source.mp4")))
+
+    async def test_audio_check_failure_retains_video_and_does_not_misclassify_as_silent(self):
+        worker=self.worker();self.pipeline()
+        with patch.object(voice,"has_audible_audio",AsyncMock(side_effect=voice.CompositionError("解码失败"))):
+            worker.enqueue(self.now,manual=True)
+            job=await self.drive(worker)
+        self.assertEqual((job["phase"],job["retry_stage"]),("failed","voice"))
+        self.assertNotIn("skipped",job["voiceover"])
+        self.synthesize.assert_not_awaited();self.publish.assert_not_awaited()
+
+    async def test_silent_source_needs_no_speech_key_or_subtitle_font_and_cache_checks_identity(self):
+        self.configure()
+        job={"id":"e"*32,"file":"ai-"+"e"*32+".mp4","voiceover":self.service.pin()}
+        path=self.service.path(job,".mp4");path.write_bytes(b"original video")
+        job["cleanup_identity"]=voice.identity(path)
+        with patch.object(voice,"probe_video",AsyncMock(return_value={"duration":6,"audio":False})) as probe, \
+             patch.object(voice.shutil,"which",return_value="tool"), patch.object(self.service,"key",side_effect=AssertionError("No speech key needed")):
+            await self.service.preflight(job)
+            await self.service.preflight(job)
+            probe.assert_awaited_once()
+            await self.service.step(job,lambda:None,auto.MAX_VIDEO_BYTES)
+            self.assertEqual(job["phase"],"ready")
+            path.write_bytes(b"user modified the video")
+            with self.assertRaisesRegex(voice.VoiceoverError,"原始视频已变化"):
+                await self.service.source_has_audio(job)
+
+    async def test_real_audio_detection_distinguishes_no_track_silent_aac_and_quiet_sound(self):
+        for kind in ("none","silence","quiet"):
+            path=self.path/"media"/(kind+".mp4")
+            args=["ffmpeg","-v","error","-y","-f","lavfi","-i","color=blue:s=320x240:d=1"]
+            if kind!="none":
+                args += ["-f","lavfi","-i", "anullsrc=r=48000:cl=stereo" if kind=="silence" else "sine=frequency=660:duration=1"]
+                if kind=="quiet":args += ["-af","volume=0.02"]
+                args += ["-c:a","aac"]
+            args += ["-c:v","libx264","-threads","2","-t","1",str(path)]
+            await voice.run_media(*args)
+            info=await voice.probe_video(path)
+            self.assertEqual(await voice.has_audible_audio(path,info),kind=="quiet",kind)
 
     async def test_real_ffmpeg_mix_and_chinese_subtitles(self):
         self.configure(mix=True,font_size=36)

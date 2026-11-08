@@ -526,6 +526,7 @@ class AutoPublisher:
                     "reference_image": row.get("reference_image", {}).get("name", ""),
                     "voiceover_enabled": bool(row.get("voiceover")),
                     "voiceover_done": row.get("voiceover", {}).get("complete", False),
+                    "voiceover_skipped": row.get("voiceover", {}).get("skipped", ""),
                     "voiceover_progress": sum(clip["phase"] == "done" for clip in row.get("voiceover", {}).get("clips", [])),
                     "voiceover_count": len(row.get("voiceover", {}).get("clips", [])),
                 }

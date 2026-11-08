@@ -1135,7 +1135,7 @@
       <div class="sec-head"><span class="caret">▸</span><h2>配音与字幕</h2><span class="sub">按镜头添加旁白，支持留白、原声混音和同步字幕</span></div>
       <div class="sec-body">
         <div class="panel">
-          <p class="sub">海螺、方舟、万相共用后期处理。使用现成音色，无需训练；先生成视频，再写旁白、合成配音与字幕，最后投稿。语音调用另计费用。</p>
+          <p class="sub">海螺、方舟、万相共用后期处理。无声视频会自动跳过配音与字幕，保留原片。当前后期仍为旁白模式，角色口型同步与原声转字幕尚未接入；语音调用另计费用。</p>
           <form id="u-voice-form">
             <fieldset id="u-voice-fields" style="border:0;padding:0;margin:0;min-width:0" disabled>
               <div class="grid">
@@ -3374,7 +3374,7 @@ function renderAutoPublish(data, fill) {
     const retryLabel={shot:"重试失败片段",download:"重试下载",assemble:"重新合成",voice:"重试后期处理"}[job.retry_stage];
     const retry=job.phase === "failed" && job.recoverable && retryLabel && /^[0-9a-f]{32}$/.test(job.id)
       ? `<button type="button" data-auto-resume="${job.id}" ${!settings.enabled||!data.logged_in||jobs.some(row=>autoPublishActive.includes(row.phase))?"disabled":""}>${retryLabel}</button>` : "";
-    const voice = job.voiceover_enabled ? `<div class="sub">${job.voiceover_done ? "旁白后期已完成" : `配音 ${job.voiceover_progress || 0} / ${job.voiceover_count || 0}`}</div>` : "";
+    const voice = job.voiceover_enabled ? `<div class="sub">${job.voiceover_skipped === "silent" ? "无声视频 · 已跳过配音与字幕" : job.voiceover_done ? "旁白后期已完成" : `配音 ${job.voiceover_progress || 0} / ${job.voiceover_count || 0}`}</div>` : "";
     return `<tr><td>${esc(String(job.created_at).slice(0, 16).replace("T", " "))}</td><td>${esc(job.title || "等待选题")}<div class="sub">${esc([providerName, job.model, job.duration ? "计划 " + job.duration + " 秒" : ""].filter(Boolean).join(" · "))}</div>${category}${task}${reference}</td><td>${esc(status)}${progress}${voice}</td><td>${autoPublishResultMarkup(job)}${retry}</td></tr>`;
   }).join("") : '<tr><td colspan="4" class="empty">还没有自主投稿任务</td></tr>';
   renderStoryPlans(jobs);

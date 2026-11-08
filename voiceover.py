@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import array
 import hashlib
 import json
 import math
@@ -9,6 +10,7 @@ import os
 import re
 import shutil
 import stat
+import sys
 import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -107,6 +109,25 @@ async def audio_duration(path: Path) -> float:
         return duration
     except (ValueError, KeyError, TypeError) as exc:
         raise VoiceoverError("配音文件无法解码为有效音频，已保留原视频。") from exc
+
+
+async def has_audible_audio(path: Path, info: dict) -> bool:
+    """A silent AAC track inserted during composition is not actual sound."""
+    if not info["audio"]:
+        return False
+    duration = info["duration"]
+    if not math.isfinite(duration) or not 0 < duration <= 65:
+        raise VoiceoverError("无法在支持的时长内检查视频声音，已保留原片。")
+    raw = await run_media("ffmpeg", "-v", "error", "-nostdin", "-i", str(path), "-map", "0:a:0",
+                          "-t", str(duration), "-ar", "16000", "-ac", "2", "-c:a", "pcm_s16le", "-f", "s16le", "-", timeout=60)
+    if not raw or len(raw) % 2:
+        raise VoiceoverError("视频音轨未能解码，已暂停后期处理，不会按无声视频跳过。")
+    samples = array.array("h")
+    samples.frombytes(raw)
+    if sys.byteorder != "little":
+        samples.byteswap()
+    # About -72 dBFS: discard digital silence/codec residue, retain quiet speech.
+    return max(samples) > 8 or min(samples) < -8
 
 
 class SpeechClient:
@@ -253,13 +274,34 @@ class VoiceoverService:
             raise VoiceoverError("配音 Key 已清除或更换，请恢复任务原来的 Key 后重试。")
         return key
 
+    async def source_has_audio(self, job: dict) -> bool:
+        config = job["voiceover"]
+        source = self.path(job, ".mp4")
+        expected = job["cleanup_identity"]
+        if identity(source) != expected:
+            raise VoiceoverError("原始视频已变化，不能检查声音或开始配音。")
+        cached = config.get("audio_check", {})
+        if cached.get("identity") == expected and type(cached.get("audible")) is bool:
+            return cached["audible"]
+        audible = await has_audible_audio(source, await probe_video(source))
+        if identity(source) != expected:
+            raise VoiceoverError("检查声音时原始视频被修改，已停止后期处理。")
+        config["audio_check"] = {"identity": expected, "audible": audible}
+        return audible
+
     async def preflight(self, job: dict) -> None:
         config = job.get("voiceover")
         if not config or config.get("complete"):
             return
-        self.key(config)
         if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
             raise VoiceoverError("配音后期需要 ffmpeg 和 ffprobe。")
+        # Before generation the sound is unknown. Only require the speech
+        # service and subtitle fonts once an audible source actually exists.
+        if not job.get("file"):
+            return
+        if not config.get("clips") and not config.get("script_ready") and not await self.source_has_audio(job):
+            return
+        self.key(config)
         if config["subtitles"] and not self._tools_checked:
             filters = await run_media("ffmpeg", "-hide_banner", "-filters", timeout=15)
             if b" subtitles " not in filters:
@@ -375,6 +417,11 @@ class VoiceoverService:
         """One bounded stage; save() persists the parent ledger before paid calls."""
         config = job["voiceover"]
         try:
+            if not config.get("clips") and not config.get("script_ready") and not await self.source_has_audio(job):
+                config.update(complete=True, skipped="silent")
+                job.update(phase="ready", recoverable=False, retry_stage="",
+                           message="成片无声，已跳过配音和字幕，保留原视频等待投稿。")
+                save(); return
             await self.preflight(job)
         except Exception as exc:
             message = str(exc) if isinstance(exc, VoiceoverError) else "配音环境检查失败，请检查 FFmpeg、字体和服务器存储。"
