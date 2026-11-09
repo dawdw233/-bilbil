@@ -15,18 +15,34 @@ from aiohttp import web
 from PIL import Image
 
 MODEL = "comfyui-h3"
-UNET = "minimax_h3_fl2va_pruned_int8_convrot.safetensors"
+AUDIO_MODEL = "comfyui-h3-audio"
+UNET = "minimax_h3_ref2va_pruned_int8_convrot.safetensors"
 ENCODER = "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"
 VIDEO_VAE = "minimax_h3_video_vae_fp16.safetensors"
 AUDIO_VAE = "minimax_h3_audio_vae_fp32.safetensors"
-LORA = "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors"
+LORA = "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors"
 OUTPUT_FOLDER = "bili-robot"
 MAX_VIDEO = 100 * 1024 * 1024
 MAX_REFERENCE = 10 * 1024 * 1024
 LOG = logging.getLogger(__name__)
 
 
-def h3_workflow(prompt, frames, width, height, prefix, image=None):
+def portrait_resolution(devices, seconds):
+    # Total VRAM is stable across jobs, even when ComfyUI still caches weights.
+    vram = max((device.get("vram_total", 0) for device in devices
+                if device.get("type") != "cpu"), default=0)
+    # Keep the source workflow's portrait aspect ratio and budget for longer clips.
+    vram_gib = vram / (1024 ** 3)
+    if vram_gib >= 23.5 and seconds <= 8:
+        return 448, 800
+    if vram_gib >= 15.5:
+        return 352, 608
+    if vram_gib >= 7.5 and seconds == 4:
+        return 288, 512
+    return 192, 352
+
+
+def h3_workflow(prompt, frames, width, height, prefix, image=None, *, audio=False):
     def node(class_type, **inputs):
         return {"class_type": class_type, "inputs": inputs}
 
@@ -36,8 +52,8 @@ def h3_workflow(prompt, frames, width, height, prefix, image=None):
         "3": node("VAELoader", vae_name=VIDEO_VAE),
         "4": node("VAELoader", vae_name=AUDIO_VAE),
         "5": node("LoraLoaderModelOnly", model=["1", 0], lora_name=LORA, strength_model=1),
-        "6": node("MiniMaxH3ImageToVideo", clip=["2", 0], vae=["3", 0], prompt=prompt,
-                  width=width, height=height, length=frames),
+        "6": node("MiniMaxH3ReferenceToVideo", clip=["2", 0], vae=["3", 0], audio_vae=["4", 0],
+                  prompt=prompt, width=width, height=height, length=frames, ref_image_size="match"),
         "7": node("BasicGuider", model=["5", 0], conditioning=["6", 0]),
         "8": node("BasicScheduler", model=["5", 0], scheduler="simple", steps=4, denoise=1),
         "9": node("RandomNoise", noise_seed=secrets.randbits(48)),
@@ -45,18 +61,28 @@ def h3_workflow(prompt, frames, width, height, prefix, image=None):
         "11": node("SamplerCustomAdvanced", noise=["9", 0], guider=["7", 0],
                    sampler=["10", 0], sigmas=["8", 0], latent_image=["6", 1]),
         "12": node("VAEDecode", samples=["11", 0], vae=["3", 0]),
-        "13": node("VAEDecodeAudio", samples=["11", 0], vae=["4", 0]),
-        "14": node("CreateVideo", images=["12", 0], audio=["13", 0], fps=24, bit_depth=8),
+        "14": node("CreateVideo", images=["12", 0], fps=24, bit_depth=8),
         "15": node("SaveVideo", video=["14", 0], filename_prefix=prefix, format="mp4", codec="auto"),
     }
     if image:
         graph["16"] = node("LoadImage", image=image)
-        graph["6"]["inputs"]["first_frame"] = ["16", 0]
+        inputs = graph["6"]["inputs"]
+        inputs["ref_images.ref_image_0"] = ["16", 0]
+        inputs["prompt"] = (
+            "Use <Picture 1> only as visual guidance for the subject's appearance. "
+            "Any front, side, and back views of the same subject describe one character. "
+            "From the first frame, show the action in the scene described below as one full-screen shot. "
+            "The reference sheet, grids, split screens, labels and overlays must stay out of the shot.\n\n"
+            + prompt
+        )
+    if audio:
+        graph["13"] = node("VAEDecodeAudio", samples=["11", 0], vae=["4", 0])
+        graph["14"]["inputs"]["audio"] = ["13", 0]
     return graph
 
 
 class ComfyBridge:
-    def __init__(self, state_dir, token, comfy_port, width, height):
+    def __init__(self, state_dir, token, comfy_port, width=None, height=None):
         self.token = token
         self.base = f"http://127.0.0.1:{comfy_port}"
         self.width, self.height = width, height
@@ -105,10 +131,13 @@ class ComfyBridge:
             choices = nodes[name].get(name, {}).get("input", {}).get("required", {}).get(field, [[]])[0]
             if filename not in choices:
                 raise web.HTTPServiceUnavailable(text=f"ComfyUI 未找到模型文件 {filename}。")
-        for name in ("MiniMaxH3ImageToVideo", "SaveVideo"):
+        for name in ("MiniMaxH3ReferenceToVideo", "SaveVideo"):
             if name not in await self.comfy_json("/object_info/" + name):
                 raise web.HTTPServiceUnavailable(text=f"ComfyUI 缺少节点 {name}。")
-        return web.json_response({"data": [{"id": MODEL, "name": "本机 ComfyUI · MiniMax H3"}]})
+        return web.json_response({"data": [
+            {"id": MODEL, "name": "本机 ComfyUI · MiniMax H3 多参（无声）"},
+            {"id": AUDIO_MODEL, "name": "本机 ComfyUI · MiniMax H3 多参（原生音频）"},
+        ]})
 
     async def create(self, request):
         if request.content_type != "multipart/form-data":
@@ -116,10 +145,16 @@ class ComfyBridge:
         fields = await request.post()
         prompt = fields.get("prompt")
         seconds = fields.get("seconds")
-        if fields.get("model") != MODEL or seconds not in ("4", "8", "12"):
-            raise web.HTTPBadRequest(text="请选择 comfyui-h3 和 4、8 或 12 秒。")
+        model = fields.get("model")
+        if model not in (MODEL, AUDIO_MODEL) or seconds not in ("4", "8", "12"):
+            raise web.HTTPBadRequest(text="请选择 comfyui-h3 或 comfyui-h3-audio，时长须为 4、8 或 12 秒。")
         if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 6000:
             raise web.HTTPBadRequest(text="视频描述为空或过长。")
+        seconds = int(seconds)
+        width, height = self.width, self.height
+        if width is None or height is None:
+            stats = await self.comfy_json("/system_stats")
+            width, height = portrait_resolution(stats.get("devices", []), seconds)
         prefix = uuid.uuid4().hex
         uploaded = None
         reference = fields.get("input_reference")
@@ -144,15 +179,16 @@ class ComfyBridge:
                 raise web.HTTPServiceUnavailable(text="无法核对 ComfyUI 上传的参考图。")
             uploaded = f"{OUTPUT_FOLDER}/{filename}"
 
-        frames = 5 + 17 * round((int(seconds) * 24 - 5) / 17)
-        graph = h3_workflow(prompt, frames, self.width, self.height, f"{OUTPUT_FOLDER}/{prefix}", uploaded)
+        frames = 5 + 17 * round((seconds * 24 - 5) / 17)
+        graph = h3_workflow(prompt, frames, width, height, f"{OUTPUT_FOLDER}/{prefix}", uploaded,
+                            audio=model == AUDIO_MODEL)
         result = await self.comfy_json("/prompt", json_body={"prompt": graph, "client_id": prefix})
         job = result.get("prompt_id", "")
         if not isinstance(job, str) or not re.fullmatch(r"[0-9a-f-]{36}", job):
             raise web.HTTPServiceUnavailable(text="未确认 ComfyUI 任务是否已受理。")
         with self.connect() as db:
             db.execute("INSERT INTO jobs VALUES (?, ?)", (job, prefix))
-        LOG.info("Accepted ComfyUI job %s", job)
+        LOG.info("Accepted ComfyUI job %s (%s, %dx%d, %d frames)", job, model, width, height, frames)
         return web.json_response({"id": job, "status": "queued"}, status=202)
 
     async def outcome(self, job):
@@ -216,10 +252,12 @@ def main():
     parser.add_argument("--state-dir", required=True, type=Path)
     parser.add_argument("--port", type=int, default=18188)
     parser.add_argument("--comfy-port", type=int, default=8188)
-    parser.add_argument("--width", type=int, default=352)
-    parser.add_argument("--height", type=int, default=192)
+    parser.add_argument("--width", type=int)
+    parser.add_argument("--height", type=int)
     args = parser.parse_args()
-    if any(value < 64 or value > 1280 or value % 32 for value in (args.width, args.height)):
+    if (args.width is None) != (args.height is None):
+        parser.error("Pass both --width and --height to override automatic resolution")
+    if args.width is not None and any(value < 64 or value > 1280 or value % 32 for value in (args.width, args.height)):
         parser.error("Width and height must be multiples of 32 between 64 and 1280")
     key = (args.state_dir / "bridge.key").read_text(encoding="utf-8").strip()
     if not re.fullmatch(r"[0-9a-f]{64}", key):

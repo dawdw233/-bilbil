@@ -168,11 +168,11 @@
 
 ## 本机 ComfyUI 生成视频
 
-`tools/comfyui_bridge.py` 将已有的 MiniMax H3 图生／文生工作流接到投稿页的「Videos API 兼容（自定义服务）」。桥接程序需要 Python 3.11 及以上、`aiohttp`、`Pillow`，并访问同一台电脑上运行的 ComfyUI。它提交工作流、查询指定任务并读取成片。[ComfyUI 接口文档](https://docs.comfy.org/development/comfyui-server/comms_routes)
+`tools/comfyui_bridge.py` 将 MiniMax H3 多参工作流接到投稿页的「Videos API 兼容（自定义服务）」。桥接程序需要 Python 3.11 及以上、`aiohttp`、`Pillow`，以及同一台电脑上的 ComfyUI、H3 Ref2VA 权重和对应的 4 步加速 LoRA。它提交工作流、查询指定任务并读取成片。[ComfyUI 接口文档](https://docs.comfy.org/development/comfyui-server/comms_routes)
 
-在桥接状态目录放置包含 64 位随机十六进制字符的 `bridge.key`，然后运行 `python tools/comfyui_bridge.py --state-dir <状态目录> --width 480 --height 288`。桥接监听本机 `127.0.0.1:18188`，ComfyUI 默认使用 `127.0.0.1:8188`。AstrBot 在远端时，需要用私有隧道转发桥接端口。
+在桥接状态目录放置包含 64 位随机十六进制字符的 `bridge.key`，然后运行 `python tools/comfyui_bridge.py --state-dir <状态目录>`。桥接监听本机 `127.0.0.1:18188`，ComfyUI 默认使用 `127.0.0.1:8188`。桥接按 ComfyUI 检测到的显存容量和视频时长选择竖屏分辨率，也可同时传入 `--width` 和 `--height` 手动指定。AstrBot 在远端时，需要用私有隧道转发桥接端口。
 
-在投稿页填入 AstrBot 能访问的桥接地址（以 `/v1` 结尾）和对应的桥接鉴权令牌，使用 `multipart` 格式和模型 `comfyui-h3`。该预设使用本机 H3 权重、4 步加速 LoRA 和 24 fps MP4。实际时长会按模型要求的帧数取整。开启投稿页的参考图选项后，图集中的图像用于首帧。
+在投稿页填入 AstrBot 能访问的桥接地址（以 `/v1` 结尾）和对应的桥接鉴权令牌，使用 `multipart` 格式和模型 `comfyui-h3`，并关闭原生声音。该预设输出没有音轨的 24 fps MP4。需要 H3 原生声音时，可选择 `comfyui-h3-audio` 并开启原生声音。实际时长会按模型要求的帧数取整。开启投稿页的参考图选项后，图集中的图像通过 `<Picture 1>` 参与角色外观参考，视频从生成的场景起镜。
 
 电脑、ComfyUI 和桥接进程需保持运行。桥接保存任务编号映射，ComfyUI 中的原任务记录仍存在时，可继续查询原任务。桥接令牌用于本地服务鉴权，生成使用本机 GPU。
 
