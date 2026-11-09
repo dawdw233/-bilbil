@@ -899,7 +899,7 @@ async def bili_coin_count(bvid: str, credential: Credential) -> dict:
 
 
 async def bili_pay_coin(bvid: str, credential: Credential) -> dict:
-    """仅供自动刷视频流程调用。"""
+    """给视频投 1 枚硬币（自动刷视频流程和管理员手动三连都用它；不顺手点赞）。"""
     try:
         await video.Video(bvid=bvid, credential=credential).pay_coin(num=1, like=False)
     except ResponseCodeException as exc:
