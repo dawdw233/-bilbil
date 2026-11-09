@@ -33,7 +33,7 @@ from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.star import Context, Star, StarTools
 from astrbot.api.web import error_response, json_response, request
-from astrbot.core.message.components import Plain
+from astrbot.core.message.components import Plain, Video
 from astrbot.core.message.message_event_result import MessageChain
 from astrbot.core.platform.message_session import MessageSession
 from astrbot.core.platform.message_type import MessageType
@@ -42,7 +42,7 @@ from . import bili_api
 from . import guard
 from . import reply as reply_logic
 from . import rhythm
-from .auto_publish import MAX_VIDEO_BYTES, AutoPublisher, PublishError, parse_category
+from .auto_publish import MAX_VIDEO_BYTES, AutoPublisher, CompatibleVideo, GenerationFailed, PublishError, parse_category
 from .reference_images import ReferenceError
 from .voiceover import VoiceoverError, VoiceoverService
 from .creative_learning import CreativeLearning, LearningError, object_json
@@ -162,6 +162,9 @@ class BiliScrollPlugin(Star):
         self._auto_publish_wake = asyncio.Event()
         self._learning = CreativeLearning(self.data_dir, self._analyze_creative_video, video_frames)
         self._qq_cards = CardReader()
+        # 本机 ComfyUI：同一时间只跑一段（8GB 卡排不了队）
+        self._comfy_job: dict | None = None
+        self._comfy_task: asyncio.Task | None = None
         self._auto_publish = AutoPublisher(
             self.data_dir, self._plan_auto_video, self._do_upload,
             self._auto_publish_account, lambda: self._upload.get("running", False),
@@ -3134,6 +3137,217 @@ class BiliScrollPlugin(Star):
         if stop:
             report += f"\n撞到风控「{stop}」，这次的其余操作先不做，过一阵再试。"
         return report
+
+    # ---------------- 本机 ComfyUI（H3）短片 ----------------
+
+    COMFY_SECONDS = (4, 8, 12)
+    COMFY_POLL_SECONDS = 8
+    COMFY_TIMEOUT_SECONDS = 20 * 60
+    COMFY_KEEP_FILES = 5
+
+    def _comfy_client(self, seconds: int):
+        """按「投稿 → 视频生成」里保存的兼容服务配置建一个客户端。
+
+        本机桥接（`http://172.18.0.1:18188/v1`）就是按这套协议写的，所以这里复用
+        同一个适配器：地址 / Key / 模型都读用户已经保存的那一份，不另存一份配置。
+        """
+        settings = self._auto_publish.settings()
+        provider, region = settings["provider"], settings["region"]
+        profile = settings["profiles"].get(f"{provider}:{region}", {})
+        base_url = str(profile.get("base_url") or "").strip()
+        key = str(profile.get("key") or "").strip()
+        model = str(profile.get("model") or "").strip()
+        if provider != "openai" or region != "custom":
+            raise PublishError(
+                "视频生成现在选的不是「Videos API 兼容（自定义服务）」。"
+                "先去「投稿」里切过去、填好地址/Key/模型并保存，再让我生成。"
+            )
+        if not (base_url and key and model):
+            raise PublishError("兼容视频服务还差地址 / Key / 模型，先去「投稿」里补齐并保存。")
+        return CompatibleVideo(
+            provider, region, key, model, duration=seconds,
+            base_url=base_url, transport=str(profile.get("transport") or "multipart"),
+        )
+
+    async def _send_chat(self, session_str: str, components: list) -> bool:
+        """往指定的聊天会话发消息（本机 ComfyUI 的成片要回到提问的那个会话）。"""
+        if not session_str:
+            return False
+        try:
+            session = MessageSession.from_str(session_str)
+        except Exception:
+            logger.warning("[bili-scroll] 会话标识认不出来，成片没法发回聊天")
+            return False
+        try:
+            await self.context.send_message(session, MessageChain(components))
+            return True
+        except Exception:
+            logger.exception("[bili-scroll] 往聊天发消息失败")
+            return False
+
+    def _prune_comfy_files(self) -> None:
+        """只留最近几段，别把 users 的素材目录撑满。"""
+        try:
+            files = sorted(
+                self._media_dir.glob("comfy-*.mp4"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+        except OSError:
+            return
+        for old in files[self.COMFY_KEEP_FILES:]:
+            try:
+                old.unlink()
+            except OSError:
+                logger.warning(f"[bili-scroll] 旧成片删不掉：{old.name}")
+
+    async def _comfy_finish(self, client, job: dict) -> None:
+        path: Path | None = None
+        error = ""
+        try:
+            deadline = time.time() + self.COMFY_TIMEOUT_SECONDS
+            done = False
+            while time.time() < deadline:
+                await asyncio.sleep(self.COMFY_POLL_SECONDS)
+                try:
+                    if await client.query(job["task_id"]):
+                        done = True
+                        break
+                except GenerationFailed as exc:
+                    error = str(exc)
+                    break
+                except Exception:
+                    # 查询偶发失败不算生成失败，接着等下一次
+                    continue
+            if not done and not error:
+                error = f"等了 {self.COMFY_TIMEOUT_SECONDS // 60} 分钟还没出片"
+            if done:
+                self._media_dir.mkdir(parents=True, exist_ok=True)
+                path = self._media_dir / f"comfy-{job['task_id'][:16]}.mp4"
+                await client.download(job["task_id"], path.with_suffix(".part"), path)
+        except Exception as exc:
+            logger.exception("[bili-scroll] 本机 ComfyUI 任务收尾失败")
+            error = str(exc) if isinstance(exc, PublishError) else "成片没拿下来"
+
+        session = job.get("session") or ""
+        try:
+            if path is not None and path.exists():
+                if not await self._send_chat(session, [Video(file=str(path))]):
+                    await self._send_chat(
+                        session,
+                        [Plain(f"成片生成好了，但发到聊天失败了。文件在服务器：{path}")],
+                    )
+                else:
+                    self._prune_comfy_files()
+            else:
+                await self._send_chat(
+                    session,
+                    [Plain(f"本机 ComfyUI 这段没生成出来：{error or '原因不明'}。")],
+                )
+        finally:
+            logger.info(
+                f"[bili-scroll] 本机 ComfyUI 任务 {job.get('task_id')}："
+                f"{'完成' if path else '失败 ' + error}"
+            )
+            self._comfy_job = None
+            self._comfy_task = None
+
+    @filter.llm_tool(name="comfyui_video")
+    async def tool_comfyui_video(
+        self,
+        event: AstrMessageEvent,
+        prompt: str,
+        seconds: int = 4,
+        reference: bool = False,
+    ):
+        """用本机 ComfyUI 的 H3 模型生成一小段视频，出片后自动把成片发回当前聊天。只有管理员能用。
+
+        用户明确说「用 ComfyUI 生成一段…」「让本机画个…短片」时调用。生成要几分钟，
+        调用后先告诉用户已经开始了、好了会发过来，不要承诺几秒出片。
+        同一时间只能生成一段；目前没有音轨，也不做口型。
+
+        Args:
+            prompt(string): 画面描述，越具体越好（人物、动作、镜头、光线），600 字以内
+            seconds(number): 时长，只能 4 / 8 / 12，默认 4；8 秒和 12 秒分辨率会更低
+            reference(boolean): 是否带上「投稿 → 三视图参考」里的参考图来保持角色长相，
+                默认 false；用户说「用三视图 / 带上角色参考 / 还是要大肥鱼」时设 true
+        """
+        if not self._is_owner(event):
+            return "只有管理员能让我调本机 ComfyUI 生成视频。"
+        text = str(prompt or "").strip()
+        if not text:
+            return "画面描述是空的，说说想生成什么。"
+        if len(text) > 600:
+            return f"描述太长了（{len(text)} 字），压到 600 字以内再发。"
+        try:
+            secs = int(seconds)
+        except (TypeError, ValueError):
+            secs = 4
+        if secs not in self.COMFY_SECONDS:
+            secs = min(self.COMFY_SECONDS, key=lambda value: abs(value - secs))
+
+        if self._comfy_job is not None:
+            running = self._comfy_job
+            return (
+                f"这台机器上还有一段在做（{running.get('at')} 开始的 {running.get('seconds')} 秒那种），"
+                "8GB 卡排不了两段，等它出片再排。"
+            )
+
+        reference_url = ""
+        if reference is True:
+            try:
+                picked = self._auto_publish.references.choose(self._auto_publish.jobs())
+                reference_url = self._auto_publish.references.load(
+                    picked, provider="openai"
+                )["data_url"]
+            except Exception as exc:
+                return (
+                    f"参考图用不了（{exc}）：先去「投稿 → 三视图参考」放一张有效图片，"
+                    "或者这次先不带参考。"
+                )
+
+        try:
+            client = self._comfy_client(secs)
+        except PublishError as exc:
+            return str(exc)
+        try:
+            models = await client.models()
+        except Exception:
+            logger.exception("[bili-scroll] 连本机 ComfyUI 桥接失败")
+            return (
+                "连不上本机 ComfyUI 桥接（172.18.0.1:18188 那条）。"
+                "先确认 ComfyUI 开着、`启动机器人连接.cmd` 也起过，再让我重试。"
+            )
+        if not models:
+            return "桥接连上了，但没报到可用视频模型，先去 ComfyUI 那边看看是不是没加载完。"
+
+        try:
+            task_id = await client.create(text, reference_image=reference_url or None)
+        except Exception as exc:
+            logger.exception("[bili-scroll] 提交本机 ComfyUI 任务失败")
+            return f"没提交成功：{exc if isinstance(exc, PublishError) else '桥接返回异常'}"
+        if not task_id:
+            return "桥接没返回任务号，这次没排上。"
+
+        job = {
+            "task_id": task_id,
+            "prompt": text[:120],
+            "seconds": secs,
+            "reference": bool(reference_url),
+            "at": datetime.now().strftime("%H:%M"),
+            "session": str(getattr(event, "unified_msg_origin", "") or ""),
+        }
+        self._comfy_job = job
+        self._comfy_task = asyncio.create_task(self._comfy_finish(client, job))
+        logger.info(
+            f"[bili-scroll] 本机 ComfyUI 已提交 {task_id}（{secs} 秒，参考图 {bool(reference_url)}）"
+        )
+        size = "288×512" if secs == 4 else "192×352"
+        return (
+            f"开始生成了：本机 H3 · {secs} 秒 · {size} · 无音轨"
+            f"{'· 带三视图参考' if reference_url else ''}，一般要几分钟。"
+            "成片好了我直接发到这个聊天，不用一直催。"
+        )
 
     # ---------------- 楼中楼 / 待审回复 ----------------
 
