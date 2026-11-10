@@ -56,9 +56,10 @@ def h3_workflow(prompt, frames, width, height, prefix, image=None, *, audio=Fals
         return {"class_type": class_type, "inputs": inputs}
 
     prompt += (
-        "\n\nKeep facial proportions consistent across frames, but let the face act: "
-        "the mouth and jaw should follow the action naturally — chewing, biting, talking "
-        "and swallowing must read clearly on screen, do not freeze the expression."
+        "\n\nKeep facial proportions consistent across frames, but let the face act. "
+        "When the subject eats, drinks or talks, the mouth must open and close rhythmically, "
+        "several times in a row: lips part, jaw drops, lips close again — never hold one "
+        "mouth shape for the whole shot. Chewing should read on the lips, jaw and cheeks."
     )
     graph = {
         "1": node("UNETLoader", unet_name=UNET, weight_dtype="default"),
