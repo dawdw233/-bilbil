@@ -163,9 +163,9 @@ class ComfyToolTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_seconds_are_snapped_to_supported_sizes(self):
         await self.run_tool(prompt="甲", seconds=10)
+        self.assertEqual(FakeVideo.instances[-1].duration, 10)
+        await self.run_tool(prompt="乙", seconds=7)
         self.assertEqual(FakeVideo.instances[-1].duration, 8)
-        await self.run_tool(prompt="乙", seconds=12)
-        self.assertEqual(FakeVideo.instances[-1].duration, 12)
         await self.run_tool(prompt="丙", seconds="abc")
         self.assertEqual(FakeVideo.instances[-1].duration, 4)
 

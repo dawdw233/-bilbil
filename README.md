@@ -109,7 +109,7 @@
 | 帮我回这条评论：…… | 把回复加入待审队列 |
 | 发这条草稿／丢弃这条草稿 | 根据草稿 ID 发送或丢弃，仅管理员可操作 |
 | 给这个视频三连 | 点赞、投 1 枚硬币、收藏到默认收藏夹，仅管理员可操作 |
-| 用 ComfyUI 生成一段…… | 调本机 H3 生成 4 / 8 / 12 秒短片，出片后把视频发回当前聊天，仅管理员可操作 |
+| 用 ComfyUI 生成一段…… | 调本机 H3 生成 4 / 8 / 10 / 12 秒短片（720p 生成、放大到 1080p），出片后把视频发回当前聊天，仅管理员可操作 |
 
 三连只在管理员本人明确要求时执行，同一视频不会重复投币；已投过或已收藏的会跳过。视频标题、简介、评论或 QQ 卡片里出现的「三连」算内容，不当作指令。
 
@@ -168,7 +168,7 @@
 
 视频接口的自定义 Base URL 包含 API 前缀（例如 `https://你的服务/v1`），不在地址里附带 Key。可从 `/models` 读取模型，或在「手动填写视频模型 ID」中输入平台给出的 ID。自定义服务的列表未必标注视频能力，模型出现不代表视频权限已验证。原生协议需要服务端兼容海螺/方舟/万相相应创建、查询和下载格式；填写其他平台地址不会自动转换任意 API。
 
-「Videos API 兼容」支持 `POST /videos` 创建、`GET /videos/{id}` 查询（queued/in_progress/completed/failed）、`GET /videos/{id}/content` 鉴权下载；请求可选 multipart 或 JSON。参数使用 model、prompt、seconds、size，参考图会转成1280×720后以文件或input_reference对象上传；返回字段必须兼容上述协议。默认协议时长为4/8/12秒，单段可选，分镜60秒可用5×12秒，30秒不能由这些时长组成。兼容模型支持原生声音时可按服务商说明勾选能力，再使用角色模式；该勾选不代表插件已实测模型。参考：[接口格式](https://developers.openai.com/api/reference/resources/videos/methods/create)、[音轨识别格式](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create)。官方文档已标注Videos API于2026-09-24下线，此入口面向自行配置的兼容服务，不预置官方视频地址，也不保证某一模型仍可用；[官方下线说明](https://developers.openai.com/api/docs/deprecations)。
+「Videos API 兼容」支持 `POST /videos` 创建、`GET /videos/{id}` 查询（queued/in_progress/completed/failed）、`GET /videos/{id}/content` 鉴权下载；请求可选 multipart 或 JSON。参数使用 model、prompt、seconds、size，参考图会转成1280×720后以文件或input_reference对象上传；返回字段必须兼容上述协议。默认协议时长为4/8/10/12秒，单段可选；分镜60秒可用5×12秒，30秒可用12+10+8三段（10秒只对能接受它的服务开放，本机 H3 桥接支持）。兼容模型支持原生声音时可按服务商说明勾选能力，再使用角色模式；该勾选不代表插件已实测模型。参考：[接口格式](https://developers.openai.com/api/reference/resources/videos/methods/create)、[音轨识别格式](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create)。官方文档已标注Videos API于2026-09-24下线，此入口面向自行配置的兼容服务，不预置官方视频地址，也不保证某一模型仍可用；[官方下线说明](https://developers.openai.com/api/docs/deprecations)。
 
 新视频任务固定创建时的地址、模型和请求格式，后续编辑服务地址不影响旧任务查询和下载；Key更换仍按原指纹保护。识别任务同样固定协议/地址/模型，只有明确手动重试未完成识别才采用任务同协议的新配置。原有 Key、图片、任务和默认服务在升级时保留。兼容接口改动不触发生成或识别，实际计费在用户开启并运行后按服务商规则发生。
 

@@ -133,4 +133,5 @@ class CompatibleTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(patch_data=patch_data),self.assertRaises(auto.PublishError):
                 worker.save_settings({"enabled":True,"provider":"openai","region":"custom","api_key":"video-key",**patch_data},self.now)
         self.assertEqual(auto.storyboard_lengths("openai","video",60),[12]*5)
-        with self.assertRaises(auto.PublishError):auto.storyboard_lengths("openai","video",30)
+        # 加了 10 秒档之后，30 秒也能凑成 3 段
+        self.assertEqual(auto.storyboard_lengths("openai","video",30),[12,10,8])

@@ -3140,7 +3140,7 @@ class BiliScrollPlugin(Star):
 
     # ---------------- 本机 ComfyUI（H3）短片 ----------------
 
-    COMFY_SECONDS = (4, 8, 12)
+    COMFY_SECONDS = (4, 8, 10, 12)
     COMFY_POLL_SECONDS = 8
     COMFY_TIMEOUT_SECONDS = 20 * 60
     COMFY_KEEP_FILES = 5
@@ -3268,7 +3268,7 @@ class BiliScrollPlugin(Star):
 
         Args:
             prompt(string): 画面描述，越具体越好（人物、动作、镜头、光线），600 字以内
-            seconds(number): 时长，只能 4 / 8 / 12，默认 4；8 秒和 12 秒分辨率会更低
+            seconds(number): 时长，只能 4 / 8 / 10 / 12，默认 4；本机桥接统一按 720p 生成、出片再放大到 1080p
             reference(boolean): 是否带上「投稿 → 三视图参考」里的参考图来保持角色长相，
                 默认 false；用户说「用三视图 / 带上角色参考 / 还是要大肥鱼」时设 true
         """

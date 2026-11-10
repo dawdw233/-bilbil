@@ -68,7 +68,7 @@ DURATION_RULES = {
         ("doubao-seedance-2-0-", list(range(4, 16))),
         ("doubao-seedance-1-0-", list(range(2, 13))),
     ],
-    "openai": [("", [4, 8, 12])],
+    "openai": [("", [4, 8, 10, 12])],
 }
 
 

@@ -24,46 +24,68 @@ LORA = "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors"
 OUTPUT_FOLDER = "bili-robot"
 MAX_VIDEO = 100 * 1024 * 1024
 MAX_REFERENCE = 10 * 1024 * 1024
+# 成片统一放大到 1080p 竖屏；显存/时长撑不住时把它改成 None，就按生成分辨率出片。
+UPSCALE = (1080, 1920)
+SECONDS = ("4", "8", "10", "12")
 LOG = logging.getLogger(__name__)
 
 
 def portrait_resolution(devices, seconds):
+    """生成分辨率：够用的机器直接 720p 竖屏（736×1312），不够才降级。"""
     # Total VRAM is stable across jobs, even when ComfyUI still caches weights.
     vram = max((device.get("vram_total", 0) for device in devices
                 if device.get("type") != "cpu"), default=0)
-    # Keep the source workflow's portrait aspect ratio and budget for longer clips.
+    # 9:16 且 32 对齐的 720p 竖屏：736×1312（720×1280 不是 32 的倍数）
     vram_gib = vram / (1024 ** 3)
-    if vram_gib >= 23.5 and seconds <= 8:
+    if vram_gib >= 7.5:
+        return 736, 1312
+    if vram_gib >= 5:
         return 448, 800
-    if vram_gib >= 15.5:
-        return 352, 608
-    if vram_gib >= 7.5 and seconds == 4:
-        return 288, 512
-    return 192, 352
+    return 288, 512
 
 
 def h3_workflow(prompt, frames, width, height, prefix, image=None, *, audio=False):
+    """构建 Ref2VA 图：SelfLift 两段采样（第 2 步升分辨率），出片前放大到 1080p。
+
+    节点接法照抄 `_preview/YZ金鱼-MiniMax H3-本机8GB兼容版.json`，单段 4 步 Turbo LoRA。
+    """
     def node(class_type, **inputs):
         return {"class_type": class_type, "inputs": inputs}
 
+    prompt += (
+        "\n\nFor visible faces, keep facial proportions and the jawline consistent across frames. "
+        "Match the expression to the action with controlled mouth and jaw movement, "
+        "and let the expression settle smoothly as the shot ends."
+    )
     graph = {
         "1": node("UNETLoader", unet_name=UNET, weight_dtype="default"),
         "2": node("CLIPLoader", clip_name=ENCODER, type="minimax", device="default"),
         "3": node("VAELoader", vae_name=VIDEO_VAE),
         "4": node("VAELoader", vae_name=AUDIO_VAE),
         "5": node("LoraLoaderModelOnly", model=["1", 0], lora_name=LORA, strength_model=1),
+        "17": node("MiniMaxH3SigmaShift", model=["5", 0], shift_video=12.0, shift_audio=3.0),
+        "18": node("MiniMaxChunkFeedForward", model=["17", 0], chunks=2, seq_threshold=4096),
         "6": node("MiniMaxH3ReferenceToVideo", clip=["2", 0], vae=["3", 0], audio_vae=["4", 0],
                   prompt=prompt, width=width, height=height, length=frames, ref_image_size="match"),
-        "7": node("BasicGuider", model=["5", 0], conditioning=["6", 0]),
-        "8": node("BasicScheduler", model=["5", 0], scheduler="simple", steps=4, denoise=1),
-        "9": node("RandomNoise", noise_seed=secrets.randbits(48)),
-        "10": node("KSamplerSelect", sampler_name="res_multistep"),
-        "11": node("SamplerCustomAdvanced", noise=["9", 0], guider=["7", 0],
-                   sampler=["10", 0], sigmas=["8", 0], latent_image=["6", 1]),
+        "7": node("ConditioningZeroOut", conditioning=["6", 0]),
+        "8": node("BasicScheduler", model=["18", 0], scheduler="simple", steps=4, denoise=1),
+        "10": node("KSamplerSelect", sampler_name="euler"),
+        "11": node("SelfLiftH3Sampler", model=["18", 0], positive=["6", 0], negative=["7", 0],
+                   vae=["3", 0], latent_image=["6", 1], sampler=["10", 0], sigmas=["8", 0],
+                   seed=secrets.randbits(48), cfg=1.0, transition_step=2, lowres_scale=0.6,
+                   rho=0.6, w_min=0.6, w_max=1.0, upscaler_model="none",
+                   highres_tiling=False, upscaler_unload=True),
         "12": node("VAEDecode", samples=["11", 0], vae=["3", 0]),
-        "14": node("CreateVideo", images=["12", 0], fps=24, bit_depth=8),
+        "14": node("CreateVideo", fps=24, bit_depth=8),
         "15": node("SaveVideo", video=["14", 0], filename_prefix=prefix, format="mp4", codec="auto"),
     }
+    if UPSCALE:
+        target_w, target_h = UPSCALE
+        graph["19"] = node("ImageScale", image=["12", 0], upscale_method="lanczos",
+                           width=target_w, height=target_h, crop="center")
+        graph["14"]["inputs"]["images"] = ["19", 0]
+    else:
+        graph["14"]["inputs"]["images"] = ["12", 0]
     if image:
         graph["16"] = node("LoadImage", image=image)
         inputs = graph["6"]["inputs"]
@@ -131,7 +153,11 @@ class ComfyBridge:
             choices = nodes[name].get(name, {}).get("input", {}).get("required", {}).get(field, [[]])[0]
             if filename not in choices:
                 raise web.HTTPServiceUnavailable(text=f"ComfyUI 未找到模型文件 {filename}。")
-        for name in ("MiniMaxH3ReferenceToVideo", "SaveVideo"):
+        required_nodes = ["MiniMaxH3ReferenceToVideo", "SelfLiftH3Sampler", "MiniMaxH3SigmaShift",
+                          "MiniMaxChunkFeedForward", "ConditioningZeroOut", "CreateVideo", "SaveVideo"]
+        if UPSCALE:
+            required_nodes.append("ImageScale")
+        for name in required_nodes:
             if name not in await self.comfy_json("/object_info/" + name):
                 raise web.HTTPServiceUnavailable(text=f"ComfyUI 缺少节点 {name}。")
         return web.json_response({"data": [
@@ -146,8 +172,8 @@ class ComfyBridge:
         prompt = fields.get("prompt")
         seconds = fields.get("seconds")
         model = fields.get("model")
-        if model not in (MODEL, AUDIO_MODEL) or seconds not in ("4", "8", "12"):
-            raise web.HTTPBadRequest(text="请选择 comfyui-h3 或 comfyui-h3-audio，时长须为 4、8 或 12 秒。")
+        if model not in (MODEL, AUDIO_MODEL) or seconds not in SECONDS:
+            raise web.HTTPBadRequest(text="请选择 comfyui-h3 或 comfyui-h3-audio，时长须为 4、8、10 或 12 秒。")
         if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 6000:
             raise web.HTTPBadRequest(text="视频描述为空或过长。")
         seconds = int(seconds)
