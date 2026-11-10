@@ -26,6 +26,9 @@ MAX_VIDEO = 100 * 1024 * 1024
 MAX_REFERENCE = 10 * 1024 * 1024
 # 成片统一放大到 1080p 竖屏；显存/时长撑不住时把它改成 None，就按生成分辨率出片。
 UPSCALE = (1080, 1920)
+# 总步数：第 2 步切到高分辨率（SelfLift transition_step=2），所以是 2 步低分辨率 + STEPS-2 步高分辨率。
+# Turbo LoRA 官方按 4 步蒸馏；4 → 8 是「更细一点、时间翻倍」的折中，再往上收益变小。
+STEPS = 8
 SECONDS = ("4", "8", "10", "12")
 LOG = logging.getLogger(__name__)
 
@@ -68,7 +71,7 @@ def h3_workflow(prompt, frames, width, height, prefix, image=None, *, audio=Fals
         "6": node("MiniMaxH3ReferenceToVideo", clip=["2", 0], vae=["3", 0], audio_vae=["4", 0],
                   prompt=prompt, width=width, height=height, length=frames, ref_image_size="match"),
         "7": node("ConditioningZeroOut", conditioning=["6", 0]),
-        "8": node("BasicScheduler", model=["18", 0], scheduler="simple", steps=4, denoise=1),
+        "8": node("BasicScheduler", model=["18", 0], scheduler="simple", steps=STEPS, denoise=1),
         "10": node("KSamplerSelect", sampler_name="euler"),
         "11": node("SelfLiftH3Sampler", model=["18", 0], positive=["6", 0], negative=["7", 0],
                    vae=["3", 0], latent_image=["6", 1], sampler=["10", 0], sigmas=["8", 0],
