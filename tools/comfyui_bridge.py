@@ -53,9 +53,9 @@ def h3_workflow(prompt, frames, width, height, prefix, image=None, *, audio=Fals
         return {"class_type": class_type, "inputs": inputs}
 
     prompt += (
-        "\n\nFor visible faces, keep facial proportions and the jawline consistent across frames. "
-        "Match the expression to the action with controlled mouth and jaw movement, "
-        "and let the expression settle smoothly as the shot ends."
+        "\n\nKeep facial proportions consistent across frames, but let the face act: "
+        "the mouth and jaw should follow the action naturally — chewing, biting, talking "
+        "and swallowing must read clearly on screen, do not freeze the expression."
     )
     graph = {
         "1": node("UNETLoader", unet_name=UNET, weight_dtype="default"),
@@ -91,10 +91,11 @@ def h3_workflow(prompt, frames, width, height, prefix, image=None, *, audio=Fals
         inputs = graph["6"]["inputs"]
         inputs["ref_images.ref_image_0"] = ["16", 0]
         inputs["prompt"] = (
-            "Use <Picture 1> only as visual guidance for the subject's appearance. "
+            "Use <Picture 1> only to fix the subject's appearance (hair, outfit, colours). "
             "Any front, side, and back views of the same subject describe one character. "
-            "From the first frame, show the action in the scene described below as one full-screen shot. "
-            "The reference sheet, grids, split screens, labels and overlays must stay out of the shot.\n\n"
+            "Do not copy the reference's pose, framing or closed-mouth expression, and never show "
+            "the reference sheet, grids, split screens, labels or overlays in the shot. "
+            "Frame the action as described below — close enough that the face and mouth are clearly visible.\n\n"
             + prompt
         )
     if audio:
