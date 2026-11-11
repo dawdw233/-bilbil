@@ -100,7 +100,8 @@ class ComfyToolTests(unittest.IsolatedAsyncioTestCase):
         self.instance._comfy_job = None
         self.instance._comfy_task = None
         self.instance.COMFY_POLL_SECONDS = 0
-        self.instance.COMFY_TIMEOUT_SECONDS = 20
+        self.instance.COMFY_TIMEOUT_BASE_SECONDS = 20
+        self.instance.COMFY_MINUTES_PER_SEGMENT = 0
 
     def event(self, sender=OWNER):
         return SimpleNamespace(
@@ -187,11 +188,34 @@ class ComfyToolTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_timeout_reports_in_chat(self):
         FakeVideo.query_result = None
-        self.instance.COMFY_TIMEOUT_SECONDS = 0.05
+        self.instance.COMFY_TIMEOUT_BASE_SECONDS = 0.05
         self.instance.COMFY_POLL_SECONDS = 0.01
         await self.run_tool(prompt="测试")
         plain = self.sent_chains()[0].chain[0]
         self.assertIn("还没出片", plain.text)
+
+    async def test_timeout_scales_with_the_number_of_segments(self):
+        # 默认 5 分钟 + 11 分钟一段：10 秒（2 段）27 分钟，60 秒（12 段）约 2 小时 17 分
+        self.instance.COMFY_TIMEOUT_BASE_SECONDS = 5 * 60
+        self.instance.COMFY_MINUTES_PER_SEGMENT = 11
+        self.assertEqual(self.instance._comfy_segments(5), 1)
+        self.assertEqual(self.instance._comfy_segments(10), 2)
+        self.assertEqual(self.instance._comfy_segments(60), 12)
+        self.assertEqual(self.instance._comfy_timeout(5), 16 * 60)
+        self.assertEqual(self.instance._comfy_timeout(10), 27 * 60)
+        self.assertEqual(self.instance._comfy_timeout(60), 5 * 60 + 11 * 60 * 12)
+        # 旧固定 20 分钟连实测 22 分钟的 10 秒都不够，这里必须比 22 分钟长
+        self.assertGreater(self.instance._comfy_timeout(10), 22 * 60)
+
+    async def test_started_message_reports_real_size_and_segments(self):
+        self.instance.COMFY_MINUTES_PER_SEGMENT = 11
+        text = await self.run_tool(prompt="甲", seconds=15)
+        self.assertIn("736×1312", text)
+        self.assertIn("1080×1920", text)
+        self.assertIn("3 段", text)
+        self.assertIn("33 分钟", text)
+        self.assertNotIn("288×512", text)
+        self.assertNotIn("192×352", text)
 
     async def test_empty_or_overlong_prompt_is_refused(self):
         self.assertIn("描述是空的", await self.run_tool(prompt="   "))
@@ -241,6 +265,13 @@ class ComfyToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("只有管理员", doc)
         self.assertIn("prompt(string)", doc)
         self.assertIn("seconds(number)", doc)
+
+    async def test_tool_docstring_forbids_guessing_port_or_power_state(self):
+        # 2026-11-11 事故复盘：超时后机器人自己猜「8188 没应声、是不是关机了」
+        doc = self.instance.tool_comfyui_video.__doc__
+        self.assertIn("不要自己猜端口", doc)
+        self.assertIn("8188", doc)
+        self.assertIn("172.18.0.1:18188", doc)
 
 
 if __name__ == "__main__":

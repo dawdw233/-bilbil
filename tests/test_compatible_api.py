@@ -134,3 +134,35 @@ class CompatibleTests(unittest.IsolatedAsyncioTestCase):
                 worker.save_settings({"enabled":True,"provider":"openai","region":"custom","api_key":"video-key",**patch_data},self.now)
         self.assertEqual(auto.storyboard_lengths("openai","video",60),[15]*4)
         self.assertEqual(auto.storyboard_lengths("openai","video",30),[15,15])
+
+    async def test_refused_request_surfaces_bridge_reason_without_the_key(self):
+        # 桥接的 4xx 正文会写清为什么拒（例如时长不在档位上），以前整段被吞掉，
+        # 机器人只能看到「拒绝请求（HTTP 400）」然后自己瞎猜原因。
+        async def plain(request):
+            return web.Response(status=400,text="时长只支持 5～60 秒、每 5 秒一档，本次请求带了 video-key。")
+        async def json_body(request):
+            return web.json_response({"error":{"message":"参考图必须是 PNG\n并且不超过 10 MB"}},status=400)
+        base=await self.server([web.post('/v1/videos/plain',plain),web.post('/v1/videos/json',json_body)])
+        client=auto.CompatibleVideo("openai","custom","video-key","comfyui-h3",base_url=base)
+        with self.assertRaises(auto.PublishError) as error:
+            await client._request("POST","/videos/plain")
+        message=str(error.exception)
+        self.assertIn("HTTP 400",message)
+        self.assertIn("时长只支持 5～60 秒、每 5 秒一档",message)
+        self.assertNotIn("video-key",message)
+        with self.assertRaises(auto.PublishError) as error:
+            await client._request("POST","/videos/json")
+        self.assertIn("参考图必须是 PNG 并且不超过 10 MB",str(error.exception))
+        self.assertNotIn("\n",str(error.exception))
+
+    async def test_refused_request_keeps_other_providers_to_the_status_code(self):
+        # 别的服务仍只报状态码，别把网关整页 HTML 或内部报文带进聊天
+        async def boom(request):
+            return web.Response(status=400,text="上游内部报文 secret-detail")
+        base=await self.server([web.post('/v1/videos',boom)])
+        client=auto.VideoClient("ark","cn","ark-key","ep",base_url=base)
+        with self.assertRaises(auto.PublishError) as error:
+            await client._request("POST","/videos")
+        self.assertIn("HTTP 400",str(error.exception))
+        self.assertNotIn("secret-detail",str(error.exception))
+        self.assertNotIn("ark-key",str(error.exception))

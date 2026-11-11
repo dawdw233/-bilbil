@@ -291,6 +291,35 @@ class VideoClient:
             location = "cn-beijing" if region == "cn" else "ap-southeast-1"
             self.models_url = f"https://{workspace}.{location}.maas.aliyuncs.com/api/v1" if workspace else ""
 
+    async def _refusal_detail(self, response) -> str:
+        """4xx 的响应正文里通常才是真原因（例如本机桥接会写清为什么拒）。
+
+        只对兼容视频（自定义服务 / 本机桥接）透出：去掉换行、截到 160 字、隐去 Key。
+        其他服务仍只报状态码，免得把网关整页 HTML 或内部报文带进聊天。
+        """
+        if self.provider != "openai":
+            return ""
+        try:
+            raw = await response.content.read(4096)
+            body = raw.decode(getattr(response, "charset", None) or "utf-8", "replace").strip()
+        except Exception:
+            return ""
+        try:
+            data = json.loads(body)
+        except ValueError:
+            data = None
+        if isinstance(data, dict):
+            value = data.get("error") if "error" in data else data.get("message")
+            if isinstance(value, dict):
+                value = value.get("message") or value.get("detail") or ""
+            if isinstance(value, str) and value.strip():
+                body = value
+        detail = " ".join(body.split())
+        key = self.headers.get("Authorization", "").partition("Bearer ")[2].strip()
+        if key:
+            detail = detail.replace(key, "***")
+        return detail[:160]
+
     async def _request(self, method, path, *, headers=None, **kwargs):
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=25)) as session:
             async with session.request(
@@ -299,7 +328,10 @@ class VideoClient:
                 allow_redirects=False, **kwargs,
             ) as response:
                 if 400 <= response.status < 500 and response.status not in (408, 429):
-                    raise PublishError(f"{self.name} 拒绝请求（HTTP {response.status}）。")
+                    detail = await self._refusal_detail(response)
+                    raise PublishError(
+                        f"{self.name} 拒绝请求（HTTP {response.status}）" + (f"：{detail}" if detail else "。")
+                    )
                 response.raise_for_status()
                 if response.status not in (200, 201, 202):
                     raise aiohttp.ClientError("Unexpected API status")

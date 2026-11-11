@@ -3142,9 +3142,36 @@ class BiliScrollPlugin(Star):
 
     # 本机桥接按 5 秒一段串行拼接，所以时长是 5～60 秒、每 5 秒一档
     COMFY_SECONDS = tuple(range(5, 61, 5))
+    COMFY_SEGMENT_SECONDS = 5
     COMFY_POLL_SECONDS = 8
-    COMFY_TIMEOUT_SECONDS = 20 * 60
+    # 实测一段 5 秒要 10～11 分钟。超时按段数算，也给用户同一套估算。
+    # 固定 20 分钟连 10 秒（2 段、实测 22 分钟）都不够，成片好了也会被判超时丢掉。
+    COMFY_MINUTES_PER_SEGMENT = 11
+    COMFY_TIMEOUT_BASE_SECONDS = 5 * 60
     COMFY_KEEP_FILES = 5
+
+    def _comfy_segments(self, seconds) -> int:
+        """这段片子要分几段：5 秒一段，向上取整（时长档本来就是 5 的倍数）。"""
+        try:
+            value = max(self.COMFY_SEGMENT_SECONDS, int(seconds))
+        except (TypeError, ValueError):
+            value = self.COMFY_SEGMENT_SECONDS
+        return -(-value // self.COMFY_SEGMENT_SECONDS)
+
+    def _comfy_timeout(self, seconds) -> int:
+        """等片上限：基础时间 + 每段 11 分钟，60 秒（12 段）约 2 小时 17 分。"""
+        return (
+            self.COMFY_TIMEOUT_BASE_SECONDS
+            + self.COMFY_MINUTES_PER_SEGMENT * 60 * self._comfy_segments(seconds)
+        )
+
+    def _comfy_eta_text(self, seconds) -> str:
+        """给用户的等待估算，跟超时用同一个「每段 11 分钟」。"""
+        minutes = max(1, self.COMFY_MINUTES_PER_SEGMENT) * self._comfy_segments(seconds)
+        if minutes < 60:
+            return f"{minutes} 分钟左右"
+        hours, rest = divmod(minutes, 60)
+        return f"{hours} 小时 {rest} 分左右" if rest else f"{hours} 小时左右"
 
     def _comfy_client(self, seconds: int):
         """按「投稿 → 视频生成」里保存的兼容服务配置建一个客户端。
@@ -3205,8 +3232,9 @@ class BiliScrollPlugin(Star):
     async def _comfy_finish(self, client, job: dict) -> None:
         path: Path | None = None
         error = ""
+        timeout = self._comfy_timeout(job.get("seconds"))
         try:
-            deadline = time.time() + self.COMFY_TIMEOUT_SECONDS
+            deadline = time.time() + timeout
             done = False
             while time.time() < deadline:
                 await asyncio.sleep(self.COMFY_POLL_SECONDS)
@@ -3221,7 +3249,10 @@ class BiliScrollPlugin(Star):
                     # 查询偶发失败不算生成失败，接着等下一次
                     continue
             if not done and not error:
-                error = f"等了 {self.COMFY_TIMEOUT_SECONDS // 60} 分钟还没出片"
+                error = (
+                    f"等了 {max(1, round(timeout / 60))} 分钟"
+                    f"（{self._comfy_segments(job.get('seconds'))} 段的上限）还没出片"
+                )
             if done:
                 self._media_dir.mkdir(parents=True, exist_ok=True)
                 path = self._media_dir / f"comfy-{job['task_id'][:16]}.mp4"
@@ -3258,18 +3289,22 @@ class BiliScrollPlugin(Star):
         self,
         event: AstrMessageEvent,
         prompt: str,
-        seconds: int = 4,
+        seconds: int = 5,
         reference: bool = False,
     ):
         """用本机 ComfyUI 的 H3 模型生成一小段视频，出片后自动把成片发回当前聊天。只有管理员能用。
 
-        用户明确说「用 ComfyUI 生成一段…」「让本机画个…短片」时调用。生成要几分钟，
-        调用后先告诉用户已经开始了、好了会发过来，不要承诺几秒出片。
-        同一时间只能生成一段；目前没有音轨，也不做口型。
+        用户明确说「用 ComfyUI 生成一段…」「让本机画个…短片」时调用。调用后先告诉用户已经
+        开始了、好了会发过来，不要承诺几秒出片。同一时间只能生成一段；目前没有音轨，也不做口型。
+
+        失败时只转述这里返回的文案（包括桥接给的拒绝原因），不要自己猜端口、进程、显存
+        或机器有没有开机：插件只连 172.18.0.1:18188 这一个地址，8188 是 ComfyUI 自己的
+        端口、跟这条链路无关，超时也不代表桥接挂了。
 
         Args:
             prompt(string): 画面描述，越具体越好（人物、动作、镜头、光线），600 字以内
-            seconds(number): 时长 5～60 秒、每 5 秒一档，默认 5；桥接按 5 秒一段串行生成再拼接，720p 生成、出片放大到 1080p。越长越慢（每 5 秒约 10 分钟）
+            seconds(number): 时长 5～60 秒、每 5 秒一档，默认 5；桥接按 5 秒一段串行生成再拼接，
+                736×1312 生成、出片放大到 1080×1920。越长越慢（每 5 秒一段约 10～11 分钟）
             reference(boolean): 是否带上「投稿 → 三视图参考」里的参考图来保持角色长相，
                 默认 false；用户说「用三视图 / 带上角色参考 / 还是要大肥鱼」时设 true
         """
@@ -3283,7 +3318,7 @@ class BiliScrollPlugin(Star):
         try:
             secs = int(seconds)
         except (TypeError, ValueError):
-            secs = 4
+            secs = self.COMFY_SEGMENT_SECONDS
         if secs not in self.COMFY_SECONDS:
             secs = min(self.COMFY_SECONDS, key=lambda value: abs(value - secs))
 
@@ -3343,10 +3378,12 @@ class BiliScrollPlugin(Star):
         logger.info(
             f"[bili-scroll] 本机 ComfyUI 已提交 {task_id}（{secs} 秒，参考图 {bool(reference_url)}）"
         )
-        size = "288×512" if secs == 4 else "192×352"
+        segments = self._comfy_segments(secs)
+        plan = f"{secs} 秒（{segments} 段 × {self.COMFY_SEGMENT_SECONDS} 秒）" if segments > 1 else f"{secs} 秒"
         return (
-            f"开始生成了：本机 H3 · {secs} 秒 · {size} · 无音轨"
-            f"{'· 带三视图参考' if reference_url else ''}，一般要几分钟。"
+            f"开始生成了：本机 H3 · {plan} · 736×1312 生成、1080×1920 出片 · 无音轨"
+            f"{' · 带三视图参考' if reference_url else ''}。"
+            f"一段 {self.COMFY_SEGMENT_SECONDS} 秒大约要 10～11 分钟，估计 {self._comfy_eta_text(secs)}，"
             "成片好了我直接发到这个聊天，不用一直催。"
         )
 
