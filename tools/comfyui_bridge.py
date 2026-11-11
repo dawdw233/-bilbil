@@ -29,7 +29,10 @@ UPSCALE = (1080, 1920)
 # 总步数：第 2 步切到高分辨率（SelfLift transition_step=2），所以是 2 步低分辨率 + STEPS-2 步高分辨率。
 # Turbo LoRA 官方按 4 步蒸馏；4 → 8 是「更细一点、时间翻倍」的折中，再往上收益变小。
 STEPS = 8
-SECONDS = ("4", "8", "10", "12")
+# 这台机器（8 GB 显存 / 15 GB 内存）实测只跑得动 4 秒：8 秒 >2 小时没出片、10 秒采样 OOM。
+# 换卡、加内存或换小量化之后，把 MAX_SECONDS 调大即可，不用改别的。
+MAX_SECONDS = 4
+SECONDS = tuple(str(value) for value in (4, 8, 10, 12) if value <= MAX_SECONDS)
 LOG = logging.getLogger(__name__)
 
 
@@ -178,7 +181,11 @@ class ComfyBridge:
         seconds = fields.get("seconds")
         model = fields.get("model")
         if model not in (MODEL, AUDIO_MODEL) or seconds not in SECONDS:
-            raise web.HTTPBadRequest(text="请选择 comfyui-h3 或 comfyui-h3-audio，时长须为 4、8、10 或 12 秒。")
+            allowed = "、".join(SECONDS)
+            raise web.HTTPBadRequest(
+                text=f"请选择 comfyui-h3 或 comfyui-h3-audio；这台机器现在只接 {allowed} 秒"
+                     f"（8/10/12 秒显存不够：8 秒两小时出不来、10 秒直接 OOM）。"
+            )
         if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 6000:
             raise web.HTTPBadRequest(text="视频描述为空或过长。")
         seconds = int(seconds)
