@@ -3147,11 +3147,10 @@ class BiliScrollPlugin(Star):
     # 实测一段 5 秒要 10～11 分钟。这个数只用来给用户估算，不要拿来当超时上限。
     COMFY_MINUTES_PER_SEGMENT = 11
     # 等片上限要宽：8 GB 显存 + 40 GB 权重，机器忙时一段可能翻倍，冷启动还要多约 10 分钟。
-    # 上限 = 基础 15 分钟 + 每段 25 分钟：5 秒 40 分、10 秒 65 分、60 秒 5 小时 15 分。
+    # 上限 = 基础 15 分钟 + 每段 20 分钟：5 秒 35 分、10 秒 55 分、60 秒 4 小时 15 分。
     # 宁可多等，也不要把已经跑出来的片子判死（11-11 就是这么丢了一部 10 秒片）。
-    # 真失败时桥接会明确报 failed，插件提前退出，所以放宽上限的代价主要在「卡住不报」这一种情况。
     COMFY_TIMEOUT_BASE_SECONDS = 15 * 60
-    COMFY_TIMEOUT_MINUTES_PER_SEGMENT = 25
+    COMFY_TIMEOUT_MINUTES_PER_SEGMENT = 20
     COMFY_KEEP_FILES = 5
 
     def _comfy_segments(self, seconds) -> int:
@@ -3163,7 +3162,7 @@ class BiliScrollPlugin(Star):
         return -(-value // self.COMFY_SEGMENT_SECONDS)
 
     def _comfy_timeout(self, seconds) -> int:
-        """等片上限：基础 15 分钟 + 每段 25 分钟，60 秒（12 段）约 5 小时 15 分。"""
+        """等片上限：基础 15 分钟 + 每段 20 分钟，60 秒（12 段）约 4 小时 15 分。"""
         return (
             self.COMFY_TIMEOUT_BASE_SECONDS
             + self.COMFY_TIMEOUT_MINUTES_PER_SEGMENT * 60 * self._comfy_segments(seconds)
