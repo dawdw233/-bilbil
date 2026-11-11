@@ -195,17 +195,17 @@ class ComfyToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("还没出片", plain.text)
 
     async def test_timeout_scales_with_the_number_of_segments(self):
-        # 默认 5 分钟 + 11 分钟一段：10 秒（2 段）27 分钟，60 秒（12 段）约 2 小时 17 分
-        self.instance.COMFY_TIMEOUT_BASE_SECONDS = 5 * 60
+        # 默认 10 分钟 + 11 分钟一段：10 秒（2 段）32 分钟，60 秒（12 段）约 2 小时 22 分
+        self.instance.COMFY_TIMEOUT_BASE_SECONDS = 10 * 60
         self.instance.COMFY_MINUTES_PER_SEGMENT = 11
         self.assertEqual(self.instance._comfy_segments(5), 1)
         self.assertEqual(self.instance._comfy_segments(10), 2)
         self.assertEqual(self.instance._comfy_segments(60), 12)
-        self.assertEqual(self.instance._comfy_timeout(5), 16 * 60)
-        self.assertEqual(self.instance._comfy_timeout(10), 27 * 60)
-        self.assertEqual(self.instance._comfy_timeout(60), 5 * 60 + 11 * 60 * 12)
-        # 旧固定 20 分钟连实测 22 分钟的 10 秒都不够，这里必须比 22 分钟长
-        self.assertGreater(self.instance._comfy_timeout(10), 22 * 60)
+        self.assertEqual(self.instance._comfy_timeout(5), 21 * 60)
+        self.assertEqual(self.instance._comfy_timeout(10), 32 * 60)
+        self.assertEqual(self.instance._comfy_timeout(60), 10 * 60 + 11 * 60 * 12)
+        # 旧固定 20 分钟连实测 22 分钟的 10 秒都不够，这里要留出冷启动的余量
+        self.assertGreater(self.instance._comfy_timeout(10), 30 * 60)
 
     async def test_started_message_reports_real_size_and_segments(self):
         self.instance.COMFY_MINUTES_PER_SEGMENT = 11

@@ -3146,8 +3146,9 @@ class BiliScrollPlugin(Star):
     COMFY_POLL_SECONDS = 8
     # 实测一段 5 秒要 10～11 分钟。超时按段数算，也给用户同一套估算。
     # 固定 20 分钟连 10 秒（2 段、实测 22 分钟）都不够，成片好了也会被判超时丢掉。
+    # 基础时间留 10 分钟：冷启动光把 40 GB 权重从硬盘过一遍就要多约 10 分钟。
     COMFY_MINUTES_PER_SEGMENT = 11
-    COMFY_TIMEOUT_BASE_SECONDS = 5 * 60
+    COMFY_TIMEOUT_BASE_SECONDS = 10 * 60
     COMFY_KEEP_FILES = 5
 
     def _comfy_segments(self, seconds) -> int:
@@ -3159,7 +3160,7 @@ class BiliScrollPlugin(Star):
         return -(-value // self.COMFY_SEGMENT_SECONDS)
 
     def _comfy_timeout(self, seconds) -> int:
-        """等片上限：基础时间 + 每段 11 分钟，60 秒（12 段）约 2 小时 17 分。"""
+        """等片上限：基础时间 + 每段 11 分钟，60 秒（12 段）约 2 小时 22 分。"""
         return (
             self.COMFY_TIMEOUT_BASE_SECONDS
             + self.COMFY_MINUTES_PER_SEGMENT * 60 * self._comfy_segments(seconds)
