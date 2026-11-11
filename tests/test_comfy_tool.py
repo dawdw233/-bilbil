@@ -196,23 +196,26 @@ class ComfyToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("还没出片", plain.text)
 
     async def test_timeout_scales_with_the_number_of_segments(self):
-        # 上限 = 15 分钟基础 + 每段 20 分钟：5 秒 35 分、10 秒 55 分、60 秒 4 小时 15 分
+        # 上限 = 15 分钟基础 + 每段 25 分钟：5 秒 40 分、10 秒 65 分、60 秒 5 小时 15 分
         self.instance.COMFY_TIMEOUT_BASE_SECONDS = 15 * 60
-        self.instance.COMFY_TIMEOUT_MINUTES_PER_SEGMENT = 20
+        self.instance.COMFY_TIMEOUT_MINUTES_PER_SEGMENT = 25
         self.assertEqual(self.instance._comfy_segments(5), 1)
         self.assertEqual(self.instance._comfy_segments(10), 2)
         self.assertEqual(self.instance._comfy_segments(60), 12)
-        self.assertEqual(self.instance._comfy_timeout(5), 35 * 60)
-        self.assertEqual(self.instance._comfy_timeout(10), 55 * 60)
-        self.assertEqual(self.instance._comfy_timeout(60), 15 * 60 + 20 * 60 * 12)
-        # 实测 10 秒 22.1 分钟：上限至少要有 2 倍余量，机器一忙就不能砍片子
+        self.assertEqual(self.instance._comfy_timeout(5), 40 * 60)
+        self.assertEqual(self.instance._comfy_timeout(10), 65 * 60)
+        self.assertEqual(self.instance._comfy_timeout(60), 15 * 60 + 25 * 60 * 12)
+        # 实测 10 秒 22.1 分钟：每一档都要留够 2 倍以上的余量
         self.assertGreater(self.instance._comfy_timeout(10), 2 * 22.1 * 60)
+        for seconds, measured in ((5, 11), (10, 22.1), (30, 66), (60, 132)):
+            with self.subTest(seconds=seconds):
+                self.assertGreater(self.instance._comfy_timeout(seconds), 2 * measured * 60)
 
     async def test_timeout_estimate_stays_honest_while_the_limit_is_generous(self):
         # 给用户的估算仍按实测 11 分钟一段走，不能因为上限放宽就把 10 秒说成一小时
         self.instance.COMFY_MINUTES_PER_SEGMENT = 11
         self.instance.COMFY_TIMEOUT_BASE_SECONDS = 15 * 60
-        self.instance.COMFY_TIMEOUT_MINUTES_PER_SEGMENT = 20
+        self.instance.COMFY_TIMEOUT_MINUTES_PER_SEGMENT = 25
         self.assertEqual(self.instance._comfy_eta_text(10), "22 分钟左右")
         self.assertGreater(self.instance._comfy_timeout(10), self.instance._comfy_timeout(5))
 
