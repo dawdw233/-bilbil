@@ -3144,11 +3144,13 @@ class BiliScrollPlugin(Star):
     COMFY_SECONDS = tuple(range(5, 61, 5))
     COMFY_SEGMENT_SECONDS = 5
     COMFY_POLL_SECONDS = 8
-    # 实测一段 5 秒要 10～11 分钟。超时按段数算，也给用户同一套估算。
-    # 固定 20 分钟连 10 秒（2 段、实测 22 分钟）都不够，成片好了也会被判超时丢掉。
-    # 基础时间留 10 分钟：冷启动光把 40 GB 权重从硬盘过一遍就要多约 10 分钟。
+    # 实测一段 5 秒要 10～11 分钟。这个数只用来给用户估算，不要拿来当超时上限。
     COMFY_MINUTES_PER_SEGMENT = 11
-    COMFY_TIMEOUT_BASE_SECONDS = 10 * 60
+    # 等片上限要宽：8 GB 显存 + 40 GB 权重，机器忙时一段可能翻倍，冷启动还要多约 10 分钟。
+    # 上限 = 基础 15 分钟 + 每段 20 分钟：5 秒 35 分、10 秒 55 分、60 秒 4 小时 15 分。
+    # 宁可多等，也不要把已经跑出来的片子判死（11-11 就是这么丢了一部 10 秒片）。
+    COMFY_TIMEOUT_BASE_SECONDS = 15 * 60
+    COMFY_TIMEOUT_MINUTES_PER_SEGMENT = 20
     COMFY_KEEP_FILES = 5
 
     def _comfy_segments(self, seconds) -> int:
@@ -3160,10 +3162,10 @@ class BiliScrollPlugin(Star):
         return -(-value // self.COMFY_SEGMENT_SECONDS)
 
     def _comfy_timeout(self, seconds) -> int:
-        """等片上限：基础时间 + 每段 11 分钟，60 秒（12 段）约 2 小时 22 分。"""
+        """等片上限：基础 15 分钟 + 每段 20 分钟，60 秒（12 段）约 4 小时 15 分。"""
         return (
             self.COMFY_TIMEOUT_BASE_SECONDS
-            + self.COMFY_MINUTES_PER_SEGMENT * 60 * self._comfy_segments(seconds)
+            + self.COMFY_TIMEOUT_MINUTES_PER_SEGMENT * 60 * self._comfy_segments(seconds)
         )
 
     def _comfy_eta_text(self, seconds) -> str:

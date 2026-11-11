@@ -101,6 +101,7 @@ class ComfyToolTests(unittest.IsolatedAsyncioTestCase):
         self.instance._comfy_task = None
         self.instance.COMFY_POLL_SECONDS = 0
         self.instance.COMFY_TIMEOUT_BASE_SECONDS = 20
+        self.instance.COMFY_TIMEOUT_MINUTES_PER_SEGMENT = 0
         self.instance.COMFY_MINUTES_PER_SEGMENT = 0
 
     def event(self, sender=OWNER):
@@ -195,17 +196,25 @@ class ComfyToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("还没出片", plain.text)
 
     async def test_timeout_scales_with_the_number_of_segments(self):
-        # 默认 10 分钟 + 11 分钟一段：10 秒（2 段）32 分钟，60 秒（12 段）约 2 小时 22 分
-        self.instance.COMFY_TIMEOUT_BASE_SECONDS = 10 * 60
-        self.instance.COMFY_MINUTES_PER_SEGMENT = 11
+        # 上限 = 15 分钟基础 + 每段 20 分钟：5 秒 35 分、10 秒 55 分、60 秒 4 小时 15 分
+        self.instance.COMFY_TIMEOUT_BASE_SECONDS = 15 * 60
+        self.instance.COMFY_TIMEOUT_MINUTES_PER_SEGMENT = 20
         self.assertEqual(self.instance._comfy_segments(5), 1)
         self.assertEqual(self.instance._comfy_segments(10), 2)
         self.assertEqual(self.instance._comfy_segments(60), 12)
-        self.assertEqual(self.instance._comfy_timeout(5), 21 * 60)
-        self.assertEqual(self.instance._comfy_timeout(10), 32 * 60)
-        self.assertEqual(self.instance._comfy_timeout(60), 10 * 60 + 11 * 60 * 12)
-        # 旧固定 20 分钟连实测 22 分钟的 10 秒都不够，这里要留出冷启动的余量
-        self.assertGreater(self.instance._comfy_timeout(10), 30 * 60)
+        self.assertEqual(self.instance._comfy_timeout(5), 35 * 60)
+        self.assertEqual(self.instance._comfy_timeout(10), 55 * 60)
+        self.assertEqual(self.instance._comfy_timeout(60), 15 * 60 + 20 * 60 * 12)
+        # 实测 10 秒 22.1 分钟：上限至少要有 2 倍余量，机器一忙就不能砍片子
+        self.assertGreater(self.instance._comfy_timeout(10), 2 * 22.1 * 60)
+
+    async def test_timeout_estimate_stays_honest_while_the_limit_is_generous(self):
+        # 给用户的估算仍按实测 11 分钟一段走，不能因为上限放宽就把 10 秒说成一小时
+        self.instance.COMFY_MINUTES_PER_SEGMENT = 11
+        self.instance.COMFY_TIMEOUT_BASE_SECONDS = 15 * 60
+        self.instance.COMFY_TIMEOUT_MINUTES_PER_SEGMENT = 20
+        self.assertEqual(self.instance._comfy_eta_text(10), "22 分钟左右")
+        self.assertGreater(self.instance._comfy_timeout(10), self.instance._comfy_timeout(5))
 
     async def test_started_message_reports_real_size_and_segments(self):
         self.instance.COMFY_MINUTES_PER_SEGMENT = 11
