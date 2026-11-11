@@ -1,5 +1,6 @@
 """管理员在聊天里让本机 ComfyUI 生成短片：闸门、排队、成片回到原会话。"""
 
+import base64
 import json
 import tempfile
 import unittest
@@ -131,9 +132,16 @@ class ComfyToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(chains), 1)
         component = chains[0].chain[0]
         self.assertEqual(type(component).__name__, "Video")
-        self.assertTrue(str(component.file).endswith(".mp4"))
-        self.assertTrue(Path(component.file).exists())
+        # QQ 侧（SnowLuma）在另一个容器里看不见 /AstrBot/... 的路径，必须走 base64
+        self.assertTrue(str(component.file).startswith("base64://"))
+        payload = base64.b64decode(str(component.file)[len("base64://"):])
+        self.assertTrue(payload.startswith(b"\x00\x00\x00\x18ftypmp42"))
         self.assertIsNone(self.instance._comfy_job)
+
+    async def test_unreadable_clip_falls_back_to_the_path(self):
+        missing = self.data_dir / "media" / "comfy-gone.mp4"
+        component = self.instance._comfy_video_component(missing)
+        self.assertEqual(str(component.file), str(missing))
 
     async def test_non_owner_is_refused_without_any_request(self):
         text = await self.instance.tool_comfyui_video(self.event("999"), prompt="随便")

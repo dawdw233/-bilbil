@@ -3267,7 +3267,7 @@ class BiliScrollPlugin(Star):
         session = job.get("session") or ""
         try:
             if path is not None and path.exists():
-                if not await self._send_chat(session, [Video(file=str(path))]):
+                if not await self._send_chat(session, [self._comfy_video_component(path)]):
                     await self._send_chat(
                         session,
                         [Plain(f"成片生成好了，但发到聊天失败了。文件在服务器：{path}")],
@@ -3286,6 +3286,21 @@ class BiliScrollPlugin(Star):
             )
             self._comfy_job = None
             self._comfy_task = None
+
+    def _comfy_video_component(self, path: Path):
+        """把成片包成能发出去的消息组件。
+
+        QQ 那侧（SnowLuma）跑在**另一个容器**里，看不见 `/AstrBot/data/...` 这种路径，
+        直接给路径会报 `ENOENT ... realpath`（2026-11-11 实测）。AstrBot 的 `Video.to_dict`
+        在没有 `callback_api_base` 时也是原样发路径，所以这里自己编码成 `base64://`
+        ——SnowLuma 明确支持 base64 视频源（实测 retcode 0）。读文件失败就退回路径，
+        让上层照常走「发不出去就给服务器路径」的兜底。
+        """
+        try:
+            return Video(file="base64://" + base64.b64encode(path.read_bytes()).decode())
+        except OSError:
+            logger.warning(f"[bili-scroll] 成片读不出来，按路径发：{path.name}")
+            return Video(file=str(path))
 
     @filter.llm_tool(name="comfyui_video")
     async def tool_comfyui_video(
