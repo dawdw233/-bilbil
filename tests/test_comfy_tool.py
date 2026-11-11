@@ -122,7 +122,7 @@ class ComfyToolTests(unittest.IsolatedAsyncioTestCase):
         text = await self.run_tool(prompt="一只在雨里走的橘猫，跟拍，暖色路灯")
         self.assertIn("开始生成了", text)
         client = FakeVideo.instances[-1]
-        self.assertEqual(client.duration, 4)
+        self.assertEqual(client.duration, 5)
         self.assertEqual(client.base_url, "http://172.18.0.1:18188/v1")
         self.assertEqual(client.created, ["一只在雨里走的橘猫，跟拍，暖色路灯"])
         chains = self.sent_chains()
@@ -165,9 +165,9 @@ class ComfyToolTests(unittest.IsolatedAsyncioTestCase):
         await self.run_tool(prompt="甲", seconds=10)
         self.assertEqual(FakeVideo.instances[-1].duration, 10)
         await self.run_tool(prompt="乙", seconds=7)
-        self.assertEqual(FakeVideo.instances[-1].duration, 8)
+        self.assertEqual(FakeVideo.instances[-1].duration, 5)
         await self.run_tool(prompt="丙", seconds="abc")
-        self.assertEqual(FakeVideo.instances[-1].duration, 4)
+        self.assertEqual(FakeVideo.instances[-1].duration, 5)
 
     async def test_second_request_waits_for_the_running_one(self):
         self.instance._comfy_job = {"task_id": "t", "seconds": 4, "at": "12:00", "session": SOURCE}

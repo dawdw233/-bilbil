@@ -44,7 +44,7 @@ VIDEO_PROVIDERS = {
             "global": ("新加坡", "https://dashscope-intl.aliyuncs.com/api/v1"),
         },
     },
-    "openai": {"name": "Videos API 兼容（自定义服务）", "model": "", "duration": 4,
+    "openai": {"name": "Videos API 兼容（自定义服务）", "model": "", "duration": 5,
                "regions": {"custom": ("自定义服务", "")}},
 }
 DEFAULTS = {
@@ -68,7 +68,8 @@ DURATION_RULES = {
         ("doubao-seedance-2-0-", list(range(4, 16))),
         ("doubao-seedance-1-0-", list(range(2, 13))),
     ],
-    "openai": [("", [4, 8, 10, 12])],
+    # 本机桥接按 5 秒一段拼接，所以开放 5～60 秒、每 5 秒一档
+    "openai": [("", list(range(5, 61, 5)))],
 }
 
 

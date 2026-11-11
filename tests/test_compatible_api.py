@@ -87,7 +87,7 @@ class CompatibleTests(unittest.IsolatedAsyncioTestCase):
             return web.Response(body=b"0000ftyp"+b"0"*2048,content_type="video/mp4")
         base=await self.server([web.get('/v1/models',models),web.post('/v1/videos',create),web.get('/v1/videos/{id}',query),web.get('/v1/videos/{id}/content',content)])
         worker=self.worker()
-        worker.save_settings({"enabled":True,"provider":"openai","region":"custom","api_key":"video-only-key","base_url":base,"model":"gateway/video-model","duration":4},self.now)
+        worker.save_settings({"enabled":True,"provider":"openai","region":"custom","api_key":"video-only-key","base_url":base,"model":"gateway/video-model","duration":5},self.now)
         self.assertEqual((await worker.models({}))["models"][0]["id"],"gateway/video-model")
         job=worker.enqueue(self.now,manual=True)
         await worker.tick(self.now)
@@ -97,7 +97,7 @@ class CompatibleTests(unittest.IsolatedAsyncioTestCase):
             if worker.jobs()[0]["phase"] in ("published","failed","review"):break
         self.assertEqual(worker.jobs()[0]["phase"],"published")
         self.assertEqual(worker.jobs()[0]["base_url"],base)
-        self.assertEqual(calls[0],("create","gateway/video-model","4","multipart/form-data"))
+        self.assertEqual(calls[0],("create","gateway/video-model","5","multipart/form-data"))
         self.assertIn(("content","job-1"),calls)
         worker.publish.assert_awaited_once()
         self.assertNotIn("video-only-key",json.dumps(worker.state()))
@@ -132,6 +132,5 @@ class CompatibleTests(unittest.IsolatedAsyncioTestCase):
         for patch_data in ({"base_url":""},{"base_url":"https://gateway.test/v1","model":""},{"base_url":"https://gateway.test/v1","model":"video","duration":7}):
             with self.subTest(patch_data=patch_data),self.assertRaises(auto.PublishError):
                 worker.save_settings({"enabled":True,"provider":"openai","region":"custom","api_key":"video-key",**patch_data},self.now)
-        self.assertEqual(auto.storyboard_lengths("openai","video",60),[12]*5)
-        # 加了 10 秒档之后，30 秒也能凑成 3 段
-        self.assertEqual(auto.storyboard_lengths("openai","video",30),[12,10,8])
+        self.assertEqual(auto.storyboard_lengths("openai","video",60),[15]*4)
+        self.assertEqual(auto.storyboard_lengths("openai","video",30),[15,15])
