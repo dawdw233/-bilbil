@@ -151,7 +151,7 @@
   },
   "reply_max_per_day": {
     "type": "int",
-    "description": "auto 模式下每天最多自动回几条（0=不回、只存草稿，默认 3）",
+    "description": "auto 模式下每天最多自动回几条（-1=不限，0=不回、只存草稿，默认 3）",
     "default": 3
   },
   "reply_interval_seconds": {

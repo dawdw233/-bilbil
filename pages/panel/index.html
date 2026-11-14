@@ -1460,8 +1460,8 @@
             <span class="tip">检查新回复及使用者本人 @ 的间隔；数值越小，检查越频繁，实际发现时间也受 B站消息延迟影响。</span>
           </label>
           <label class="field"><span class="lbl">每天最多自动回几条</span>
-            <input id="f-reply_max_per_day" type="number" min="0" max="20" step="1" />
-            <span class="tip">仅限制自动发送的回复；达到上限后，后续生成的回复转为待审草稿。填 0 则只存草稿。</span>
+            <input id="f-reply_max_per_day" type="number" min="-1" max="20" step="1" />
+            <span class="tip">仅限制自动发送的回复；达到上限后，后续生成的回复转为待审草稿。填 0 则只存草稿，填 -1 表示不限。</span>
           </label>
           <label class="field"><span class="lbl">两条回复间隔（秒）</span>
             <input id="f-reply_interval_seconds" type="number" min="30" max="600" step="1" />
