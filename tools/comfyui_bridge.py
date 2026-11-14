@@ -21,6 +21,8 @@ import aiohttp
 from aiohttp import web
 from PIL import Image
 
+from reference_art import ReferenceArt
+
 MODEL = "comfyui-h3"
 AUDIO_MODEL = "comfyui-h3-audio"
 UNET = "minimax_h3_ref2va_pruned_int8_convrot.safetensors"
@@ -458,6 +460,7 @@ class ComfyBridge:
 
     def app(self):
         app = web.Application(middlewares=[self.guard], client_max_size=12 * 1024 * 1024)
+        ReferenceArt(self, h3_workflow).register(app)
         app.router.add_get("/v1/models", self.models)
         app.router.add_post("/v1/videos", self.create)
         app.router.add_get("/v1/videos/{job:[0-9a-f-]{36}}", self.status)
