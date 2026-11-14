@@ -74,6 +74,9 @@ class AutoPublishTests(unittest.IsolatedAsyncioTestCase):
         await self.worker.tick(due)
         self.assertEqual(self.publish.await_args.args[0]["video_path"], str(media))
         self.assertIn("AI 生成", self.publish.await_args.args[0]["desc"])
+        # 自动投稿出的片子都是 AI 生成的：声明和 4:3 封面默认要带上
+        self.assertIs(self.publish.await_args.args[0]["ai_declare"], True)
+        self.assertIs(self.publish.await_args.args[0]["cover_43"], True)
         result = self.worker.state()["jobs"][0]
         self.assertEqual((result["phase"], result["bvid"]), ("published", "BV1234567890"))
         await self.worker.tick(due)

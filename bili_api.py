@@ -31,7 +31,7 @@ from bilibili_api import video, search, comment, Credential, dynamic, opus
 from bilibili_api import hot, rank, user, session, favorite_list
 from bilibili_api.exceptions import ResponseCodeException
 from bilibili_api.video_uploader import (
-    VideoUploader, VideoUploaderPage, VideoMeta, Lines,
+    VideoUploader, VideoUploaderPage, VideoMeta, Lines, upload_cover,
 )
 from bilibili_api.utils.picture import Picture
 from bilibili_api.login_v2 import QrCodeLogin, QrCodeLoginEvents
@@ -1172,19 +1172,278 @@ async def bili_send_dynamic(
         return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
 
 
+# ========== 投稿辅助：创作中心接口 ==========
+# 这层照 kukemc/bili-cli 的投稿方式补：投稿前先问 B站（分区预测、标签预检、预上传），
+# 失败时能说清是「要过验证码」还是「标签不收」，而不是 bilibili-api 丢回来的光秃秃 HTTP 406。
+# 另外 meta 改成普通 dict 提交（见 bili_upload_video）——VideoMeta 表达不了
+# creation_statement（含AI生成内容）/ is_only_self / human_type2（新版分区）这几个新字段，
+# 而 VideoUploader._submit 本来就是 `self.meta.__dict__() if isinstance(..., VideoMeta) else self.meta`，
+# 传 dict 是它支持的路径，不用换上传库。
+
+import time
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
+
+CST = timezone(timedelta(hours=8))
+MEMBER_BASE = "https://member.bilibili.com"
+PREDICT_URL = MEMBER_BASE + "/x/vupre/web/archive/types/predict"
+PREUPLOAD_URL = MEMBER_BASE + "/preupload"
+TAG_CHECK_URL = MEMBER_BASE + "/x/vupre/web/topic/tag/check"
+TOPIC_SEARCH_URL = MEMBER_BASE + "/x/vupre/web/topic/search"
+ARCHIVE_VIEW_URL = MEMBER_BASE + "/x/vupre/web/archive/view"
+MEMBER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+             "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36")
+SCHEDULE_MIN_SECONDS = 2 * 3600
+SCHEDULE_MAX_SECONDS = 15 * 24 * 3600
+STATEMENT_AI = 1       # 创作声明「含AI生成内容」
+STATEMENT_NONE = -1
+
+
+class PublishRefused(Exception):
+    """投稿在真正上传前就被挡下：str(exc) 给人看，hint 说下一步。"""
+
+    def __init__(self, message: str, hint: str = ""):
+        super().__init__(message)
+        self.hint = hint
+
+
+def _member_headers(referer: str = "https://member.bilibili.com/") -> dict:
+    return {"User-Agent": MEMBER_UA, "Referer": referer, "Origin": "https://member.bilibili.com"}
+
+
+def _member_cookies(cred: Credential) -> dict:
+    pairs = {
+        "SESSDATA": getattr(cred, "sessdata", None),
+        "bili_jct": getattr(cred, "bili_jct", None),
+        "DedeUserID": getattr(cred, "dedeuserid", None),
+        "buvid3": getattr(cred, "buvid3", None),
+        "buvid4": getattr(cred, "buvid4", None),
+    }
+    return {k: v for k, v in pairs.items() if v}
+
+
+@asynccontextmanager
+async def _member_client(cred: Credential, referer: str = ""):
+    import aiohttp
+
+    async with aiohttp.ClientSession(
+        headers=_member_headers(referer or "https://member.bilibili.com/"),
+        cookies=_member_cookies(cred),
+        timeout=aiohttp.ClientTimeout(total=25),
+    ) as client:
+        yield client
+
+
+async def _member_body(resp) -> dict:
+    try:
+        data = json.loads(await resp.text())
+    except (ValueError, TypeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+async def predict_upload_zone(title: str, credential: Credential | None = None) -> dict | None:
+    """按标题问 B站 该投哪个分区：{tid, tid_name, zone, zone_name}。
+
+    tid 是投稿接口仍要的旧分区，zone 是现在观众看到的新分区（human_type2）。
+    """
+    cred = credential or get_cred()
+    import aiohttp
+
+    form = aiohttp.FormData()
+    form.add_field("filename", "")
+    form.add_field("title", title)
+    try:
+        async with _member_client(cred, "https://member.bilibili.com/platform/upload/video/frame") as client:
+            async with client.post(PREDICT_URL, params={"csrf": cred.bili_jct, "ts": int(time.time() * 1000)},
+                                   data=form) as resp:
+                body = await _member_body(resp)
+    except Exception:
+        return None
+    if body.get("code") != 0 or not isinstance(body.get("data"), list) or not body["data"]:
+        return None
+    first = body["data"][0]
+    if not isinstance(first, dict) or type(first.get("id")) is not int:
+        return None
+    human = first.get("human_type") if isinstance(first.get("human_type"), dict) else {}
+    return {
+        "tid": first["id"],
+        "tid_name": f"{first.get('parent_name')} / {first.get('name')}",
+        "zone": human.get("id") if type(human.get("id")) is int else None,
+        "zone_name": human.get("name") or None,
+    }
+
+
+async def check_upload_tags(tags: list[str], credential: Credential | None = None) -> list[str]:
+    """返回 B站 明确不收的标签；预检接口自己出错时返回空（预检不该拦住投稿）。"""
+    cred = credential or get_cred()
+    bad: list[str] = []
+    try:
+        async with _member_client(cred) as client:
+            for tag in tags:
+                async with client.get(TAG_CHECK_URL, params={"tag": tag}) as resp:
+                    body = await _member_body(resp)
+                if body.get("code") not in (None, 0):
+                    bad.append(tag)
+    except Exception:
+        return []
+    return bad
+
+
+async def preflight_upload(video_path: str, credential: Credential | None = None) -> None:
+    """上传前先要一个上传位：被拒时把 B站 的真实原因抛出来，别白传几百 MB。"""
+    cred = credential or get_cred()
+    params = {
+        "profile": "ugcfx/bup", "name": os.path.basename(video_path),
+        "size": str(os.path.getsize(video_path)),
+        "r": "upos", "ssl": "0", "version": "2.14.0", "build": "2100400",
+    }
+    try:
+        async with _member_client(cred) as client:
+            async with client.get(PREUPLOAD_URL, params=params) as resp:
+                status = resp.status
+                body = await _member_body(resp)
+    except Exception:
+        return  # 预检自己连不上就别拦着投稿
+    if status < 400 and body.get("OK") == 1:
+        return
+    if body.get("OK") != 1 and not body:
+        return  # 没解析出正文，当预检不可用
+    message = body.get("message") or body.get("info") or f"HTTP {status}"
+    if (body.get("detail") or {}).get("v_voucher"):
+        raise PublishRefused(
+            f"B站拒绝了上传：{message}",
+            "账号触发了风控验证：先在网页端 https://member.bilibili.com/platform/upload/video/frame "
+            "手动上传一次并完成验证，或过一段时间再试。",
+        )
+    raise PublishRefused(f"B站拒绝了上传：{message}")
+
+
+async def find_upload_topic(query: str, credential: Credential | None = None) -> dict | None:
+    """按话题名或 ID 找话题；活动话题带 mission_id，提交时会跟着报名。"""
+    cred = credential or get_cred()
+    q = str(query or "").strip()
+    if not q:
+        return None
+    try:
+        async with _member_client(cred) as client:
+            async with client.get(TOPIC_SEARCH_URL,
+                                  params={"keywords": q, "page_size": 20, "offset": 0}) as resp:
+                body = await _member_body(resp)
+    except Exception:
+        return None
+    topics = ((body.get("data") or {}).get("result") or {}).get("topics") or []
+    norm = lambda s: str(s).replace(" ", "").lower()  # noqa: E731
+    for topic in topics:
+        if not isinstance(topic, dict):
+            continue
+        if norm(topic.get("name")) == norm(q) or str(topic.get("id")) == q:
+            return {"id": topic.get("id"), "name": topic.get("name"),
+                    "mission_id": topic.get("mission_id") or None}
+    return None
+
+
+def parse_schedule_time(value: str) -> int:
+    """把「2026-11-15 20:00」这类北京时间解析成时间戳；必须是 2 小时~15 天之后。"""
+    text = str(value or "").strip().replace("/", "-").replace("T", " ")
+    if not text:
+        return 0
+    dt = None
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            dt = datetime.strptime(text, fmt)
+            break
+        except ValueError:
+            continue
+    if dt is None:
+        raise ValueError("定时发布时间格式不对，用 2026-11-15 20:00 这种写法")
+    stamp = int(dt.replace(tzinfo=CST).timestamp())
+    if not SCHEDULE_MIN_SECONDS <= stamp - time.time() <= SCHEDULE_MAX_SECONDS:
+        raise ValueError("定时发布必须在 2 小时到 15 天之后")
+    return stamp
+
+
+def _extract_cover_43(video_path: str) -> str:
+    """从视频里裁一张 4:3 封面（手机推荐流用），失败返回空串。"""
+    target = os.path.join(tempfile.gettempdir(), f"bili_cover43_{os.getpid()}.png")
+    crop = ("crop=w='min(iw,ih*4/3)':h='min(ih,iw*3/4)':"
+            "x='(iw-min(iw,ih*4/3))/2':y='(ih-min(ih,iw*3/4))/2'")
+    for seek in ("3", "0"):
+        if os.path.isfile(target):
+            os.remove(target)
+        subprocess.run(
+            ["ffmpeg", "-y", "-ss", seek, "-i", video_path,
+             "-vframes", "1", "-vf", crop, "-q:v", "2", target],
+            capture_output=True, timeout=30,
+        )
+        if os.path.isfile(target) and os.path.getsize(target) > 0:
+            return target
+    return ""
+
+
+async def bili_archive_state(bvid: str, credential: Credential | None = None) -> dict:
+    """查一个稿件的审核状态和 B站 实际记录的字段（改稿前的唯一依据）。"""
+    cred = credential or get_cred()
+    try:
+        async with _member_client(cred) as client:
+            async with client.get(ARCHIVE_VIEW_URL, params={"bvid": bvid}) as resp:
+                body = await _member_body(resp)
+    except Exception as exc:
+        raise ValueError(f"查询稿件状态失败：{type(exc).__name__}") from exc
+    if body.get("code") != 0:
+        raise ValueError(f"查询稿件状态失败：{body.get('message') or 'B站没返回原因'}")
+    data = body.get("data") if isinstance(body.get("data"), dict) else {}
+    arc = data.get("archive") if isinstance(data.get("archive"), dict) else {}
+    statement = arc.get("creation_statement")
+    human = arc.get("human_type2")
+    stamp = lambda ts: (datetime.fromtimestamp(ts, CST).strftime("%Y-%m-%d %H:%M")
+                        if type(ts) in (int, float) and ts > 0 else "")  # noqa: E731
+    return {
+        "bvid": arc.get("bvid") or bvid,
+        "aid": arc.get("aid"),
+        "title": arc.get("title"),
+        "state": arc.get("state"),
+        "state_desc": arc.get("state_desc") or "",
+        "published": arc.get("state") == 0,
+        "reject_reason": arc.get("reject_reason") or "",
+        "private": arc.get("is_only_self") == 1,
+        "ai_declare": isinstance(statement, dict) and statement.get("id") == STATEMENT_AI,
+        "tags": [t for t in str(arc.get("tag") or "").split(",") if t],
+        "tid": arc.get("tid"),
+        "zone": (human or {}).get("id") if isinstance(human, dict) else None,
+        "zone_name": (human or {}).get("name") if isinstance(human, dict) else None,
+        "publish_time": stamp(arc.get("ptime")),
+        "scheduled_time": stamp(arc.get("dtime")),
+        "pages": [
+            {"cid": page.get("cid"), "title": page.get("title"),
+             "status_desc": page.get("status_desc") or "", "fail_desc": page.get("fail_desc") or ""}
+            for page in (data.get("videos") or []) if isinstance(page, dict)
+        ],
+    }
+
+
 # ========== Tool 9: 上传视频 ==========
+
+def _upload_json(ok: bool, **fields) -> str:
+    return json.dumps({"success": ok, **fields}, ensure_ascii=False)
+
 
 @tool()
 async def bili_upload_video(
     video_path: str,
     title: str,
     desc: str = "",
-    tid: int = 124,
+    tid: int = 0,
     tags: str = "AI",
     cover_path: str = "",
     source: str = "",
     dynamic_text: str = "",
     no_reprint: bool = True,
+    ai_declare: bool = True,
+    cover_43: bool = False,
+    private: bool = False,
+    schedule_time: str = "",
+    topic: str = "",
 ) -> str:
     """
     上传视频到B站
@@ -1193,74 +1452,161 @@ async def bili_upload_video(
         video_path: 视频文件的本地路径
         title: 视频标题（最多80字）
         desc: 视频简介描述
-        tid: 分区ID，默认124（趣味科普人文-社科·法律·心理）。
-             常用分区：17=单机游戏 21=日常 95=数码 122=野生技术协会
+        tid: 分区ID；传 0（默认）表示按标题自动预测，猜不出来才回退到 21（日常）。
+             手动指定时常用：17=单机游戏 21=日常 95=数码 122=野生技术协会
              124=社科 160=生活记录 171=电子竞技 183=影视杂谈
              188=科技资讯 201=科学 207=财经商业 208=科技 209=手工
              230=其他(生活) 231=美食 234=健身 32=完结动画
-        tags: 标签，逗号分隔，如"AI,教程,编程"（至少1个标签）
-        cover_path: 封面图片路径（可选，不填则B站自动截取）
+        tags: 标签，逗号分隔，如"AI,教程,编程"（至少1个标签；B站不收的会自动去掉）
+        cover_path: 封面图片路径（可选，不填则从视频第3秒截一帧）
         source: 转载来源URL（非原创时必填）
         dynamic_text: 粉丝动态文本（可选，投稿时同步发布的动态内容）
         no_reprint: 是否启用未经作者授权禁止转载，默认True
+        ai_declare: 是否勾选创作声明「含AI生成内容」，默认True
+        cover_43: 是否额外生成一张 4:3 封面（手机端推荐流用），默认False
+        private: 是否「仅自己可见」，默认False
+        schedule_time: 定时发布时间，北京时间如「2026-11-15 20:00」，必须在 2 小时到 15 天之后；留空立即发布
+        topic: 投稿话题名或话题ID（官方活动话题会自动报名），留空不加；找不到话题会跳过而不是报错
 
     Returns:
-        上传结果，包含BV号
+        上传结果，包含BV号、实际分区、AI声明、话题和标签预检说明；失败时带 error/hint
     """
+    notes: list[str] = []
+    phase = "校验"
+
     # ---- 参数校验 ----
     if not video_path or not video_path.strip():
-        return json.dumps({"success": False, "error": "video_path 不能为空，请提供视频文件的本地路径"}, ensure_ascii=False)
+        return _upload_json(False, error="video_path 不能为空，请提供视频文件的本地路径", phase=phase)
 
     video_path = video_path.strip()
     if not os.path.isfile(video_path):
-        return json.dumps({"success": False, "error": f"视频文件不存在: {video_path}"}, ensure_ascii=False)
+        return _upload_json(False, error=f"视频文件不存在: {video_path}", phase=phase)
 
     if not title or not title.strip():
-        return json.dumps({"success": False, "error": "title 不能为空"}, ensure_ascii=False)
+        return _upload_json(False, error="title 不能为空", phase=phase)
+
+    title_text = title.strip()[:80]
+    if type(tid) is not int:
+        try:
+            tid = int(tid)
+        except (TypeError, ValueError):
+            tid = 0
+    if tid > 0 and not 1 <= tid <= 99999:
+        return _upload_json(False, error=f"分区 ID 不合法：{tid}", phase=phase)
+    if tid < 0:
+        tid = 0
+
+    source_text = str(source or "").strip()
+    is_original = not source_text
+    tag_list = [t.strip() for t in str(tags or "").split(",") if t.strip()]
+    if not tag_list:
+        tag_list = ["视频"]
 
     cred = get_cred()
-
+    cover43_file = ""
     try:
-        # 准备分P
-        page = VideoUploaderPage(
-            path=video_path,
-            title=title.strip()[:80],
-            description=(desc or "")[:250],
-        )
+        # ---- 1. 分区：tid=0 时按标题问 B站 ----
+        phase = "预测分区"
+        zone = None
+        if tid == 0:
+            zone = await predict_upload_zone(title_text, cred)
+            if zone is None:
+                tid = 21
+                notes.append("分区预测失败，按「日常（21）」投的")
+            else:
+                tid = zone["tid"]
+                notes.append(f"分区按标题预测为「{zone['tid_name'] or tid}」")
 
-        # 标签处理
-        tag_list = [t.strip() for t in (tags or "").split(",") if t.strip()]
-        if not tag_list:
-            tag_list = ["视频"]
+        # ---- 2. 标签预检（B站不收的去掉了再投）----
+        phase = "预检标签"
+        rejected = await check_upload_tags(tag_list, cred)
+        if rejected:
+            kept = [t for t in tag_list if t not in rejected]
+            if not kept:
+                return _upload_json(False, error="B站不接受这些标签：" + "，".join(rejected), phase=phase)
+            tag_list = kept
+            notes.append("B站不收这些标签，已去掉：" + "，".join(rejected))
 
-        # 判断原创/转载
-        is_original = not bool(source and source.strip())
+        # ---- 3. 定时发布 ----
+        phase = "解析定时"
+        try:
+            dtime = parse_schedule_time(schedule_time)
+        except ValueError as exc:
+            return _upload_json(False, error=str(exc), phase=phase)
+        schedule_iso = (datetime.fromtimestamp(dtime, CST).strftime("%Y-%m-%d %H:%M")
+                        if dtime else "")
 
-        # 封面：用户提供 > 自动从视频截取
+        # ---- 4. 话题（找不到就跳过，不拦投稿）----
+        phase = "查找话题"
+        topic_info = None
+        if str(topic or "").strip():
+            topic_info = await find_upload_topic(topic, cred)
+            if topic_info is None:
+                notes.append(f"没找到话题「{str(topic).strip()}」，这次不加话题")
+
+        # ---- 5. 预上传：被拒时把真实原因带出来 ----
+        phase = "预上传"
+        await preflight_upload(video_path, cred)
+
+        # ---- 6. 封面：用户指定 > 视频截帧；4:3 另裁一张 ----
+        phase = "准备封面"
         if cover_path and cover_path.strip() and os.path.isfile(cover_path.strip()):
             cover_pic = Picture.from_file(cover_path.strip())
         else:
             cover_pic = _extract_cover_from_video(video_path)
+        cover43_url = ""
+        if cover_43:
+            cover43_file = _extract_cover_43(video_path)
+            if cover43_file:
+                try:
+                    cover43_url = await upload_cover(Picture.from_file(cover43_file), cred)
+                except Exception:
+                    notes.append("4:3 封面没传上去，这次只用主封面")
+            else:
+                notes.append("没能从视频裁出 4:3 封面，这次只用主封面")
 
-        meta = VideoMeta(
-            tid=tid,
-            title=title.strip()[:80],
-            desc=desc or "",
-            cover=cover_pic,
-            tags=tag_list,
-            original=is_original,
-            source=source.strip() if source and source.strip() else None,
-            no_reprint=no_reprint if is_original else False,
-            dynamic=dynamic_text.strip() if dynamic_text and dynamic_text.strip() else None,
-        )
+        # ---- 7. 组装 meta 并提交 ----
+        # 用普通 dict 而不是 VideoMeta：creation_statement / is_only_self / human_type2 它表达不了
+        phase = "上传"
+        meta = {
+            "title": title_text,
+            "copyright": 1 if is_original else 2,
+            "tid": tid,
+            "tag": ",".join(tag_list),
+            "desc_format_id": 9999,
+            "desc": desc or "",
+            "recreate": -1,
+            "dynamic": str(dynamic_text or "").strip(),
+            "interactive": 0,
+            "act_reserve_create": 0,
+            "no_disturbance": 0,
+            "no_reprint": 1 if (is_original and no_reprint) else 0,
+            "subtitle": {"open": 0, "lan": ""},
+            "dolby": 0,
+            "lossless_music": 0,
+            "up_selection_reply": False,
+            "up_close_reply": False,
+            "up_close_danmu": False,
+            "web_os": 1,
+            "is_only_self": 1 if private else 0,
+            "creation_statement": {"id": STATEMENT_AI if ai_declare else STATEMENT_NONE},
+        }
+        if zone and zone.get("zone"):
+            meta["human_type2"] = zone["zone"]
+        if not is_original:
+            meta["source"] = source_text
+        if topic_info:
+            meta["topic_id"] = topic_info["id"]
+            if topic_info.get("mission_id"):
+                meta["mission_id"] = topic_info["mission_id"]
+            meta["topic_detail"] = {"from_topic_id": topic_info["id"], "from_source": "arc.web.recommend"}
+        if dtime:
+            meta["dtime"] = dtime
+        if cover43_url:
+            meta["cover43"] = cover43_url
 
-        uploader = VideoUploader(
-            pages=[page],
-            meta=meta,
-            credential=cred,
-        )
-
-        # 上传事件回调（记录进度）
+        page = VideoUploaderPage(path=video_path, title=title_text, description=(desc or "")[:250])
+        uploader = VideoUploader(pages=[page], meta=meta, credential=cred, cover=cover_pic)
         progress_info = {"phase": "初始化"}
 
         @uploader.on("__ALL__")
@@ -1268,17 +1614,38 @@ async def bili_upload_video(
             progress_info["phase"] = str(data)
 
         result = await uploader.start()
-        return json.dumps({
-            "success": True,
-            "message": "视频上传成功",
-            "data": result if isinstance(result, dict) else str(result),
-        }, ensure_ascii=False)
-    except Exception as e:
-        return json.dumps({
-            "success": False,
-            "error": str(e),
-            "last_phase": progress_info.get("phase", "unknown") if "progress_info" in dir() else "init",
-        }, ensure_ascii=False)
+        data = result if isinstance(result, dict) else {"raw": str(result)}
+        return _upload_json(
+            True,
+            message="视频上传成功",
+            data={
+                "bvid": data.get("bvid"),
+                "aid": data.get("aid"),
+                "zone": {"tid": tid, "zone": (zone or {}).get("zone"),
+                         "zone_name": (zone or {}).get("zone_name")},
+                "ai_declare": bool(ai_declare),
+                "private": bool(private),
+                "schedule": schedule_iso,
+                "topic": topic_info,
+                "cover_43": bool(cover43_url),
+                "tags": tag_list,
+                "notes": notes,
+            },
+        )
+    except PublishRefused as exc:
+        return _upload_json(False, error=str(exc), hint=exc.hint, phase=phase, notes=notes)
+    except Exception as exc:
+        code = getattr(exc, "code", None)
+        if code in (406, 412) or "412" in str(exc):
+            return _upload_json(False, error=str(exc), phase=phase, notes=notes,
+                                hint="B站风控拦截：先到网页端手动传一次完成验证，或隔一段时间再试。")
+        return _upload_json(False, error=str(exc), phase=phase, notes=notes)
+    finally:
+        if cover43_file and os.path.isfile(cover43_file):
+            try:
+                os.remove(cover43_file)
+            except OSError:
+                pass
 
 
 # ========== Tool 10: 上传多P视频 ==========

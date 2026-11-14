@@ -250,6 +250,7 @@ class BiliScrollPlugin(Star):
             ("upload/files", self._api_upload_files, ["GET"], "投稿素材列表"),
             ("upload/start", self._api_upload_start, ["POST"], "开始投稿"),
             ("upload/status", self._api_upload_status, ["GET"], "投稿进度"),
+            ("upload/review", self._api_upload_review, ["POST"], "查稿件审核状态"),
             ("upload/auto/state", self._api_auto_publish_state, ["GET"], "自主投稿设置与记录"),
             ("learning/state", self._api_learning_state, ["GET"], "自主学习设置与经验"),
             ("learning/save", self._api_learning_save, ["POST"], "保存自主学习设置"),
@@ -1349,6 +1350,24 @@ class BiliScrollPlugin(Star):
                 data["elapsed"] = 0
         return json_response(data)
 
+    async def _api_upload_review(self):
+        if not self._cred_ok():
+            return error_response("还没登录 B站，先在「刷视频」页扫码登录")
+        payload = await request.json(default={})
+        if not isinstance(payload, dict):
+            return error_response("请求体不是 JSON 对象")
+        bvid = str(payload.get("bvid") or "").strip()
+        if not re.fullmatch(r"BV[0-9A-Za-z]{10}", bvid):
+            return error_response("BV 号不对")
+        try:
+            state = await bili_api.bili_archive_state(bvid)
+        except ValueError as exc:
+            return error_response(str(exc))
+        except Exception:
+            logger.exception("[bili-scroll] 查询稿件审核状态失败")
+            return error_response("查询审核状态失败，稍后再试")
+        return json_response(state)
+
     async def _do_upload(self, payload: dict) -> dict:
         title = str(payload.get("title") or "").strip()
         self._upload.update(
@@ -1360,12 +1379,17 @@ class BiliScrollPlugin(Star):
                 video_path=str(payload.get("video_path") or "").strip(),
                 title=title,
                 desc=str(payload.get("desc") or ""),
-                tid=int(payload.get("tid") or 21),
+                tid=int(payload.get("tid") or 0),
                 tags=str(payload.get("tags") or ""),
                 cover_path=str(payload.get("cover_path") or "").strip(),
                 source=str(payload.get("source") or "").strip(),
                 dynamic_text=str(payload.get("dynamic") or ""),
                 no_reprint=bool(payload.get("no_reprint", True)),
+                ai_declare=bool(payload.get("ai_declare", True)),
+                cover_43=bool(payload.get("cover_43", True)),
+                private=bool(payload.get("private", False)),
+                schedule_time=str(payload.get("schedule") or "").strip(),
+                topic=str(payload.get("topic") or "").strip(),
             )
             data = json.loads(raw) if raw else {}
             if not isinstance(data, dict):
@@ -1380,9 +1404,10 @@ class BiliScrollPlugin(Star):
             data = {"success": False, "error": str(exc)}
         ok = bool(data.get("success"))
         bv = ""
-        payload_data = data.get("data")
-        if isinstance(payload_data, dict):
-            bv = str(payload_data.get("bvid") or payload_data.get("bv") or "")
+        detail = data.get("data")
+        detail = detail if isinstance(detail, dict) else {}
+        if isinstance(detail, dict):
+            bv = str(detail.get("bvid") or detail.get("bv") or "")
         self._upload.update(
             running=False,
             phase="完成" if ok else "失败",
@@ -1390,6 +1415,12 @@ class BiliScrollPlugin(Star):
                 "success": ok,
                 "bvid": bv,
                 "error": "" if ok else str(data.get("error") or data.get("message") or "未知错误"),
+                "hint": "" if ok else str(data.get("hint") or ""),
+                "notes": detail.get("notes") if isinstance(detail.get("notes"), list) else data.get("notes") or [],
+                "zone": detail.get("zone") if ok else None,
+                "ai_declare": detail.get("ai_declare") if ok else None,
+                "schedule": detail.get("schedule") if ok else "",
+                "topic": detail.get("topic") if ok else None,
             },
         )
         logger.info(f"[bili-scroll] 投稿结束：{'成功 ' + bv if ok else '失败 ' + self._upload['result']['error'][:80]}")
@@ -1408,6 +1439,29 @@ class BiliScrollPlugin(Star):
             return error_response("标题不能为空")
         if len(title) > 80:
             return error_response("标题最多 80 字")
+
+        # 投稿状态：tid=0 表示按标题自动预测分区
+        try:
+            tid = int(payload.get("tid") if payload.get("tid") not in (None, "") else 0)
+        except (TypeError, ValueError):
+            return error_response("分区参数不对")
+        if not 0 <= tid <= 99999:
+            return error_response("分区参数不对")
+        payload["tid"] = tid
+        schedule = str(payload.get("schedule") or "").strip()
+        if schedule:
+            try:
+                bili_api.parse_schedule_time(schedule)
+            except ValueError as exc:
+                return error_response(str(exc))
+        payload["schedule"] = schedule
+        topic = str(payload.get("topic") or "").strip()
+        if len(topic) > 60:
+            return error_response("话题名最多 60 字")
+        payload["topic"] = topic
+        payload["ai_declare"] = bool(payload.get("ai_declare", True))
+        payload["cover_43"] = bool(payload.get("cover_43", True))
+        payload["private"] = bool(payload.get("private", False))
 
         raw_path = str(payload.get("video_path") or payload.get("file") or "").strip()
         if not raw_path:

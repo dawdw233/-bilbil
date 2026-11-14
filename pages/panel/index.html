@@ -1251,6 +1251,7 @@
           </label>
           <label class="field"><span class="lbl">分区</span>
             <select id="u-tid">
+              <option value="0">自动预测（按标题，推荐）</option>
               <option value="21">日常（21）</option>
               <option value="17">单机游戏（17）</option>
               <option value="171">电子竞技（171）</option>
@@ -1272,7 +1273,15 @@
           </label>
           <label class="field"><span class="lbl">封面图片路径（可选）</span>
             <input id="u-cover" placeholder="/root/qqbot/media/cover.jpg" />
-            <span class="tip">填写服务器上的图片路径；留空则不指定封面，由 B站处理。</span>
+            <span class="tip">填写服务器上的图片路径；留空则从视频第 3 秒截一帧当封面。</span>
+          </label>
+          <label class="field"><span class="lbl">投稿话题（可选）</span>
+            <input id="u-topic" placeholder="AI 创作" />
+            <span class="tip">填话题名或话题 ID；官方活动话题会自动报名。找不到话题时这次不加，不会拦住投稿。</span>
+          </label>
+          <label class="field"><span class="lbl">定时发布（可选）</span>
+            <input id="u-schedule" placeholder="2026-11-15 20:00" />
+            <span class="tip">北京时间，必须在 2 小时到 15 天之后；留空立即公开。</span>
           </label>
           <label class="field"><span class="lbl">转载来源（非原创才填）</span>
             <input id="u-source" placeholder="https://…" />
@@ -1285,9 +1294,22 @@
             <input id="u-no_reprint" type="checkbox" checked />
             <span><span class="t">禁止未经授权转载</span><span class="d">用于原创稿的转载设置；填写转载来源后，此项不生效。</span></span>
           </label>
+          <label class="check">
+            <input id="u-ai_declare" type="checkbox" checked />
+            <span><span class="t">勾选「含AI生成内容」创作声明</span><span class="d">默认勾上；AI 生成的内容按《标识办法》应当标识。</span></span>
+          </label>
+          <label class="check">
+            <input id="u-cover43" type="checkbox" checked />
+            <span><span class="t">额外生成 4:3 封面</span><span class="d">手机端推荐流用这一张，从同一个截帧按中心裁；裁不出来就只用主封面。</span></span>
+          </label>
+          <label class="check">
+            <input id="u-private" type="checkbox" />
+            <span><span class="t">仅自己可见</span><span class="d">测试用；勾上后稿件不公开。</span></span>
+          </label>
         </div>
         <div class="save-bar">
           <button id="u-btn-start" class="primary">开始投稿</button>
+          <button id="u-btn-review" class="hide">查审核状态</button>
           <span id="u-hint" class="sub" role="status" aria-live="polite"></span>
         </div>
         <div id="u-err" class="err"></div>
@@ -3150,6 +3172,7 @@ $("d-btn-save").onclick = async () => {
 
 // ---------- 投稿 tab ----------
 let uploadTimer = null;
+let lastUploadBvid = "";
 
 function uShowErr(msg) { $("u-err").textContent = msg ? String(msg) : ""; }
 
@@ -3172,7 +3195,11 @@ let autoReferenceUploading = false;
 let voiceState = null, voiceLoaded = false, voiceSaving = false, voiceDraftDirty = false;
 let autoPublishState = null;
 let autoModelRequest = 0;
-$("u-auto-tid").innerHTML = $("u-tid").innerHTML;
+// 自动投稿的分区必须是具体 tid（1~9999），手动投稿那个「自动预测（0）」选项不能带过去
+$("u-auto-tid").innerHTML = [...$("u-tid").options]
+  .filter((option) => option.value !== "0")
+  .map((option) => `<option value="${esc(option.value)}">${esc(option.textContent)}</option>`)
+  .join("");
 
 function setAutoPublishRegions(region) {
   const spec = autoPublishState.providers[$("u-auto-provider").value];
@@ -3849,8 +3876,23 @@ async function pollUpload() {
       card("素材目录", "media/"),
       card("大小上限", "B站 按账号等级"),
     ].join("");
+    const notes = Array.isArray(res.notes) ? res.notes.filter(Boolean) : [];
     $("u-hint").textContent = s.running ? `上传中…（${s.title || ""}）` : "";
-    if (res.error) uShowErr("B站 返回：" + res.error);
+    if (!s.running && res.success) {
+      const zone = res.zone && (res.zone.zone_name || res.zone.tid)
+        ? `分区 ${res.zone.zone_name || res.zone.tid}` : "";
+      $("u-hint").textContent = [zone, ...notes].filter(Boolean).join("；");
+    }
+    if (!s.running && !res.success && notes.length) $("u-hint").textContent = notes.join("；");
+    if (res.success && res.bvid) {
+      lastUploadBvid = String(res.bvid);
+      $("u-btn-review").classList.remove("hide");
+    } else if (!res.success) {
+      lastUploadBvid = "";
+      $("u-btn-review").classList.add("hide");
+    }
+    if (res.error) uShowErr("B站 返回：" + res.error + (res.hint ? "\n" + res.hint : ""));
+    else uShowErr("");
     if (s.running) {
       if (!uploadTimer) uploadTimer = setInterval(pollUpload, 3000);
     } else {
@@ -3872,13 +3914,18 @@ $("u-btn-start").onclick = async () => {
   const payload = {
     file: $("u-path").value.trim() || $("u-file").value,
     title: $("u-title").value.trim(),
-    tid: Number($("u-tid").value || 21),
+    tid: Number($("u-tid").value || 0),
     tags: $("u-tags").value.trim(),
     desc: $("u-desc").value.trim(),
     cover_path: $("u-cover").value.trim(),
     source: $("u-source").value.trim(),
     dynamic: $("u-dynamic").value.trim(),
     no_reprint: $("u-no_reprint").checked,
+    topic: $("u-topic").value.trim(),
+    schedule: $("u-schedule").value.trim(),
+    ai_declare: $("u-ai_declare").checked,
+    cover_43: $("u-cover43").checked,
+    private: $("u-private").checked,
   };
   try {
     await api("upload/start", payload);
@@ -3889,6 +3936,26 @@ $("u-btn-start").onclick = async () => {
     btn.disabled = false;
     $("u-hint").textContent = "";
     uShowErr("投稿没开始：" + (e?.message || e));
+  }
+};
+
+$("u-btn-review").onclick = async () => {
+  if (!lastUploadBvid) return;
+  const btn = $("u-btn-review");
+  btn.disabled = true;
+  $("u-hint").textContent = "查审核状态…";
+  try {
+    const st = await api("upload/review", { bvid: lastUploadBvid });
+    const parts = [`审核：${st.state_desc || st.state}`];
+    if (st.private) parts.push("仅自己可见");
+    if (st.ai_declare) parts.push("已标 AI");
+    if (st.scheduled_time) parts.push("定时 " + st.scheduled_time);
+    if (st.reject_reason) parts.push("驳回原因：" + st.reject_reason);
+    $("u-hint").textContent = parts.join(" · ");
+  } catch (e) {
+    $("u-hint").textContent = "查审核状态失败：" + (e?.message || e);
+  } finally {
+    btn.disabled = false;
   }
 };
 
@@ -3929,7 +3996,7 @@ async function loadReply() {
   rShowErr("");
   try {
     const s = await api("reply/summary");
-    const cap = s.max_per_day === -1 ? "不限" : `${s.sent_today ?? 0}/${s.max_per_day ?? 0}`;
+    const cap = s.max_per_day === -1 ? `${s.sent_today ?? 0} 条 / 不限` : `${s.sent_today ?? 0}/${s.max_per_day ?? 0}`;
     $("r-cards").innerHTML = [
       card("模式", MODE_TEXT[s.mode] || s.mode || "不检测", s.mode === "auto" ? "warn" : ""),
       card("待审", `${s.pending ?? 0} 条`, s.pending ? "warn" : ""),

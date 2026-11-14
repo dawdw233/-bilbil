@@ -1265,6 +1265,8 @@ class AutoPublisher:
                     "video_path": str(video), "title": job["title"],
                     "desc": f"AI 生成视频 · {spec['name']}\n\n" + job["desc"],
                     "tags": publication_tags(job["tags"]), "tid": job["tid"],
+                    # 自动投稿出的片子都是 AI 生成的：按《标识办法》默认勾声明，并顺带出 4:3 封面
+                    "ai_declare": True, "cover_43": True,
                 })
         except Exception:
             self._update(rows, job, "review", message="投稿结果未能确认，请到 B站创作中心核对。")
