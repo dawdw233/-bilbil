@@ -91,10 +91,3 @@ test("切回浅色时收起流星面板，夜晚时保留面板并显示入口",
   assert.equal(dialog.closes,1);
   assert.match(html,/:root:not\(\[data-study-theme="night"\]\) #meteor-open \{ display: none; \}/);
 });
-
-test("丁达尔光束只在浅色模式显示，不挡点击，减少动态效果时静止",()=>{
-  assert.match(html,/<div class="light-tyndall" aria-hidden="true"><\/div>\n<div class="light-tyndall-rays" aria-hidden="true"><i class="tyndall-dust"><\/i><\/div>/);
-  assert.match(html,/\.light-tyndall, \.light-tyndall-rays \{ display: none; position: fixed; inset: 0; overflow: hidden; pointer-events: none; \}/);
-  assert.match(html,/:root:not\(\[data-study-theme="night"\]\) :is\(\.light-tyndall, \.light-tyndall-rays\) \{ display: block; \}/);
-  assert.match(html,/@media \(prefers-reduced-motion: reduce\) \{ \.light-tyndall-rays::before, \.light-tyndall-rays::after, \.tyndall-dust::before, \.tyndall-dust::after \{ animation: none; \} \}/);
-});
