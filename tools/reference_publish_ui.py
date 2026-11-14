@@ -1,6 +1,7 @@
 """Render a chapter card with a separate illustration, text, and subtitle band."""
 
 import math
+from statistics import median
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps
 
@@ -55,37 +56,118 @@ def background(width, height, px):
     return Image.alpha_composite(img.convert("RGBA"), glow.filter(ImageFilter.GaussianBlur(px(87)))).convert("RGB")
 
 
+def illustration_matte(art):
+    """Remove the flat or smoothly graded backdrop typical of these illustrations."""
+    w, h = art.size
+    sample = art.load()
+    inset = max(1, w // 192)
+    backdrop = Image.new("RGB", (2, h))
+    rows = []
+    for y in range(h):
+        left = tuple(int(median(sample[x, y][c] for x in range(inset))) for c in range(3))
+        right = tuple(int(median(sample[w - x - 1, y][c] for x in range(inset))) for c in range(3))
+        rows.append((left, right))
+    def similarity(a, b):
+        return max(abs(x - y) for x, y in zip(a, b))
+
+    # The upper border verifies that the image has a single backdrop. Keep full scenes intact.
+    left, right = rows[0]
+    if similarity(left, right) > 24 or any(similarity(left, sample[x, 0]) > 28 for x in range(0, w, max(1, w // 32))):
+        return None
+    neutral = min(left + right) >= 228
+
+    def valid(color):
+        return min(color) >= 222 if neutral else color[2] >= color[0] + 20
+
+    if not valid(left) or not valid(right):
+        return None
+
+    last = rows[0]
+    backdrop_end = h
+    for y, (left, right) in enumerate(rows):
+        a = valid(left) and similarity(left, last[0]) <= 22
+        b = valid(right) and similarity(right, last[1]) <= 22
+        if a and b and similarity(left, right) > 30:
+            a = similarity(left, last[0]) <= similarity(right, last[1])
+            b = not a
+        if not a and not b and y > h * 0.7:
+            backdrop_end = min(backdrop_end, y)
+        if a or b:
+            last = (left if a else right, right if b else left)
+        backdrop.putpixel((0, y), last[0])
+        backdrop.putpixel((1, y), last[1])
+
+    if neutral and similarity(*rows[0]) <= 6:
+        backdrop = Image.new("RGB", art.size, rows[0][0])
+    else:
+        backdrop = backdrop.filter(ImageFilter.MedianFilter(5)).resize(art.size, Image.Resampling.BILINEAR)
+    red, green, blue = ImageChops.difference(art, backdrop).split()
+    distance = ImageChops.lighter(ImageChops.lighter(red, green), blue)
+    # Keep the foreground line art even if it borders the same coloured backdrop.
+    # The wide, flat backdrop and enclosed pockets both fall inside the colour range.
+    tolerance = 8 if neutral else 24
+    flat = distance.point(lambda p: 255 if p <= tolerance else 0)
+    border = ((x, y) for x in (0, w - 1) for y in range(h))
+    for x, y in border:
+        if flat.getpixel((x, y)) == 255:
+            ImageDraw.floodfill(flat, (x, y), 128)
+
+    # A loose strand can close off a small patch of background. Test only the
+    # outside of the silhouette and never use white face or clothing as seeds.
+    # Require a nearly exact match so shadows and dark lines stay opaque.
+    if neutral:
+        edge = round(w * 0.15)
+        for x in (0, w - edge):
+            box = (x, round(h * 0.56), x + edge, round(h * 0.90))
+            edge_distance = distance.crop(box)
+            pockets = edge_distance.point(lambda p: 255 if p <= 15 else 0)
+            for y in range(0, pockets.height, 4):
+                for col in range(0, pockets.width, 4):
+                    if edge_distance.getpixel((col, y)) <= 8 and pockets.getpixel((col, y)) == 255:
+                        ImageDraw.floodfill(pockets, (col, y), 128)
+            fill = pockets.point(lambda p: 255 if p == 128 else 0)
+            flat.paste(128, box, fill)
+
+    matte = flat.point(lambda p: 0 if p == 128 else 255)
+    # Drop the colour fringe just outside the outline, then smooth at pixel scale.
+    matte = matte.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(0.75))
+
+    img = art.convert("RGBA")
+    if backdrop_end < h:
+        # Leave furniture below the subject intact. The compositing fade handles this base.
+        matte.paste(255, (0, backdrop_end, w, h))
+    img.putalpha(matte)
+    return img
+
+
 def place_art(canvas, path, px, *, compact=False):
     with Image.open(path) as source:
-        art = ImageOps.contain(source.convert("RGB"), (px(645 if compact else 850), px(846)),
-                               Image.Resampling.LANCZOS)
-    # Feather the boundary only; retain the illustration's contrast and colour in the centre.
+        has_alpha = "A" in source.getbands() and source.getchannel("A").getextrema()[0] < 255
+        art = ImageOps.contain(source.convert("RGBA" if has_alpha else "RGB"),
+                               (px(645 if compact else 850), px(846)), Image.Resampling.LANCZOS)
+    if not has_alpha:
+        cutout = illustration_matte(art)
+        if cutout is not None:
+            art = cutout
     w, h = art.size
-    # A few generations copy the reference sheet's nearly white background.
-    # Only key out highlights connected to the outer edge of the illustration.
-    corners = [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]
-    white = [(x, y) for x, y in corners if min(art.getpixel((x, y))) >= 238]
-    subject = None
-    if len(white) >= 3:
-        red, green, blue = art.split()
-        matte = ImageChops.darker(ImageChops.darker(red, green), blue).point(lambda p: 255 if p >= 237 else 0)
-        for corner in white:
-            ImageDraw.floodfill(matte, corner, 128)
-        subject = matte.point(lambda p: 0 if p == 128 else 255).filter(ImageFilter.GaussianBlur(0.6))
 
     mask = Image.new("L", (w, h))
     d = ImageDraw.Draw(mask)
+    cutout = "A" in art.getbands()
     for y in range(h):
-        vertical = min(1, y / px(32), (h - 1 - y) / px(82))
+        vertical = min(1, (h - 1 - y) / px(82))
+        if not cutout:
+            vertical = min(vertical, y / px(32))
         d.line((0, y, w, y), fill=round(255 * vertical))
-    feather = px(55)
+    feather = px(105 if cutout else 55)
+    start = int(h * 0.86) if cutout else 0
     for x in range(min(feather, w // 2)):
         factor = x / feather
-        left = mask.crop((x, 0, x + 1, h)).point(lambda p: round(p * factor))
-        mask.paste(left, (x, 0))
-        mask.paste(left, (w - x - 1, 0))
-    if subject is not None:
-        mask = ImageChops.multiply(mask, subject)
+        column = mask.crop((x, start, x + 1, h)).point(lambda p: round(p * factor))
+        mask.paste(column, (x, start))
+        mask.paste(column, (w - x - 1, start))
+    if cutout:
+        mask = ImageChops.multiply(mask, art.getchannel("A"))
     canvas.paste(art, (px(1080 if compact else 1445) - w // 2, px(71) + (px(846) - h) // 2), mask)
 
 
