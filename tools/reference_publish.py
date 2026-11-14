@@ -357,7 +357,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     path.write_text("".join(line + "\n" for line in lines), encoding="utf-8")
 
 
-def build_video(art_count=4, *, cards_only=False) -> dict:
+def build_video(art_count=4, *, cards_only=False, height=H) -> dict:
     script = load_script()
     segments = script["segments"]
     kicker = (script.get("kicker") or "鲸汐 · 制作笔记").replace("大肥鱼的工作台", "鲸汐的工作台")
@@ -404,8 +404,22 @@ def build_video(art_count=4, *, cards_only=False) -> dict:
         return local_art(*transport, prompt, picture)
 
     board, art = art_for_episode(WORK, script, REF_IMAGE, art_count, choose, generate)
+    if height == 1440:
+        enhanced = []
+        for index, path in enumerate(art, 1):
+            target = path.with_name(path.stem + "-esrgan-2x.png")
+            if not target.is_file():
+                if transport is None:
+                    transport = bridge_profile(DATA)
+                print(f"超分插画 {index}/{len(art)}…", flush=True)
+                data = local_art(*transport, "", path.read_bytes(), upscale=True)
+                part = target.with_suffix(".part")
+                part.write_bytes(data)
+                part.replace(target)
+            enhanced.append(target)
+        art = enhanced
     (WORK / "cards").mkdir(parents=True, exist_ok=True)
-    cover = make_card(FONTS, art[0], kicker, None, 0, len(segments), cover_title=board["cover_title"])
+    cover = make_card(FONTS, art[0], kicker, None, 0, len(segments), cover_title=board["cover_title"], height=height)
     cover.save(WORK / "cover.png")
     upload_cover = make_card(FONTS, art[0], kicker, None, 0, len(segments),
                              cover_title=board["cover_title"], upload_cover=True)
@@ -416,11 +430,11 @@ def build_video(art_count=4, *, cards_only=False) -> dict:
         target = WORK / name
         run(["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-framerate", str(FPS),
              "-i", str(card_path), "-frames:v", str(frames), "-vf", "format=yuv420p",
-             "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", str(target)])
+             "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", str(target)])
         clips.append(target.name)
 
     for index, segment in enumerate(segments, 1):
-        card = make_card(FONTS, art[board["chapters"][index - 1]], kicker, segment, index, len(segments))
+        card = make_card(FONTS, art[board["chapters"][index - 1]], kicker, segment, index, len(segments), height=height)
         card_path = WORK / "cards" / f"{index:02d}.png"
         card.save(card_path)
         if cards_only:
@@ -444,11 +458,12 @@ def build_video(art_count=4, *, cards_only=False) -> dict:
     run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(WORK / "silent.mp4"), "-i", str(wav),
          "-vf", f"subtitles={WORK / 'subs.ass'}:fontsdir={FONTS.parent}",
          "-af", f"afade=t=out:st={max(0.0, total - 1.0):.2f}:d=1.0",
-         "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-preset", "medium", "-crf", "20",
+         "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-preset", "medium", "-crf", "17",
          "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-shortest", str(WORK / "final.mp4")])
 
     artifacts = {"video": str(WORK / "final.mp4"), "cover": str(WORK / "cover-4x3.png"),
                  "duration": round(duration_of(WORK / "final.mp4"), 2),
+                 "width": round(W * height / H), "height": height,
                  "segments": len(segments), "sentences": len(sentences),
                  "persona": script.get("persona"), "illustration_count": len(art), "upload": script["upload"]}
     (WORK / "artifacts.json").write_text(json.dumps(artifacts, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -498,6 +513,8 @@ def main() -> int:
     parser.add_argument("--reference", type=Path, default=REF_IMAGE, help="自己的角色设定图")
     parser.add_argument("--art-count", type=int, choices=range(1, 7), default=4, help="本期插画数量")
     parser.add_argument("--cards", action="store_true", help="只生成卡片供预览")
+    parser.add_argument("--height", type=int, choices=(1080, 1440), default=1080,
+                        help="成片高度；1440 启用本机动漫插画超分")
     args = parser.parse_args()
     if args.plan and not (args.topic and args.topic.strip()):
         parser.error("--plan 需要 --topic")
@@ -518,7 +535,7 @@ def main() -> int:
     if args.audio:
         asyncio.run(build_audio())
     if args.video or args.cards:
-        build_video(args.art_count, cards_only=not args.video)
+        build_video(args.art_count, cards_only=not args.video, height=args.height)
     if args.upload:
         artifacts = json.loads((WORK / "artifacts.json").read_text(encoding="utf-8"))
         print("开始上传（仅自己可见）…", flush=True)

@@ -19,5 +19,10 @@
    SelfLift 生成 PNG。出图串行进行，已生成的图与分镜保存在本期 `illustrations/`，后续渲染可复用。
 5. `--video` 生成的成片是本期 `final.mp4`。确认后才单独运行 `--upload`，该入口提交仅自己可见的 B 站稿件。
 
+加 `--height 1440` 可导出 2560×1440。桥接先用 Real-ESRGAN 动漫模型超分每张插画，再按 1440p 绘制卡片。
+将 [RealESRGAN_x4plus_anime_6B.pth](https://github.com/xinntao/Real-ESRGAN/releases/tag/v0.2.2.4)
+放入本机 ComfyUI 的 `models/upscale_models/`。已有 Real-ESRGAN Vulkan 时，也可把
+`COMFY_REALESRGAN_EXE` 设为该程序路径，由桥接调用程序和它旁边的 `models/`。
+
 参考投稿的文件与现有手动、自主投稿记录独立。当前入口是脚本，暂未加入 QQ 命令或面板。
 本地桥接不可用时，生成阶段会报告失败并保留已完成的插画。
