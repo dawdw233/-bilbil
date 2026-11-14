@@ -1319,28 +1319,49 @@ async def preflight_upload(video_path: str, credential: Credential | None = None
     raise PublishRefused(f"B站拒绝了上传：{message}")
 
 
-async def find_upload_topic(query: str, credential: Credential | None = None) -> dict | None:
-    """按话题名或 ID 找话题；活动话题带 mission_id，提交时会跟着报名。"""
+async def find_upload_topic(query: str, credential: Credential | None = None) -> dict:
+    """按话题名或 ID 找投稿话题。
+
+    返回 {"match": {"id","name","mission_id"}|None, "candidates": [名字…]}。
+
+    B站 的话题搜索天生是模糊的（搜「AI 创作」会翻出「AI 创作人」「AI 绘画创作」），
+    所以规则是：先要**精确匹配**（忽略空格和大小写，或直接给 ID）；精确的找不到时，
+    只在**非活动话题**里挑名字以查询词开头的最短一个——活动话题会自动报名，
+    不能靠猜。都不行就返回候选名，让调用方告诉用户有哪些可选。
+    """
     cred = credential or get_cred()
     q = str(query or "").strip()
     if not q:
-        return None
+        return {"match": None, "candidates": []}
     try:
         async with _member_client(cred) as client:
             async with client.get(TOPIC_SEARCH_URL,
                                   params={"keywords": q, "page_size": 20, "offset": 0}) as resp:
                 body = await _member_body(resp)
     except Exception:
-        return None
+        return {"match": None, "candidates": []}
     topics = ((body.get("data") or {}).get("result") or {}).get("topics") or []
-    norm = lambda s: str(s).replace(" ", "").lower()  # noqa: E731
+    found = []
     for topic in topics:
-        if not isinstance(topic, dict):
-            continue
-        if norm(topic.get("name")) == norm(q) or str(topic.get("id")) == q:
-            return {"id": topic.get("id"), "name": topic.get("name"),
-                    "mission_id": topic.get("mission_id") or None}
-    return None
+        if isinstance(topic, dict) and type(topic.get("id")) is int:
+            found.append({
+                "id": topic["id"],
+                "name": str(topic.get("name") or ""),
+                "mission_id": topic.get("mission_id") or 0,
+            })
+    norm = lambda s: "".join(str(s).split()).lower()  # noqa: E731
+    target = norm(q)
+    for topic in found:
+        if norm(topic["name"]) == target or str(topic["id"]) == q:
+            return {"match": {"id": topic["id"], "name": topic["name"],
+                              "mission_id": topic["mission_id"] or None}, "candidates": []}
+    if len(target) >= 2:
+        fuzzy = [t for t in found if not t["mission_id"] and norm(t["name"]).startswith(target)]
+        if fuzzy:
+            best = min(fuzzy, key=lambda t: len(t["name"]))
+            return {"match": {"id": best["id"], "name": best["name"], "mission_id": None},
+                    "candidates": []}
+    return {"match": None, "candidates": [t["name"] for t in found[:5]]}
 
 
 def parse_schedule_time(value: str) -> int:
@@ -1539,10 +1560,14 @@ async def bili_upload_video(
         # ---- 4. 话题（找不到就跳过，不拦投稿）----
         phase = "查找话题"
         topic_info = None
-        if str(topic or "").strip():
-            topic_info = await find_upload_topic(topic, cred)
+        topic_query = str(topic or "").strip()
+        if topic_query:
+            found = await find_upload_topic(topic_query, cred)
+            topic_info = found.get("match")
             if topic_info is None:
-                notes.append(f"没找到话题「{str(topic).strip()}」，这次不加话题")
+                near = "、".join(str(name) for name in (found.get("candidates") or [])[:3] if name)
+                notes.append(f"没找到话题「{topic_query}」" + (f"，B站 上相近的有：{near}" if near else "")
+                             + "；这次不加话题")
 
         # ---- 5. 预上传：被拒时把真实原因带出来 ----
         phase = "预上传"

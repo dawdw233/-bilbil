@@ -156,13 +156,40 @@ class MemberApiTests(unittest.IsolatedAsyncioTestCase):
                 {"id": 22, "name": "AI 创作", "mission_id": 777},
             ]}},
         })
-        topic = await bili_api.find_upload_topic("AI 创作", SimpleNamespace())
-        self.assertEqual(topic["id"], 22)
-        self.assertEqual(topic["mission_id"], 777)
+        found = await bili_api.find_upload_topic("AI 创作", SimpleNamespace())
+        self.assertEqual(found["match"]["id"], 22)
+        self.assertEqual(found["match"]["mission_id"], 777)
 
-    async def test_topic_not_found_returns_none(self):
-        patch_member(self, lambda method, url, kwargs: {"code": 0, "data": {"result": {"topics": []}}})
-        self.assertIsNone(await bili_api.find_upload_topic("不存在的活动", SimpleNamespace()))
+    async def test_topic_fuzzy_prefix_only_for_non_activity(self):
+        def handler(method, url, kwargs):
+            return {"code": 0, "data": {"result": {"topics": [
+                {"id": 5, "name": "AI创作人"},
+                {"id": 6, "name": "AI创作大赏", "mission_id": 888},
+            ]}}}
+        patch_member(self, handler)
+        found = await bili_api.find_upload_topic("AI创作", SimpleNamespace())
+        self.assertEqual(found["match"]["name"], "AI创作人")
+        self.assertIsNone(found["match"]["mission_id"])
+
+    async def test_topic_activity_only_matches_exactly(self):
+        patch_member(self, lambda method, url, kwargs: {
+            "code": 0,
+            "data": {"result": {"topics": [
+                {"id": 6, "name": "AI创作大赏", "mission_id": 888},
+            ]}},
+        })
+        found = await bili_api.find_upload_topic("AI创作", SimpleNamespace())
+        self.assertIsNone(found["match"], "活动话题不能靠前缀猜（会自动报名）")
+        self.assertEqual(found["candidates"], ["AI创作大赏"])
+
+    async def test_topic_not_found_lists_candidates(self):
+        patch_member(self, lambda method, url, kwargs: {
+            "code": 0,
+            "data": {"result": {"topics": [{"id": 1, "name": "研究生日常"}, {"id": 2, "name": "快乐日常万花筒"}]}},
+        })
+        found = await bili_api.find_upload_topic("日常", SimpleNamespace())
+        self.assertIsNone(found["match"])
+        self.assertEqual(found["candidates"], ["研究生日常", "快乐日常万花筒"])
 
     async def test_archive_state_maps_review_fields(self):
         patch_member(self, lambda method, url, kwargs: {
@@ -224,7 +251,7 @@ class UploadMetaTests(unittest.IsolatedAsyncioTestCase):
         self.predict = AsyncMock(return_value={"tid": 21, "tid_name": "生活 / 日常",
                                                "zone": 10017, "zone_name": "日常"})
         self.tags = AsyncMock(return_value=[])
-        self.topic = AsyncMock(return_value=None)
+        self.topic = AsyncMock(return_value={"match": None, "candidates": []})
         self.preflight = AsyncMock()
         self.cover43 = patch.object(bili_api, "Picture")
         self.addCleanup(self.cover43.stop)
@@ -278,7 +305,7 @@ class UploadMetaTests(unittest.IsolatedAsyncioTestCase):
         cover43 = self.folder / "cover43.png"
         cover43.write_bytes(b"png")
         with patch.object(bili_api, "_extract_cover_43", lambda path: str(cover43)):
-            self.topic.return_value = {"id": 22, "name": "AI 创作", "mission_id": 777}
+            self.topic.return_value = {"match": {"id": 22, "name": "AI 创作", "mission_id": 777}, "candidates": []}
             result = await self.upload(
                 tid=21, private=True, schedule_time=target.strftime("%Y-%m-%d %H:%M"),
                 topic="AI 创作", cover_43=True,
