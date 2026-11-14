@@ -409,5 +409,75 @@ class UploadApiValidationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["state_desc"], "已通过")
 
 
+class ChatUploadToolTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.instance = plugin.BiliScrollPlugin.__new__(plugin.BiliScrollPlugin)
+        self.instance.data_dir = Path(folder.name)
+        (self.instance.data_dir / "media").mkdir()
+        (self.instance.data_dir / "media" / "clip.mp4").write_bytes(b"\x00" * 2048)
+        self.instance._upload = {"running": False}
+        self.instance.context = SimpleNamespace(get_config=lambda: {"admins_id": ["42"]})
+        self.instance._cred_ok = lambda: True
+        self.instance._do_upload = AsyncMock(return_value={
+            "success": True, "bvid": "BV1xx411c7mD", "zone": {"zone_name": "日常"},
+            "notes": ["B站不收这些标签，已去掉：动画"], "ai_declare": True,
+            "schedule": "", "topic": None,
+        })
+        self.event = SimpleNamespace(get_sender_id=lambda: "42")
+
+    async def test_non_owner_cannot_publish(self):
+        result = await self.instance.tool_bili_upload_video(
+            SimpleNamespace(get_sender_id=lambda: "999"), "clip.mp4", "标题")
+        self.assertIn("只有管理员", result)
+        self.instance._do_upload.assert_not_awaited()
+
+    async def test_foreign_path_is_refused(self):
+        result = await self.instance.tool_bili_upload_video(
+            self.event, "/etc/passwd", "标题")
+        self.assertIn("素材目录", result)
+        self.instance._do_upload.assert_not_awaited()
+
+    async def test_missing_file_is_reported(self):
+        result = await self.instance.tool_bili_upload_video(self.event, "nope.mp4", "标题")
+        self.assertIn("没有这个文件", result)
+
+    async def test_defaults_are_forwarded(self):
+        await self.instance.tool_bili_upload_video(self.event, "clip.mp4", "标题")
+        payload = self.instance._do_upload.await_args.args[0]
+        self.assertEqual(payload["tid"], 0)
+        self.assertIs(payload["ai_declare"], True)
+        self.assertIs(payload["cover_43"], True)
+        self.assertIs(payload["private"], False)
+        self.assertEqual(payload["schedule"], "")
+
+    async def test_success_message_has_link_and_notes(self):
+        result = await self.instance.tool_bili_upload_video(
+            self.event, "clip.mp4", "标题", topic="AI 创作",
+            schedule="2026-11-15 20:00", private=True, ai_declare=False)
+        self.assertIn("BV1xx411c7mD", result)
+        self.assertIn("日常", result)
+        self.assertIn("标签", result)
+        payload = self.instance._do_upload.await_args.args[0]
+        self.assertEqual(payload["topic"], "AI 创作")
+        self.assertEqual(payload["schedule"], "2026-11-15 20:00")
+
+    async def test_failure_carries_hint(self):
+        self.instance._do_upload = AsyncMock(return_value={
+            "success": False, "error": "B站拒绝了上传：需要验证",
+            "hint": "去网页端手动传一次",
+        })
+        result = await self.instance.tool_bili_upload_video(self.event, "clip.mp4", "标题")
+        self.assertIn("没成功", result)
+        self.assertIn("需要验证", result)
+        self.assertIn("网页端", result)
+
+    async def test_busy_upload_is_refused(self):
+        self.instance._upload["running"] = True
+        result = await self.instance.tool_bili_upload_video(self.event, "clip.mp4", "标题")
+        self.assertIn("还在上传", result)
+
+
 if __name__ == "__main__":
     unittest.main()
