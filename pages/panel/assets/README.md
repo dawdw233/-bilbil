@@ -1,9 +1,18 @@
 # 书房欢迎卡插画
 
+新安装默认使用以下两张由使用者提供的插画。WebP 文件保留原图构图，发布许可与代码许可分开。
+
+| 位置 | 文件 | 来源 |
+| --- | --- | --- |
+| 左侧 | `study-hero-left.webp` | おむたつ / omutatsu，[《愛言葉Ⅴ》](https://www.pixiv.net/artworks/141311340) |
+| 右侧 | `study-hero-right.webp` | おむたつ / omutatsu，[《世界计划》全球下载突破 3900 万纪念插画](https://www.pixiv.net/artworks/117309293) |
+
+## 旧版单图
+
 - 文件：`study-hero.png`
 - 生成日期：2026-11-03
 - 生成方式：内置 `image_gen`，新生成的原创角色插画；未使用参考人物或已有作品图片。
-- 用途：欢迎卡右侧人物插画及侧栏头像。插画经 `appearance/default` 和 `appearance/state` 接口提供；用户可以上传替换、移除或恢复默认插画。
+- 用途：旧版欢迎卡右侧和头像。保留旧素材供维护时参考。
 
 最终提示词：
 

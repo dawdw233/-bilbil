@@ -229,19 +229,34 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((self.instance.data_dir / "appearance.json").read_bytes(), original)
 
     async def test_missing_or_broken_preferences_use_defaults(self):
-        defaults = self.instance._load_appearance()
+        defaults = await self.instance._api_appearance_state()
         self.assertEqual(defaults["settings"], plugin.APPEARANCE_DEFAULTS)
-        self.assertTrue(defaults["image"].startswith("data:image/png;base64,"))
+        self.assertEqual(defaults, await self.instance._api_appearance_default())
+        for key, side in (("image", "right"), ("left_image", "left")):
+            prefix, encoded = defaults[key].split(",", 1)
+            self.assertEqual(prefix, "data:image/webp;base64")
+            self.assertEqual(base64.b64decode(encoded), (ROOT / "pages" / "panel" / "assets" / f"study-hero-{side}.webp").read_bytes())
         (self.instance.data_dir / "appearance.json").write_text("not json", encoding="utf-8")
-        self.assertEqual(self.instance._load_appearance()["settings"], plugin.APPEARANCE_DEFAULTS)
+        self.assertEqual(self.instance._load_appearance(), defaults)
 
     async def test_old_blank_cover_gets_default_but_explicit_removal_stays_empty(self):
         (self.instance.data_dir / "appearance.json").write_text(json.dumps({"settings": {}, "image": None}), encoding="utf-8")
-        self.assertTrue(self.instance._load_appearance()["image"].startswith("data:image/png;base64,"))
-        self.payload = {"settings": {}, "image": None}
+        self.assertTrue(self.instance._load_appearance()["image"].startswith("data:image/webp;base64,"))
+        self.payload = {"settings": {}, "image": None, "left_image": None}
         await self.instance._api_appearance_save()
         self.assertIsNone(self.instance._load_appearance()["image"])
-        self.assertTrue((await self.instance._api_appearance_default())["image"].startswith("data:image/png;base64,"))
+        self.assertIsNone(self.instance._load_appearance()["left_image"])
+
+    async def test_existing_single_cover_keeps_image_and_previous_implicit_parameters(self):
+        right = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\ncustom").decode()
+        path = self.instance.data_dir / "appearance.json"
+        path.write_text(json.dumps({"version": 2, "settings": {"x": 30}, "image": right}), encoding="utf-8")
+        state = await self.instance._api_appearance_state()
+        self.assertEqual(state["image"], right)
+        self.assertIsNone(state["left_image"])
+        self.assertEqual(state["settings"]["x"], 30)
+        self.assertEqual(state["settings"]["opacity"], 85)
+        self.assertEqual(state["settings"]["strength"], 85)
 
     async def test_theme_mode_defaults_to_auto_and_saves_independently(self):
         self.assertEqual(await self.instance._api_theme_state(), {"mode": "auto"})

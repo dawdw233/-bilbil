@@ -66,10 +66,14 @@ DEFAULT_COMMENT_TASTE = (
 DEFAULT_SPEAKING_STYLE = "像普通网友随手回的，不端着，不堆网络烂梗，不卖萌，不油腻。"
 
 APPEARANCE_DEFAULTS = {
-    "x": 75, "y": 50, "zoom": 100, "opacity": 85,
-    "fit": "cover", "mask": "#edf6fc", "strength": 85,
+    "x": 0, "y": 50, "zoom": 100, "opacity": 100,
+    "fit": "cover", "mask": "#edf6fc", "strength": 50,
     "glass_enabled": True, "glass": 50, "sharpness": 0,
-    "left_x": 50, "left_y": 50, "left_zoom": 100, "left_opacity": 65,
+    "left_x": 100, "left_y": 50, "left_zoom": 100, "left_opacity": 100,
+}
+# Saved profiles missing these keys used the previous defaults when they were created.
+SAVED_APPEARANCE_FALLBACKS = {
+    "x": 75, "opacity": 85, "strength": 85, "left_x": 50, "left_opacity": 65,
 }
 METEOR_DEFAULTS = {
     "meteor_enabled": True, "meteor_count": 128, "meteor_brightness": 72, "meteor_speed": 100,
@@ -312,13 +316,20 @@ class BiliScrollPlugin(Star):
         return result
 
     def _default_appearance(self) -> dict:
-        image = None
-        try:
-            raw = (Path(__file__).parent / "pages" / "panel" / "assets" / "study-hero.png").read_bytes()
-            image = "data:image/png;base64," + base64.b64encode(raw).decode("ascii")
-        except OSError:
-            pass
-        return {"settings": dict(APPEARANCE_DEFAULTS), "image": image, "left_image": None}
+        assets = Path(__file__).parent / "pages" / "panel" / "assets"
+
+        def read_art(filename: str) -> str | None:
+            try:
+                raw = (assets / filename).read_bytes()
+            except OSError:
+                return None
+            return "data:image/webp;base64," + base64.b64encode(raw).decode("ascii")
+
+        return {
+            "settings": dict(APPEARANCE_DEFAULTS),
+            "image": read_art("study-hero-right.webp"),
+            "left_image": read_art("study-hero-left.webp"),
+        }
 
     def _load_appearance(self) -> dict:
         try:
@@ -327,7 +338,8 @@ class BiliScrollPlugin(Star):
             # 老版空白封面升级为新默认插画；新版主动移除插画后保留渐变背景。
             if image is None and data.get("version", 1) < 2:
                 image = self._default_appearance()["image"]
-            return {"settings": self._normalize_appearance(data.get("settings", {})), "image": image,
+            settings = {**SAVED_APPEARANCE_FALLBACKS, **data.get("settings", {})}
+            return {"settings": self._normalize_appearance(settings), "image": image,
                     "left_image": data.get("left_image")}
         except (OSError, ValueError, TypeError, AttributeError):
             return self._default_appearance()

@@ -26,7 +26,11 @@ test("时间轴转义内容并限制状态类名，保留最新五个时刻", ()
 });
 test("欢迎卡、分组导航与默认插画作为项目资源提供", () => {
   for (const text of ["一隅书房", "nav-group-label\">阅读", "nav-group-label\">写作", "nav-group-label\">生活", "study-timeline", 'role="progressbar"']) assert.ok(html.includes(text), text);
-  const asset = new URL("../pages/panel/assets/study-hero.png", import.meta.url);
-  assert.ok(statSync(asset).size < 3 * 1024 * 1024);
-  assert.equal(readFileSync(asset).subarray(1, 4).toString(), "PNG");
+  for (const side of ["left", "right"]) {
+    const asset = new URL(`../pages/panel/assets/study-hero-${side}.webp`, import.meta.url);
+    assert.ok(statSync(asset).size < 3 * 1024 * 1024);
+    const header = readFileSync(asset).subarray(0, 12);
+    assert.equal(header.subarray(0, 4).toString(), "RIFF");
+    assert.equal(header.subarray(8, 12).toString(), "WEBP");
+  }
 });

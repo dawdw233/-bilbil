@@ -1855,7 +1855,7 @@ meteorDialog.addEventListener("close", () => { renderMeteors(savedMeteors); });
 </script>
 <script type="module" id="appearance-script">
 // 通过插件 bridge 保存外观，兼容 AstrBot 的隔离面板。
-const ART_DEFAULTS = Object.freeze({ x: 75, y: 50, zoom: 100, opacity: 85, fit: "cover", mask: "#edf6fc", strength: 85, glass_enabled: true, glass: 50, sharpness: 0, left_x: 50, left_y: 50, left_zoom: 100, left_opacity: 65 });
+const ART_DEFAULTS = Object.freeze({ x: 0, y: 50, zoom: 100, opacity: 100, fit: "cover", mask: "#edf6fc", strength: 50, glass_enabled: true, glass: 50, sharpness: 0, left_x: 100, left_y: 50, left_zoom: 100, left_opacity: 100 });
 function normalizeAppearance(raw = {}) {
   const clamp = (key, min, max) => {
     const value = Number(raw[key]);
