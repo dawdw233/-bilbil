@@ -332,7 +332,7 @@
     *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
   }
 
-  /* 一隅书房：固定分组导航、轻工具栏与插画欢迎卡 */
+  /* 书房：固定分组导航、轻工具栏与插画欢迎卡 */
   body { padding: 22px 26px 54px; background: radial-gradient(ellipse at 82% 0, #f3f8fd 0, transparent 58%), linear-gradient(125deg, #f0f5fb, #e9f0f7 70%, #e5edf6); }
   .wrap.study-shell { max-width: 1460px; position: relative; z-index: 1; }
   .study-shell .layout { display: block; }
@@ -708,7 +708,7 @@
 <div class="wrap study-shell">
   <div class="layout">
   <aside class="side" id="tabs">
-    <div class="study-profile"><button type="button" class="study-avatar" id="avatar-open" aria-label="更换书房头像" aria-haspopup="dialog" title="点击更换头像">汐<img id="study-avatar" alt="" /></button><div><button type="button" class="study-room-name" id="room-open" aria-label="修改书房名称" aria-haspopup="dialog" title="点击修改书房名称"><span data-room-name>一隅书房</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z"/></svg></button><p class="study-room-caption">私人的观影手记</p></div></div>
+    <div class="study-profile"><button type="button" class="study-avatar" id="avatar-open" aria-label="更换书房头像" aria-haspopup="dialog" title="点击更换头像">汐<img id="study-avatar" alt="" /></button><div><button type="button" class="study-room-name" id="room-open" aria-label="修改书房名称" aria-haspopup="dialog" title="点击修改书房名称"><span data-room-name>鲸汐影院</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z"/></svg></button><p class="study-room-caption">私人的观影手记</p></div></div>
     <nav class="side-menu" aria-label="书房导航">
       <div class="nav-group nav-home">
         <div class="nav-group-buttons">
@@ -724,7 +724,7 @@
   </aside>
   <main class="main">
     <div class="study-toolbar">
-      <div class="toolbar-path"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8M6 9v12h12V9M10 21v-7h4v7"/></svg><span data-room-name>一隅书房</span><span class="path-separator">/</span><strong id="study-page-title">主页</strong></div>
+      <div class="toolbar-path"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8M6 9v12h12V9M10 21v-7h4v7"/></svg><span data-room-name>鲸汐影院</span><span class="path-separator">/</span><strong id="study-page-title">主页</strong></div>
       <div class="toolbar-actions">
         <select id="theme-mode" aria-label="页面昼夜模式" title="随时间：北京时间 19:00 至次日 07:00 使用夜晚模式" disabled><option value="auto">随时间</option><option value="light">浅色模式</option><option value="night">夜晚模式</option></select>
         <button id="btn-refresh"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></svg>刷新状态</button>
@@ -742,7 +742,7 @@
         <div class="art-float-plane"><div class="hero-art"><img id="hero-illustration" alt="" decoding="async" /><div class="hero-wash"></div></div></div>
         <div class="hero-readability"></div>
       </div>
-      <div class="hd-main"><div class="hero-eyebrow">A QUIET CORNER · BILIBILI JOURNAL</div><h1><span id="study-greeting">欢迎回来，</span><br/><strong data-room-name>一隅书房</strong></h1><p class="hero-note">今日也留一点闲时，看看世界的有趣。<br/>让喜欢的内容，在这里慢慢留下来。</p><div class="hero-tags"><span class="hero-tag">B站观影手记</span><span class="hero-tag" id="study-style-tag">人设相伴</span></div></div>
+      <div class="hd-main"><div class="hero-eyebrow">A QUIET CORNER · BILIBILI JOURNAL</div><h1><span id="study-greeting">欢迎回来，</span><br/><strong data-room-name>鲸汐影院</strong></h1><p class="hero-note">今日也留一点闲时，看看世界的有趣。<br/>让喜欢的内容，在这里慢慢留下来。</p><div class="hero-tags"><span class="hero-tag">B站观影手记</span><span class="hero-tag" id="study-style-tag">人设相伴</span></div></div>
     </header>
 
   <div id="view-home">
@@ -1623,7 +1623,7 @@
     <div class="row"><button type="button" id="avatar-upload">选择图片</button><button type="button" id="avatar-reset">恢复默认</button></div>
     <input type="file" id="avatar-file" class="sr-only" tabindex="-1" aria-label="选择头像文件" accept="image/png,image/jpeg,image/webp" />
     <div class="tip">支持 PNG、JPG、WebP，最大 20 MB。图片居中裁剪为圆形。</div>
-    <div class="tip">默认头像跟随页首插画；自选头像单独保存。</div>
+    <div class="tip">默认头像采用内置插画的角色特写，自选头像单独保存。</div>
     <div class="avatar-colors"><label class="color-field" for="avatar-border-color">边框颜色<input id="avatar-border-color" type="color" value="#74bfa7" aria-label="边框颜色" /><output id="avatar-color-value" for="avatar-border-color">#74bfa7</output></label><div class="avatar-palette" role="group" aria-label="常用边框颜色"><button type="button" data-avatar-color="#74bfa7" style="--swatch:#74bfa7" aria-label="薄荷绿边框" aria-pressed="true"></button><button type="button" data-avatar-color="#82acca" style="--swatch:#82acca" aria-label="冰蓝色边框" aria-pressed="false"></button><button type="button" data-avatar-color="#b39bd0" style="--swatch:#b39bd0" aria-label="浅紫色边框" aria-pressed="false"></button><button type="button" data-avatar-color="#d99caf" style="--swatch:#d99caf" aria-label="樱粉色边框" aria-pressed="false"></button><button type="button" data-avatar-color="#c6a262" style="--swatch:#c6a262" aria-label="暖金色边框" aria-pressed="false"></button><button type="button" data-avatar-color="#8194a8" style="--swatch:#8194a8" aria-label="灰蓝色边框" aria-pressed="false"></button></div><div class="tip">点击色块或选择任意颜色，高光与阴影随边框颜色变化。</div></div>
     <div id="avatar-status" role="status" aria-live="polite"></div>
   </div>
@@ -1632,7 +1632,7 @@
 <dialog id="room-dialog" class="appearance-dialog avatar-dialog" aria-labelledby="room-title">
   <form id="room-form">
     <div class="appearance-heading"><div><h2 id="room-title">书房名称</h2><div class="sub">为这一隅，取个喜欢的名字。</div></div><button type="button" id="room-close" class="icon-button" aria-label="关闭名称设置">×</button></div>
-    <div class="avatar-content"><label class="field" for="room-name"><span class="lbl">书房名称</span><input id="room-name" type="text" maxlength="24" required autocomplete="off" placeholder="例如：一隅书房" /></label><div class="tip">1～24 个字符，保存后同步更新侧栏、页首标题和顶部路径。</div><div id="room-status" class="sub" role="status" aria-live="polite"></div></div>
+    <div class="avatar-content"><label class="field" for="room-name"><span class="lbl">书房名称</span><input id="room-name" type="text" maxlength="24" required autocomplete="off" placeholder="例如：鲸汐影院" /></label><div class="tip">1～24 个字符，保存后同步更新侧栏、页首标题和顶部路径。</div><div id="room-status" class="sub" role="status" aria-live="polite"></div></div>
     <div class="appearance-footer"><div class="row"><button type="button" id="room-reset">恢复默认</button><button type="button" id="room-cancel">取消</button><button type="submit" id="room-save" class="primary">保存名称</button></div></div>
   </form>
 </dialog>
@@ -2003,6 +2003,7 @@ let artBusy = false;
 let artToastTimer;
 let artStorageWarning = "";
 let savedAvatar = null;
+let defaultAvatar = null;
 let savedAvatarColor = "#74bfa7";
 function artStatus(text, error = false) {
   artEl("art-status").textContent = text;
@@ -2212,22 +2213,22 @@ let draftAvatar = null;
 let draftAvatarColor = "#74bfa7";
 let avatarBusy = false;
 function renderStudyAvatar() {
-  const image = savedAvatar || displayedIllustration;
+  const image = savedAvatar || defaultAvatar || displayedIllustration;
   const element = artEl("study-avatar");
   if (image) { if (element.getAttribute("src") !== image) element.src = image; }
   else element.removeAttribute("src");
-  element.style.objectPosition = savedAvatar ? "50% 50%" : "84% 34%";
+  element.style.objectPosition = savedAvatar || defaultAvatar ? "50% 50%" : "84% 34%";
 }
 function avatarStatus(message, error = false) {
   artEl("avatar-status").textContent = message;
   artEl("avatar-status").classList.toggle("bad", error);
 }
 function updateAvatarControls() {
-  const image = draftAvatar || savedIllustration;
+  const image = draftAvatar || defaultAvatar || savedIllustration;
   const preview = artEl("avatar-preview");
   if (image) preview.src = image;
   else preview.removeAttribute("src");
-  preview.style.objectPosition = draftAvatar ? "50% 50%" : "84% 34%";
+  preview.style.objectPosition = draftAvatar || defaultAvatar ? "50% 50%" : "84% 34%";
   for (const id of ["avatar-upload", "avatar-reset", "avatar-save", "avatar-close", "avatar-cancel", "avatar-border-color"]) artEl(id).disabled = avatarBusy;
   artEl("avatar-upload").textContent = draftAvatar ? "替换图片" : "选择图片";
   artEl("avatar-border-color").value = draftAvatarColor;
@@ -2242,7 +2243,9 @@ async function refreshSavedAvatar() {
   const bridge = await appearanceBridge();
   const stored = await bridge.apiGet("avatar/state");
   if (!stored || !("image" in stored)) throw new Error("头像暂时无法读取，请稍后重试");
-  savedAvatar = typeof stored.image === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(stored.image) ? stored.image : null;
+  const avatarSource = (value) => typeof value === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(value) ? value : null;
+  savedAvatar = avatarSource(stored.image);
+  defaultAvatar = avatarSource(stored.default_image);
   savedAvatarColor = /^#[0-9a-f]{6}$/i.test(stored.border_color || "") ? stored.border_color.toLowerCase() : "#74bfa7";
   document.documentElement.style.setProperty("--avatar-border-color", savedAvatarColor);
   renderStudyAvatar();
@@ -2325,7 +2328,8 @@ avatarDialog.addEventListener("cancel", (event) => { if (avatarBusy) event.preve
 avatarDialog.addEventListener("close", () => { artEl("avatar-file").value = ""; document.documentElement.style.setProperty("--avatar-border-color", savedAvatarColor); });
 
 const roomDialog = artEl("room-dialog");
-let savedRoomName = "一隅书房";
+const defaultRoomName = artEl("room-open").querySelector("[data-room-name]").textContent;
+let savedRoomName = defaultRoomName;
 let roomBusy = false;
 function renderRoomName(name) {
   savedRoomName = name;
@@ -2384,7 +2388,7 @@ artEl("room-form").onsubmit = async (event) => {
   } catch (error) { roomStatus("保存失败：" + (error.message || "请重试"), true); }
   finally { setRoomBusy(false); }
 };
-artEl("room-reset").onclick = () => { artEl("room-name").value = "一隅书房"; roomStatus("保存后恢复为默认名称。"); };
+artEl("room-reset").onclick = () => { artEl("room-name").value = defaultRoomName; roomStatus("保存后恢复为默认名称。"); };
 artEl("room-close").onclick = artEl("room-cancel").onclick = () => roomDialog.close();
 roomDialog.addEventListener("cancel", (event) => { if (roomBusy) event.preventDefault(); });
 

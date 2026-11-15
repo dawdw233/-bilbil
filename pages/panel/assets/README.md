@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | 左侧 | `study-hero-left.webp` | おむたつ / omutatsu，[《愛言葉Ⅴ》](https://www.pixiv.net/artworks/141311340) |
 | 右侧 | `study-hero-right.webp` | おむたつ / omutatsu，[《世界计划》全球下载突破 3900 万纪念插画](https://www.pixiv.net/artworks/117309293) |
+| 默认头像 | `study-avatar.webp` | 由左侧插画裁出的人物方形特写，面板以圆形显示。 |
 
 ## 旧版单图
 

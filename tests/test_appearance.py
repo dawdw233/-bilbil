@@ -296,7 +296,9 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
         self.payload = {"settings": {"zoom": 140}, "image": None}
         await self.instance._api_appearance_save()
         cover = (self.instance.data_dir / "appearance.json").read_bytes()
-        self.assertEqual(await self.instance._api_avatar_state(), {"image": None, "border_color": "#74bfa7"})
+        default_state = await self.instance._api_avatar_state()
+        self.assertIsNone(default_state["image"])
+        self.assertEqual(default_state["border_color"], "#74bfa7")
         self.payload = {"image": image}
         self.assertEqual(await self.instance._api_avatar_save(), {"saved": True})
         self.assertEqual((await self.instance._api_avatar_state())["image"], image)
@@ -331,14 +333,23 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(list(self.instance.data_dir.glob("*.tmp")))
 
     async def test_corrupt_avatar_uses_default(self):
-        for content in ('not json', '[]', '{"image":"data:image/png;base64,YQ=="}'):
-            (self.instance.data_dir / "avatar.json").write_text(content, encoding="utf-8")
-            self.assertEqual((await self.instance._api_avatar_state())["image"], None)
+        path = self.instance.data_dir / "avatar.json"
+        for content in (None, 'not json', '[]', '{"image":"data:image/png;base64,YQ=="}'):
+            if content is not None:
+                path.write_text(content, encoding="utf-8")
+            state = await self.instance._api_avatar_state()
+            self.assertIsNone(state["image"])
+            prefix, encoded = state["default_image"].split(",", 1)
+            self.assertEqual(prefix, "data:image/webp;base64")
+            asset = ROOT / "pages" / "panel" / "assets" / "study-avatar.webp"
+            self.assertEqual(base64.b64decode(encoded), asset.read_bytes())
 
     async def test_avatar_color_persists_and_legacy_save_keeps_color(self):
         self.payload = {"image": None, "border_color": "#B39BD0"}
         self.assertEqual(await self.instance._api_avatar_save(), {"saved": True})
-        self.assertEqual(await self.instance._api_avatar_state(), {"image": None, "border_color": "#b39bd0"})
+        state = await self.instance._api_avatar_state()
+        self.assertIsNone(state["image"])
+        self.assertEqual(state["border_color"], "#b39bd0")
         self.payload = {"image": None}
         await self.instance._api_avatar_save()
         self.assertEqual((await self.instance._api_avatar_state())["border_color"], "#b39bd0")
@@ -359,10 +370,12 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
         image = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\navatar").decode()
         for record in ({"image": image}, {"image": image, "border_color": "invalid"}):
             (self.instance.data_dir / "avatar.json").write_text(json.dumps(record), encoding="utf-8")
-            self.assertEqual(await self.instance._api_avatar_state(), {"image": image, "border_color": "#74bfa7"})
+            state = await self.instance._api_avatar_state()
+            self.assertEqual(state["image"], image)
+            self.assertEqual(state["border_color"], "#74bfa7")
 
     async def test_room_name_persists_without_changing_avatar_or_cover(self):
-        self.assertEqual(await self.instance._api_room_state(), {"name": "一隅书房"})
+        self.assertEqual(await self.instance._api_room_state(), {"name": "鲸汐影院"})
         self.payload = {"image": None}
         await self.instance._api_avatar_save()
         await self.instance._api_appearance_save()
@@ -397,7 +410,7 @@ class AppearanceTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(list(self.instance.data_dir.glob("*.tmp")))
         for content in ('not json', '[]', '{"name":""}'):
             (self.instance.data_dir / "room.json").write_text(content, encoding="utf-8")
-            self.assertEqual(await self.instance._api_room_state(), {"name": "一隅书房"})
+            self.assertEqual(await self.instance._api_room_state(), {"name": "鲸汐影院"})
 
 
 if __name__ == "__main__":

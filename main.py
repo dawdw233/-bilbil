@@ -79,6 +79,7 @@ METEOR_DEFAULTS = {
     "meteor_enabled": True, "meteor_count": 128, "meteor_brightness": 72, "meteor_speed": 100,
 }
 MAX_ILLUSTRATION_BYTES = 3 * 1024 * 1024
+DEFAULT_ROOM_NAME = "鲸汐影院"
 
 # 页面上能改的配置项（也是 GET /config 返回的字段）
 CONFIG_KEYS = (
@@ -315,20 +316,20 @@ class BiliScrollPlugin(Star):
         result["mask"] = color.lower()
         return result
 
-    def _default_appearance(self) -> dict:
+    @staticmethod
+    def _panel_art_data_url(filename: str) -> str | None:
         assets = Path(__file__).parent / "pages" / "panel" / "assets"
+        try:
+            raw = (assets / filename).read_bytes()
+        except OSError:
+            return None
+        return "data:image/webp;base64," + base64.b64encode(raw).decode("ascii")
 
-        def read_art(filename: str) -> str | None:
-            try:
-                raw = (assets / filename).read_bytes()
-            except OSError:
-                return None
-            return "data:image/webp;base64," + base64.b64encode(raw).decode("ascii")
-
+    def _default_appearance(self) -> dict:
         return {
             "settings": dict(APPEARANCE_DEFAULTS),
-            "image": read_art("study-hero-right.webp"),
-            "left_image": read_art("study-hero-left.webp"),
+            "image": self._panel_art_data_url("study-hero-right.webp"),
+            "left_image": self._panel_art_data_url("study-hero-left.webp"),
         }
 
     def _load_appearance(self) -> dict:
@@ -432,7 +433,11 @@ class BiliScrollPlugin(Star):
             image = None
         color = data.get("border_color") if isinstance(data, dict) else None
         color = color.lower() if isinstance(color, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", color) else "#74bfa7"
-        return json_response({"image": image, "border_color": color})
+        return json_response({
+            "image": image,
+            "default_image": self._panel_art_data_url("study-avatar.webp"),
+            "border_color": color,
+        })
 
     async def _api_avatar_save(self):
         payload = await request.json(default={})
@@ -485,7 +490,7 @@ class BiliScrollPlugin(Star):
             data = json.loads((self.data_dir / "room.json").read_text(encoding="utf-8"))
             name = self._validate_room_name(data.get("name"))
         except (OSError, ValueError, TypeError, AttributeError):
-            name = "一隅书房"
+            name = DEFAULT_ROOM_NAME
         return json_response({"name": name})
 
     async def _api_room_save(self):
